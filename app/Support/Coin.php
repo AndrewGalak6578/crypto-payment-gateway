@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace App\Support;
 
+use App\Services\BtcRpc;
 use App\Services\CoinRpc;
+use App\Services\DashRpc;
+use App\Services\LtcRpc;
+use App\Services\MockRpc;
 
 class Coin
 {
@@ -25,10 +29,14 @@ class Coin
     {
         $coin = self::normalize($coin);
 
+        if (config('coins.mode', 'mock') === 'mock') {
+            return app(MockRpc::class);
+        }
+
         return match ($coin) {
-            'btc' => app(CoinRpc::class), // TODO: Add BtcRpc
-            'ltc' => app(CoinRpc::class), // TODO: Add LtcRpc
-            default => app(CoinRpc::class) // TODO: Add DashRpc
+            'btc' => app(BtcRpc::class),
+            'ltc' => app(LtcRpc::class),
+            default => app(DashRpc::class)
         };
     }
 }

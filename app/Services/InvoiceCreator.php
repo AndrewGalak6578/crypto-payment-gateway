@@ -10,6 +10,8 @@ use Illuminate\Support\Str;
 
 class InvoiceCreator
 {
+    public function __construct(private CoinRate $rates) {}
+
     public function create(Merchant $merchant, array $data): Invoice
     {
         $coin = Coin::normalize($data['coin'] ?? 'dash');
@@ -25,32 +27,31 @@ class InvoiceCreator
 
         $amountUsd = round((float)$data['amount_usd'], 3);
 
-        $rateUsd = match ($coin) {
-            'btc' => 60000.0,
-            'ltc' => 80.0,
-            default => 30.0,
-        };
+        $rateUsd = $this->rates->usd($coin);
 
         $decimals = $coin === 'dash' ? 3 : 8;
         $amountCoin = round($amountUsd / max($rateUsd, 1e-8), $decimals);
 
-        $expiresMin = (int)config('payments.invoice_ttl_minutes', 60);
+        $expiresMin = (int)($data['expires_minutes'] ?? config('payments.invoice_ttl_minutes', 60));
         $deadline = now('UTC')->addMinutes($expiresMin);
 
-        $invoice = Invoice::create([
+        $publicId = Str::lower(Str::random(16));
+
+        $rpc = Coin::rpc($coin);
+        $address = $rpc->getNewAddress("inv:{$publicId}");
+
+        return Invoice::create([
             'merchant_id' => $merchant->id,
-            'public_id' => Str::lower(Str::random(16)),
+            'public_id' => $publicId,
             'external_id' => $externalId,
             'status' => 'pending',
             'coin' => $coin,
-            'pay_address' => 'mock_' . Str::lower(Str::random(24)), // mock
+            'pay_address' => $address,
             'amount_coin' => $amountCoin,
             'expected_usd' => $amountUsd,
             'rate_usd' => $rateUsd,
             'expires_at' => $deadline,
             'metadata' => $data['metadata'] ?? null,
-        ]);
-
-        return $invoice;
+        ])->fresh();
     }
 }

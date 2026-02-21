@@ -64,6 +64,58 @@ services:
                 - ping
             retries: 3
             timeout: 5s
+    bitcoind:
+        image: ruimarinho/bitcoin-core:latest
+        command: >
+            -regtest=1
+            -server=1
+            -rpcuser=sail
+            -rpcpassword=password
+            -rpcallowip=0.0.0.0/0
+            -rpcbind=0.0.0.0
+            -rpcport=18443
+            -port=18444
+            -txindex=1
+            -fallbackfee=0.0002
+        volumes:
+            - bitcoind-data:/home/bitcoin/.bitcoin
+        networks:
+            - sail
+
+    litecoind:
+        image: litecoinproject/litecoin-core:latest
+        command: >
+            -regtest=1
+            -server=1
+            -rpcuser=sail
+            -rpcpassword=password
+            -rpcallowip=0.0.0.0/0
+            -rpcbind=0.0.0.0
+            -rpcport=19443
+            -port=19444
+            -txindex=1
+        volumes:
+            - litecoind-data:/home/litecoin/.litecoin
+        networks:
+            - sail
+
+    dashd:
+        image: dashpay/dashd:latest
+        command: >
+            dashd
+            -regtest=1
+            -server=1
+            -rpcuser=sail
+            -rpcpassword=password
+            -rpcallowip=0.0.0.0/0
+            -rpcbind=0.0.0.0
+            -rpcport=19998
+            -port=19999
+        volumes:
+            - dashd-data:/dash/.dashcore
+        networks:
+            - sail
+
 networks:
     sail:
         driver: bridge
@@ -71,4 +123,10 @@ volumes:
     sail-pgsql:
         driver: local
     sail-redis:
+        driver: local
+    bitcoin-data:
+        driver: local
+    litecoin-data:
+        driver: local
+    dashd-data:
         driver: local

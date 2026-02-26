@@ -11,4 +11,5 @@ Route::get('/user', function (Request $request) {
 Route::prefix('v1')->middleware('auth.merchant')->group(function () {
     Route::post('/invoices', [\App\Http\Controllers\Api\InvoiceController::class, 'store']);
     Route::get('/invoices/{id}', [\App\Http\Controllers\Api\InvoiceController::class, 'show']);
+    Route::post('/invoices/{id}/refresh', [\App\Http\Controllers\Api\InvoiceRefreshController::class, '__invoke']);
 });

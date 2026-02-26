@@ -7,6 +7,7 @@ use App\Http\Requests\CreateInvoiceRequest;
 use App\Models\Invoice;
 use App\Models\Merchant;
 use App\Services\InvoiceCreator;
+use App\Services\InvoiceStatusRefresher;
 use Illuminate\Http\Request;
 
 class InvoiceController extends Controller
@@ -41,7 +42,14 @@ class InvoiceController extends Controller
         /** @var Merchant $merchant */
         $merchant = $request->attributes->get('merchant');
 
+
         $invoice = Invoice::where('merchant_id', $merchant->id)->findOrFail($id);
+
+        if ($request->boolean('refresh')) {
+            /** @var InvoiceStatusRefresher $refresher */
+            $refresher = app(InvoiceStatusRefresher::class);
+            $invoice = $refresher->refresh($invoice);
+        }
 
         return response()->json([
             'success' => true,

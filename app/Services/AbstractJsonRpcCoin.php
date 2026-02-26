@@ -61,10 +61,10 @@ class AbstractJsonRpcCoin implements CoinRpc
         return (string)$this->call('getnewaddress', [$label]);
     }
 
-    public function getReceivedTotals(string $address): array
+    public function getReceivedTotals(string $address, int $confirmedMinConf): array
     {
         $all = (float)$this->call('getreceivedbyaddress', [$address, 0]);
-        $conf = (float)$this->call('getreceivedbyaddress', [$address, 1]);
+        $conf = (float)$this->call('getreceivedbyaddress', [$address, $confirmedMinConf]);
         $unconf = max(0.0, $all - $conf);
 
         return ['confirmed' => $conf, 'unconfirmed' => $unconf, 'all' => $all];

@@ -67,54 +67,37 @@ services:
     bitcoind:
         image: ruimarinho/bitcoin-core:latest
         command: >
-            -regtest=1
-            -server=1
-            -rpcuser=sail
-            -rpcpassword=password
-            -rpcallowip=0.0.0.0/0
-            -rpcbind=0.0.0.0
-            -rpcport=18443
-            -port=18444
-            -txindex=1
-            -fallbackfee=0.0002
+            -conf=/etc/bitcoin/bitcoin.conf
+            -datadir=/home/bitcoin/.bitcoin
+            -printtoconsole
         volumes:
             - bitcoind-data:/home/bitcoin/.bitcoin
+            - ./nodes/bitcoin/bitcoin.conf:/etc/bitcoin/bitcoin.conf:ro
         networks:
             - sail
 
     litecoind:
         image: litecoinproject/litecoin-core:latest
         command: >
-            -regtest=1
-            -server=1
-            -rpcuser=sail
-            -rpcpassword=password
-            -rpcallowip=0.0.0.0/0
-            -rpcbind=0.0.0.0
-            -rpcport=19443
-            -port=19444
-            -txindex=1
+            -conf=/etc/litecoin/litecoin.conf
+            -datadir=/home/litecoin/.litecoin
+            -printtoconsole
         volumes:
             - litecoind-data:/home/litecoin/.litecoin
+            - ./nodes/ltc/litecoin.conf:/etc/litecoin/litecoin.conf:ro
         networks:
             - sail
 
     dashd:
         image: dashpay/dashd:latest
         command: >
-            dashd
-            -regtest=1
-            -server=1
-            -rpcuser=sail
-            -rpcpassword=password
-            -rpcallowip=0.0.0.0/0
-            -rpcbind=0.0.0.0
-            -rpcport=19998
-            -port=19999
+            /usr/local/bin/dashd -conf=/dash/.dashcore/dash.conf
         volumes:
             - dashd-data:/dash/.dashcore
+            - ./nodes/dash/dash.conf:/dash/.dashcore/dash.conf:ro
         networks:
             - sail
+
 
 networks:
     sail:
@@ -124,9 +107,6 @@ volumes:
         driver: local
     sail-redis:
         driver: local
-    bitcoin-data:
-        driver: local
-    litecoin-data:
-        driver: local
+    bitcoind-data:
+    litecoind-data:
     dashd-data:
-        driver: local

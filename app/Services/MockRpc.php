@@ -13,7 +13,7 @@ class MockRpc implements CoinRpc
         return 'mock_' . Str::lower(Str::random(30));
     }
 
-    public function getReceivedTotals(string $address): array
+    public function getReceivedTotals(string $address, int $confirmedMinConf): array
     {
         return ['confirmed' => 0.0, 'unconfirmed' => 0.0, 'all' => 0.0];
     }

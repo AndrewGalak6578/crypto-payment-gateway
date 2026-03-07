@@ -32,7 +32,7 @@ class AuthMerchantApiKey
             ->where('token_hash', $hash)
             ->whereNull('revoked_at')
             ->with('merchant')
-            ->first();
+            ->firstOrFail();
 
         if (!$key || !$key->merchant || $key->merchant->status !== 'active') {
             return response()->json(['success' => false, 'error' => 'Invalid API key'], 401);

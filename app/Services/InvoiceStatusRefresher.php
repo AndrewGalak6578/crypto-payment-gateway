@@ -3,9 +3,11 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Jobs\ForwardInvoiceJob;
 use App\Models\Invoice;
 use App\Support\Coin;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 final class InvoiceStatusRefresher
 {
@@ -13,97 +15,111 @@ final class InvoiceStatusRefresher
 
     public function refresh(Invoice $invoice): Invoice
     {
-        /** @var Invoice $inv */
-        $inv = Invoice::query()
-            ->whereKey($invoice->id)
-            ->lockForUpdate()
-            ->firstOrFail();
+        $shouldDispatchForward = false;
 
-        $now = now('UTC');
+        DB::transaction(function () use ($invoice, &$shouldDispatchForward): void {
+            /** @var Invoice $inv */
+            $inv = Invoice::query()
+                ->whereKey($invoice->id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        $confirmations = (int)config('payments.confirmations', 1);
+            $now = now('UTC');
+            $confirmations = (int) config('payments.confirmations', 1);
 
-        $rpc = Coin::rpc($inv->coin);
+            $rpc = Coin::rpc($inv->coin);
+            $label = "inv:{$inv->public_id}";
 
-        // label same as InvoiceCreator: inv{public_id}
-        $label = "inv:{$inv->public_id}";
+            $txs = $rpc->getTransactionsByAddress($inv->pay_address, 0, 1000, $label);
+            $totals = $rpc->getReceivedTotals($inv->pay_address, $confirmations);
 
-        // tx list: all transactions, both confirmed and unconfirmed to fixate first_tx
-        $txs = $rpc->getTransactionsByAddress($inv->pay_address, 0, 1000, $label);
+            $receivedAll = (float) ($totals['all'] ?? 0.0);
+            $receivedConf = (float) ($totals['confirmed'] ?? 0.0);
 
-        // totals: all + confirmed(minConf = $confirmations)
-        $totals = $rpc->getReceivedTotals($inv->pay_address, $confirmations);
+            $inv->received_all_coin = $receivedAll;
+            $inv->received_conf_coin = $receivedConf;
 
-        $receivedAll = (float)($totals['all'] ?? 0.0);
-        $receivedConf = (float)($totals['confirmed'] ?? 0.0);
-
-        $inv->received_all_coin = $receivedAll;
-        $inv->received_conf_coin = $receivedConf;
-
-        // first tx snapshot (only once)
-        if (!$inv->first_txid && !empty($txs)) {
-            $first = $this->pickFirstTx($txs);
-            if ($first) {
-                $inv->first_txid = (string)($first['txid'] ?? null);
-                $inv->first_amount_coin = (float)($first['amount'] ?? null);
-            }
-        }
-
-        // ---------TRANSITIONS-----------
-        // 1 - fixated - if any amount came BEFORE expires_at (by the time of the first transaction)
-        if ($inv->status === 'pending' && $receivedAll > 0.0) {
-            $firstTime = $this->firstSeenTime($txs); // unix time|null
-
-            $beforeExpiry = false;
-            if ($firstTime !== null && $inv->expires_at) {
-                $beforeExpiry = Carbon::createFromTimestampUTC((int)$firstTime)
-                    ->lte($inv->expires_at);
-            } elseif ($inv->expires_at) {
-                $beforeExpiry = $now->lte($inv->expires_at);
+            if (! $inv->first_txid && ! empty($txs)) {
+                $first = $this->pickFirstTx($txs);
+                if ($first) {
+                    $inv->first_txid = (string) ($first['txid'] ?? null);
+                    $inv->first_amount_coin = (float) ($first['amount'] ?? null);
+                }
             }
 
-            if ($beforeExpiry) {
-                $inv->status = "fixated";
-                $inv->fixated_at = $now;
+            // 1) fixated
+            if ($inv->status === 'pending' && $receivedAll > 0.0) {
+                $firstTime = $this->firstSeenTime($txs);
 
-                $rate = (float)$this->rates->usd($inv->coin);
-                $receivedUsd = $receivedAll * $rate;
-                $slip = $receivedUsd - (float)$inv->expected_usd;
+                $beforeExpiry = false;
+                if ($firstTime !== null && $inv->expires_at) {
+                    $beforeExpiry = Carbon::createFromTimestampUTC((int) $firstTime)
+                        ->lte($inv->expires_at);
+                } elseif ($inv->expires_at) {
+                    $beforeExpiry = $now->lte($inv->expires_at);
+                }
 
-                $meta = is_array($inv->metadata) ? $inv->metadata : (array)($inv->metadata ?? []);
-                $meta['slippage']['fixated_usd'] = $slip;
-                $meta['slippage']['fixated_rate_usd'] = $rate;
-                $inv->metadata = $meta;
+                if ($beforeExpiry) {
+                    $inv->status = 'fixated';
+                    $inv->fixated_at = $now;
+
+                    $rate = (float) $this->rates->usd($inv->coin);
+                    $receivedUsd = $receivedAll * $rate;
+                    $slip = $receivedUsd - (float) $inv->expected_usd;
+
+                    $meta = is_array($inv->metadata) ? $inv->metadata : (array) ($inv->metadata ?? []);
+                    $meta['slippage']['fixated_usd'] = $slip;
+                    $meta['slippage']['fixated_rate_usd'] = $rate;
+                    $inv->metadata = $meta;
+                }
             }
-        }
 
-        // 2 - expired - if pending and now > expires_at and NO FIXATION
-        if ($inv->status === 'pending' && $inv->expires_at && !$inv->fixated_at && $now->gt($inv->expires_at)) {
-            $inv->status = 'expired';
-        }
-
-        // 3 - paid - if confirmed amount is enough (even from expired)
-        if (in_array($inv->status, ['pending', 'fixated', 'expired'], true) && $this->isPaid($inv, $receivedConf)) {
-            $inv->status = 'paid';
-            $inv->paid_at = $inv->paid_at ?? $now;
-
-            if ($inv->paid_usd === null) {
-                $rate = (float)$this->rates->usd($inv->coin);
-                $paidUsd = $receivedConf * $rate;
-                $inv->paid_usd = $paidUsd;
-
-                $slip = $paidUsd - (float)$inv->expected_usd;
-
-                $meta = is_array($inv->metadata) ? $inv->metadata : (array)($inv->metadata ?? []);
-                $meta['slippage']['paid_usd'] = $slip;
-                $meta['slippage']['paid_rate_usd'] = $rate;
-                $inv->metadata = $meta;
+            // 2) expired
+            if ($inv->status === 'pending' && $inv->expires_at && ! $inv->fixated_at && $now->gt($inv->expires_at)) {
+                $inv->status = 'expired';
             }
+
+            // 3) paid
+            if (in_array($inv->status, ['pending', 'fixated', 'expired'], true) && $this->isPaid($inv, $receivedConf)) {
+                $inv->status = 'paid';
+                $inv->paid_at = $inv->paid_at ?? $now;
+
+                if ($inv->paid_usd === null) {
+                    $rate = (float) $this->rates->usd($inv->coin);
+                    $paidUsd = $receivedConf * $rate;
+                    $inv->paid_usd = $paidUsd;
+
+                    $slip = $paidUsd - (float) $inv->expected_usd;
+
+                    $meta = is_array($inv->metadata) ? $inv->metadata : (array) ($inv->metadata ?? []);
+                    $meta['slippage']['paid_usd'] = $slip;
+                    $meta['slippage']['paid_rate_usd'] = $rate;
+                    $inv->metadata = $meta;
+                }
+            }
+
+            $confirmed = (float) ($inv->received_conf_coin ?? 0);
+            $forwarded = (float) ($inv->forwarded_coin ?? 0);
+            $delta = $confirmed - $forwarded;
+
+            if (
+                $inv->status === 'paid'
+                && $delta > 0
+                && in_array($inv->forward_status, ['none', 'partial', 'failed'], true)
+                && $inv->forward_attempt_uuid === null
+            ) {
+                $shouldDispatchForward = true;
+            }
+
+            $inv->save();
+
+        });
+
+        if ($shouldDispatchForward && config('forwarding.enabled')) {
+            ForwardInvoiceJob::dispatch($invoice->id);
         }
 
-        $inv->save();
-
-        return $inv->fresh();
+        return $invoice->fresh();
     }
 
     private function isPaid(Invoice $inv, float $receivedConf)

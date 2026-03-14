@@ -5,19 +5,24 @@ namespace App\Services;
 
 use App\Jobs\ForwardInvoiceJob;
 use App\Models\Invoice;
+use App\Services\Webhooks\EnqueueInvoiceWebhook;
 use App\Support\Coin;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 final class InvoiceStatusRefresher
 {
-    public function __construct(private CoinRate $rates){}
+    public function __construct(
+        private CoinRate $rates,
+        private EnqueueInvoiceWebhook $enqueueWebhook,
+    ){}
 
     public function refresh(Invoice $invoice): Invoice
     {
         $shouldDispatchForward = false;
+        $eventsToDispatch = [];
 
-        DB::transaction(function () use ($invoice, &$shouldDispatchForward): void {
+        DB::transaction(function () use ($invoice, &$shouldDispatchForward, &$eventsToDispatch): void {
             /** @var Invoice $inv */
             $inv = Invoice::query()
                 ->whereKey($invoice->id)
@@ -47,14 +52,12 @@ final class InvoiceStatusRefresher
                 }
             }
 
-            // 1) fixated
             if ($inv->status === 'pending' && $receivedAll > 0.0) {
                 $firstTime = $this->firstSeenTime($txs);
 
                 $beforeExpiry = false;
                 if ($firstTime !== null && $inv->expires_at) {
-                    $beforeExpiry = Carbon::createFromTimestampUTC((int) $firstTime)
-                        ->lte($inv->expires_at);
+                    $beforeExpiry = Carbon::createFromTimestampUTC((int) $firstTime)->lte($inv->expires_at);
                 } elseif ($inv->expires_at) {
                     $beforeExpiry = $now->lte($inv->expires_at);
                 }
@@ -71,15 +74,16 @@ final class InvoiceStatusRefresher
                     $meta['slippage']['fixated_usd'] = $slip;
                     $meta['slippage']['fixated_rate_usd'] = $rate;
                     $inv->metadata = $meta;
+
+                    $eventsToDispatch[] = 'invoice.fixated';
                 }
             }
 
-            // 2) expired
             if ($inv->status === 'pending' && $inv->expires_at && ! $inv->fixated_at && $now->gt($inv->expires_at)) {
                 $inv->status = 'expired';
+                $eventsToDispatch[] = 'invoice.expired';
             }
 
-            // 3) paid
             if (in_array($inv->status, ['pending', 'fixated', 'expired'], true) && $this->isPaid($inv, $receivedConf)) {
                 $inv->status = 'paid';
                 $inv->paid_at = $inv->paid_at ?? $now;
@@ -96,6 +100,8 @@ final class InvoiceStatusRefresher
                     $meta['slippage']['paid_rate_usd'] = $rate;
                     $inv->metadata = $meta;
                 }
+
+                $eventsToDispatch[] = 'invoice.paid';
             }
 
             $confirmed = (float) ($inv->received_conf_coin ?? 0);
@@ -112,14 +118,19 @@ final class InvoiceStatusRefresher
             }
 
             $inv->save();
-
         });
+
+        $fresh = $invoice->fresh(['merchant']);
+
+        foreach ($eventsToDispatch as $event) {
+            $this->enqueueWebhook->enqueue($event, $fresh);
+        }
 
         if ($shouldDispatchForward && config('forwarding.enabled')) {
             ForwardInvoiceJob::dispatch($invoice->id);
         }
 
-        return $invoice->fresh();
+        return $fresh;
     }
 
     private function isPaid(Invoice $inv, float $receivedConf)

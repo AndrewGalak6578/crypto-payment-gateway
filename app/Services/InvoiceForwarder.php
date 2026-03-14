@@ -5,6 +5,7 @@ namespace App\Services;
 
 use App\Models\Invoice;
 use App\Models\SuperWallet;
+use App\Services\Webhooks\EnqueueInvoiceWebhook;
 use App\Support\Coin;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -12,6 +13,11 @@ use Throwable;
 
 final class InvoiceForwarder
 {
+    public function __construct(
+        private readonly EnqueueInvoiceWebhook $enqueueWebhook,
+    )
+    {
+    }
 
     public function forward(int $invoiceId): void
     {
@@ -36,6 +42,12 @@ final class InvoiceForwarder
                 amount: $plan['amount'],
                 txid: $txid
             );
+
+            $fresh = Invoice::query()->with('merchant')->find($invoiceId);
+
+            if ($fresh) {
+                $this->enqueueWebhook->enqueue('invoice.forwarded', $fresh);
+            }
         } catch (Throwable $e) {
             $this->markFailed($invoiceId, $plan['attempt_uuid']);
             report($e);

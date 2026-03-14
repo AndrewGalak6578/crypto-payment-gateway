@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -33,7 +34,6 @@ use Illuminate\Support\Carbon;
  * @property array|null $metadata
  * @property array|null $forward_txids
  * @property Carbon|null $last_forwarded_at
- * @property Carbon|null $last_forward_at
  * @property Carbon|null $forwarding_started_at
  * @property float|null $forwarded_coin
  * @property float|null $forwarding_coin
@@ -62,7 +62,7 @@ class Invoice extends Model
         'fixated_at' => 'datetime',
         'paid_at' => 'datetime',
         'monitor_until' => 'datetime',
-        'last_forward_at' => 'datetime',
+        'last_forwarded_at' => 'datetime',
         'forwarding_started_at' => 'datetime',
         'metadata' => 'array',
         'forward_txids' => 'array',
@@ -70,8 +70,29 @@ class Invoice extends Model
         'forwarding_coin' => 'decimal:8',
     ];
 
+    protected function casts()
+    {
+        return [
+            'expires_at' => 'datetime',
+            'fixated_at' => 'datetime',
+            'paid_at' => 'datetime',
+            'monitor_until' => 'datetime',
+            'last_forwarded_at' => 'datetime',
+            'forwarding_started_at' => 'datetime',
+            'metadata' => 'array',
+            'forward_txids' => 'array',
+            'forwarded_coin' => 'decimal:8',
+            'forwarding_coin' => 'decimal:8',
+        ];
+    }
+
     public function merchant(): BelongsTo
     {
         return $this->belongsTo(Merchant::class);
+    }
+
+    public function webhookDeliveries(): HasMany
+    {
+        return $this->hasMany(WebhookDelivery::class);
     }
 }

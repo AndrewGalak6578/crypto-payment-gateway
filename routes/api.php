@@ -14,6 +14,9 @@ Route::prefix('v1')->middleware('auth.merchant')->group(function () {
     Route::post('/invoices/{id}/refresh', [\App\Http\Controllers\Api\InvoiceRefreshController::class, '__invoke']);
 });
 
+
+// TEST ROUTES FOR TESTING WEBHOOKS
+// TODO: Delete them when not needed
 Route::post('/test/webhook-receiver', function (Request $request) {
     Log::info('test webhook received', [
         'headers' => $request->headers->all(),

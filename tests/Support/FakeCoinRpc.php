@@ -6,6 +6,9 @@ namespace Tests\Support;
 
 use App\Services\CoinRpc;
 
+/**
+ * In-memory RPC test double with controllable totals, transactions and send calls.
+ */
 final class FakeCoinRpc implements CoinRpc
 {
     /** @var array<int, array<string, mixed>> */
@@ -23,16 +26,31 @@ final class FakeCoinRpc implements CoinRpc
 
     public string $nextTxid = 'fake_txid_1';
 
+    /**
+     * @param string $label
+     */
     public function getNewAddress(string $label = ''): string
     {
         return 'mock_addr_' . md5($label . microtime(true));
     }
 
+    /**
+     * @param string $address
+     * @param int $confirmedMinConf
+     * @return array{confirmed: float, unconfirmed: float, all: float}
+     */
     public function getReceivedTotals(string $address, int $confirmedMinConf): array
     {
         return $this->totals;
     }
 
+    /**
+     * @param string $address
+     * @param int $minConf
+     * @param int $count
+     * @param string|null $label
+     * @return array<int, array<string, mixed>>
+     */
     public function getTransactionsByAddress(
         string $address,
         int $minConf = 1,
@@ -42,6 +60,12 @@ final class FakeCoinRpc implements CoinRpc
         return $this->txs;
     }
 
+    /**
+     * @param string $address
+     * @param float $amount
+     * @param float|null $feeRate
+     * @return string
+     */
     public function sendToAddress(string $address, float $amount, ?float $feeRate = null): string
     {
         $this->sendCalls[] = [
@@ -53,6 +77,9 @@ final class FakeCoinRpc implements CoinRpc
         return $this->nextTxid;
     }
 
+    /**
+     * @return float
+     */
     public function getBalance(): float
     {
         return 1000.0;

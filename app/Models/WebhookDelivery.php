@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
- * App\Models\WebhookDelivery
+ * Stored outbound webhook delivery with retry metadata.
  *
  * @property int $id
  * @property int $invoice_id
@@ -40,6 +40,9 @@ class WebhookDelivery extends Model
         'delivered_at',
     ];
 
+    /**
+     * @return array<string, string>
+     */
     protected function casts(): array
     {
         return [

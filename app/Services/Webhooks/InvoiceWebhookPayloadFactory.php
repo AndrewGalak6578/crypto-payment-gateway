@@ -5,8 +5,20 @@ namespace App\Services\Webhooks;
 
 use App\Models\Invoice;
 
+/**
+ * Builds canonical webhook payload for invoice events.
+ */
 final class InvoiceWebhookPayloadFactory
 {
+    /**
+     * @param non-empty-string $event
+     * @param Invoice $invoice
+     * @return array{
+     *     event: string,
+     *     sent_at: string,
+     *     invoice: array<string, mixed>
+     * }
+     */
     public function make(string $event, Invoice $invoice): array
     {
         return [

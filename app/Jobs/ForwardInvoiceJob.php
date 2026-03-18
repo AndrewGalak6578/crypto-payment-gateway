@@ -9,6 +9,9 @@ use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 
+/**
+ * Asynchronous settlement trigger for a paid invoice.
+ */
 class ForwardInvoiceJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
@@ -18,6 +21,8 @@ class ForwardInvoiceJob implements ShouldQueue
 
     /**
      * Create a new job instance.
+     *
+     * @param int $invoiceId Internal invoice identifier.
      */
     public function __construct(public int $invoiceId)
     {
@@ -36,6 +41,8 @@ class ForwardInvoiceJob implements ShouldQueue
 
     /**
      * Execute the job.
+     *
+     * @param InvoiceForwarder $forwarder
      */
     public function handle(InvoiceForwarder $forwarder): void
     {

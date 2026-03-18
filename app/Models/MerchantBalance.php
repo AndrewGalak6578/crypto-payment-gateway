@@ -7,11 +7,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 
 /**
- * Class MerchantBalance
+ * Internal merchant balance for coins that were not forwarded on-chain.
+ *
  * @property int $id
  * @property int $merchant_id
  * @property string $coin
  * @property float $amount
+ *
+ * @property-read Merchant $merchant
  */
 class MerchantBalance extends Model
 {
@@ -19,6 +22,9 @@ class MerchantBalance extends Model
         'merchant_id', 'coin', 'amount'
     ];
 
+    /**
+     * @return array<string, string>
+     */
     protected function casts(): array
     {
         return [

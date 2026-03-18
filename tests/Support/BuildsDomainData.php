@@ -8,8 +8,14 @@ use App\Models\Invoice;
 use App\Models\Merchant;
 use App\Models\MerchantApiKey;
 
+/**
+ * Test fixture helpers for domain entities.
+ */
 trait BuildsDomainData
 {
+    /**
+     * @param array<string, mixed> $overrides
+     */
     protected function createMerchant(array $overrides = []): Merchant
     {
         return Merchant::query()->create(array_merge([
@@ -21,7 +27,11 @@ trait BuildsDomainData
         ], $overrides));
     }
 
-    /** @return array{0: MerchantApiKey, 1: string} */
+    /**
+     * @param Merchant $merchant
+     * @param array<string, mixed> $overrides
+     * @return array{0: MerchantApiKey, 1: string}
+     */
     protected function createApiKey(Merchant $merchant, array $overrides = []): array
     {
         $plain = $overrides['plain'] ?? 'merchant_token_123';
@@ -37,6 +47,10 @@ trait BuildsDomainData
         return [$key, $plain];
     }
 
+    /**
+     * @param Merchant $merchant
+     * @param array<string, mixed> $overrides
+     */
     protected function createInvoice(Merchant $merchant, array $overrides = []): Invoice
     {
         return Invoice::query()->create(array_merge([

@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
+ * Invoice state snapshot used by API, hosted page and settlement pipeline.
+ *
  * @property int $id
  * @property int $merchant_id
  * @property string|null $public_id
@@ -40,6 +42,7 @@ use Illuminate\Support\Carbon;
  * @property float|null $forwarded_coin
  * @property float|null $forwarding_coin
  * @property-read Merchant $merchant
+ * @property-read HasMany<WebhookDelivery> $webhookDeliveries
  */
 class Invoice extends Model
 {
@@ -72,6 +75,9 @@ class Invoice extends Model
         'forwarding_coin' => 'decimal:8',
     ];
 
+    /**
+     * @return array<string, string>
+     */
     protected function casts(): array
     {
         return [

@@ -13,6 +13,13 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Throwable;
 
+/**
+ * Handles merchant settlement after invoice payment.
+ *
+ * Settlement strategy:
+ * - If a destination wallet exists, transfer only the merchant net amount.
+ * - If no destination wallet exists, credit merchant internal balance.
+ */
 final class InvoiceForwarder
 {
     public function __construct(
@@ -23,6 +30,12 @@ final class InvoiceForwarder
     {
     }
 
+    /**
+     * Attempts to settle a paid invoice.
+     *
+     * @param int $invoiceId Internal invoice identifier.
+     * @throws \Throwable Re-thrown after marking forwarding attempt as failed.
+     */
     public function forward(int $invoiceId): void
     {
         /** @var Invoice $invoice */
@@ -77,6 +90,19 @@ final class InvoiceForwarder
         }
     }
 
+    /**
+     * Reserves a forwarding attempt and returns immutable transfer plan.
+     *
+     * @param int $invoiceId Internal invoice identifier.
+     * @param SuperWallet $wallet Resolved destination wallet.
+     * @return array{
+     *     attempt_uuid: string,
+     *     coin: string,
+     *     wallet: string,
+     *     fee_rate: float|null,
+     *     amount: float
+     * }|null
+     */
     private function reserveForwarding(int $invoiceId, SuperWallet $wallet): ?array
     {
         return DB::transaction(function () use ($invoiceId, $wallet): ?array {
@@ -99,6 +125,7 @@ final class InvoiceForwarder
             $confirmed = $this->norm((float) ($invoice->received_conf_coin ?? 0), $scale);
             $forwarded = $this->norm((float) ($invoice->forwarded_coin ?? 0), $scale);
             $feePercent = (float) ($invoice->merchant->fee_percent ?? 0.0);
+            // Merchant receives net amount after fee retention by the gateway.
             $targetNet = $this->norm($confirmed - ($confirmed * ($feePercent / 100)), $scale);
             $targetNet = max(0.0, $targetNet);
             $amount = $this->norm($targetNet - $forwarded, $scale);
@@ -138,6 +165,14 @@ final class InvoiceForwarder
         });
     }
 
+    /**
+     * Finalizes successful forwarding attempt and updates invoice settlement fields.
+     *
+     * @param int $invoiceId Internal invoice identifier.
+     * @param string $attemptUuid Forwarding attempt UUID reserved before RPC send.
+     * @param float $amount Settled amount that was sent to destination wallet.
+     * @param string $txid Transaction identifier returned by chain RPC.
+     */
     private function markForwarded(int $invoiceId, string $attemptUuid, float $amount, string $txid): void
     {
         DB::transaction(function () use ($invoiceId, $attemptUuid, $amount, $txid): void {
@@ -179,6 +214,13 @@ final class InvoiceForwarder
             $invoice->save();
         });
     }
+
+    /**
+     * Marks reserved forwarding attempt as failed and clears processing fields.
+     *
+     * @param int $invoiceId Internal invoice identifier.
+     * @param string $attemptUuid Forwarding attempt UUID.
+     */
     private function markFailed(int $invoiceId, string $attemptUuid): void
     {
         DB::transaction(function () use ($invoiceId, $attemptUuid): void {
@@ -198,6 +240,7 @@ final class InvoiceForwarder
             $invoice->save();
         });
     }
+
     private function scale(string $coin): int
     {
         return match ($coin) {
@@ -207,13 +250,21 @@ final class InvoiceForwarder
     }
 
     /**
+     * Rounds coin values to chain-specific precision.
      *
+     * @param float $value Value to normalize.
+     * @param int $scale Number of decimal places for target coin.
      */
     private function norm(float $value, int $scale): float
     {
         return round($value, $scale);
     }
 
+    /**
+     * Defines floating-point tolerance per coin precision.
+     *
+     * @param string $coin Normalized coin symbol.
+     */
     private function epsilon(string $coin): float
     {
         return match ($coin) {

@@ -8,8 +8,17 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * Resolves USD rates with provider fallback and safety guards.
+ */
 class CoinRate
 {
+    /**
+     * Returns market rate for given coin symbol.
+     *
+     * @param string $coin Normalized coin symbol.
+     * @throws \RuntimeException When no sane rate can be resolved.
+     */
     public function usd(string $coin = 'dash'): float
     {
         $coin = strtolower($coin);
@@ -58,6 +67,11 @@ class CoinRate
         throw new \RuntimeException("Rate for {$coin} unavailable");
     }
 
+    /**
+     * Reads spot price from CoinGecko.
+     *
+     * @param string $coin Normalized coin symbol.
+     */
     private function fromCoinGecko(string $coin): ?float
     {
         $id = match ($coin) {
@@ -78,6 +92,11 @@ class CoinRate
         return isset($data[$id]['usd']) ? (float)$data[$id]['usd'] : null;
     }
 
+    /**
+     * Reads spot price from Coinbase.
+     *
+     * @param string $coin Normalized coin symbol.
+     */
     private function fromCoinbase(string $coin): ?float
     {
         $pair = match ($coin) {
@@ -98,6 +117,12 @@ class CoinRate
         return is_numeric($amount) ? (float)$amount : null;
     }
 
+    /**
+     * Basic sanity checks against obvious provider outliers.
+     *
+     * @param string $coin Normalized coin symbol.
+     * @param float $rate Candidate rate.
+     */
     private function isSaneRate(string $coin, float $rate): bool
     {
         if ($rate <= 0) return false;

@@ -7,8 +7,16 @@ use App\Models\Invoice;
 use App\Models\MerchantBalance;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Credits merchant internal balance when on-chain forwarding wallet is unavailable.
+ */
 final class MerchantBalanceCreditor
 {
+    /**
+     * Idempotently books fee and merchant payout for a paid invoice.
+     *
+     * @param int $invoiceId Internal invoice identifier.
+     */
     public function credit(int $invoiceId): void
     {
         DB::transaction(function () use ($invoiceId): void {
@@ -63,6 +71,11 @@ final class MerchantBalanceCreditor
         });
     }
 
+    /**
+     * Returns decimal precision for coin-level rounding.
+     *
+     * @param string $coin Normalized coin symbol.
+     */
     private function scale(string $coin): int
     {
         return match ($coin) {
@@ -71,6 +84,12 @@ final class MerchantBalanceCreditor
         };
     }
 
+    /**
+     * Rounds value to configured coin precision.
+     *
+     * @param float $value Value to normalize.
+     * @param int $scale Number of decimal places for target coin.
+     */
     private function norm(float $value, int $scale): float
     {
         return round($value, $scale);

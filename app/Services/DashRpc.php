@@ -2,6 +2,9 @@
 
 namespace App\Services;
 
+/**
+ * Dash JSON-RPC client.
+ */
 class DashRpc extends AbstractJsonRpcCoin
 {
     public function __construct()

@@ -5,6 +5,9 @@ namespace App\Services;
 
 use Illuminate\Support\Str;
 
+/**
+ * Deterministic local stub for test/dev mode without real chain RPC calls.
+ */
 class MockRpc implements CoinRpc
 {
 
@@ -18,6 +21,9 @@ class MockRpc implements CoinRpc
         return ['confirmed' => 0.0, 'unconfirmed' => 0.0, 'all' => 0.0];
     }
 
+    /**
+     * @return array<int, array<string, mixed>>
+     */
     public function getTransactionsByAddress(string $address, int $minConf = 1, int $count = 1000, ?string $label = null): array
     {
         return [];

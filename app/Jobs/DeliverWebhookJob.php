@@ -2,7 +2,6 @@
 
 namespace App\Jobs;
 
-use App\Models\WebhookDelivery;
 use App\Services\Webhooks\WebhookDeliverySender;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -10,6 +9,9 @@ use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 
+/**
+ * Delivers a single webhook attempt for stored webhook delivery record.
+ */
 class DeliverWebhookJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
@@ -19,6 +21,8 @@ class DeliverWebhookJob implements ShouldQueue
 
     /**
      * Create a new job instance.
+     *
+     * @param int $deliveryId Webhook delivery record identifier.
      */
     public function __construct(public int $deliveryId)
     {
@@ -32,6 +36,8 @@ class DeliverWebhookJob implements ShouldQueue
 
     /**
      * Execute the job.
+     *
+     * @param WebhookDeliverySender $sender
      */
     public function handle(WebhookDeliverySender $sender): void
     {

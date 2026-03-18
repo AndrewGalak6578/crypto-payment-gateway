@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Class Merchant
+ * Merchant aggregate root for API auth, invoice ownership and settlement settings.
  *
  * @property int $id
  * @property string $name
@@ -16,8 +16,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $webhook_url
  * @property string|null $webhook_secret
  *
- * @property Collection|MerchantApiKey[] $apiKeys
- * @property Collection|Invoice[] $invoices
+ * @property-read Collection<int, MerchantApiKey> $apiKeys
+ * @property-read Collection<int, Invoice> $invoices
+ * @property-read Collection<int, SuperWallet> $superWallets
+ * @property-read Collection<int, MerchantBalance> $balances
  */
 class Merchant extends Model
 {

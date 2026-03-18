@@ -9,10 +9,20 @@ use App\Models\Merchant;
 use App\Services\InvoiceCreator;
 use App\Services\InvoiceStatusRefresher;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 
+/**
+ * Merchant API endpoints for invoice creation and retrieval.
+ */
 class InvoiceController extends Controller
 {
-    public function store(CreateInvoiceRequest $request, InvoiceCreator $creator)
+    /**
+     * Creates a new invoice or returns existing one by external_id.
+     *
+     * @param CreateInvoiceRequest $request
+     * @param InvoiceCreator $creator
+     */
+    public function store(CreateInvoiceRequest $request, InvoiceCreator $creator): JsonResponse
     {
         /** @var Merchant $merchant */
         $merchant = $request->attributes->get('merchant');
@@ -37,7 +47,13 @@ class InvoiceController extends Controller
         ], 201);
     }
 
-    public function show(Request $request, int $id)
+    /**
+     * Returns invoice details and optionally refreshes chain state.
+     *
+     * @param Request $request
+     * @param int $id Internal invoice identifier.
+     */
+    public function show(Request $request, int $id): JsonResponse
     {
         /** @var Merchant $merchant */
         $merchant = $request->attributes->get('merchant');

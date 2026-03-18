@@ -7,6 +7,9 @@ use App\Jobs\DeliverWebhookJob;
 use App\Models\Invoice;
 use App\Models\WebhookDelivery;
 
+/**
+ * Persists invoice webhook delivery and dispatches async sender job.
+ */
 final class EnqueueInvoiceWebhook
 {
     public function __construct(
@@ -15,6 +18,11 @@ final class EnqueueInvoiceWebhook
     )
     {}
 
+    /**
+     * @param non-empty-string $event
+     * @param Invoice $invoice Invoice snapshot with loaded merchant relation.
+     * @return WebhookDelivery|null
+     */
     public function enqueue(string $event, Invoice $invoice): ?WebhookDelivery
     {
         if (!config('webhooks.enabled')) {

@@ -12,17 +12,24 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Carbon;
 
+/**
+ * Periodically refreshes invoice chain state until terminal status.
+ */
 class MonitorInvoiceJob implements ShouldQueue
 {
     use Queueable, Dispatchable, InteractsWithQueue, SerializesModels;
 
     /**
      * Create a new job instance.
+     *
+     * @param int $invoiceId Internal invoice identifier.
      */
     public function __construct(public int $invoiceId) {}
 
     /**
      * Execute the job.
+     *
+     * @param InvoiceStatusRefresher $refresher
      */
     public function handle(InvoiceStatusRefresher $refresher): void
     {
@@ -44,6 +51,13 @@ class MonitorInvoiceJob implements ShouldQueue
         self::dispatch($inv->id)->delay($now->copy()->addSeconds($delay));
     }
 
+    /**
+     * Selects polling cadence based on invoice age and expiration.
+     *
+     * @param Invoice $inv
+     * @param Carbon $nowUtc
+     * @return int Delay in seconds.
+     */
     private function nextDelaySeconds(Invoice $inv, Carbon $nowUtc): int
     {
         $fastSec = (int)config('payments.monitor.poll_fast_sec', 60);

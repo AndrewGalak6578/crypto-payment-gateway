@@ -2,6 +2,9 @@
 
 namespace App\Services;
 
+/**
+ * Litecoin JSON-RPC client.
+ */
 class LtcRpc extends AbstractJsonRpcCoin
 {
     public function __construct()

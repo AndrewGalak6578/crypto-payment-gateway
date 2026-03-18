@@ -10,6 +10,9 @@ use App\Support\Coin;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Recalculates invoice blockchain state and emits state transition webhooks.
+ */
 final class InvoiceStatusRefresher
 {
     public function __construct(
@@ -17,6 +20,17 @@ final class InvoiceStatusRefresher
         private EnqueueInvoiceWebhook $enqueueWebhook,
     ){}
 
+    /**
+     * Refreshes invoice payment state from chain data.
+     *
+     * Transitions:
+     * - pending -> fixated
+     * - pending -> expired
+     * - pending|fixated|expired -> paid
+     *
+     * @param Invoice $invoice Invoice model instance to refresh.
+     * @return Invoice Fresh invoice snapshot after transition handling.
+     */
     public function refresh(Invoice $invoice): Invoice
     {
         $shouldDispatchForward = false;
@@ -109,6 +123,7 @@ final class InvoiceStatusRefresher
             $scale = $this->scale($inv->coin);
             $epsilon = $this->epsilon($inv->coin);
             $feePercent = (float) ($inv->merchant->fee_percent ?? 0.0);
+            // Forwarding target must be based on merchant net amount, not gross received amount.
             $targetNet = $this->norm($confirmed - ($confirmed * ($feePercent / 100)), $scale);
             $targetNet = max(0.0, $targetNet);
             $remainingNet = $this->norm($targetNet - $forwarded, $scale);
@@ -138,7 +153,14 @@ final class InvoiceStatusRefresher
         return $fresh;
     }
 
-    private function isPaid(Invoice $inv, float $receivedConf)
+    /**
+     * Checks whether confirmed amount satisfies paid threshold.
+     *
+     * @param Invoice $inv Invoice snapshot under lock.
+     * @param float $receivedConf Confirmed amount on chain.
+     * @return bool
+     */
+    private function isPaid(Invoice $inv, float $receivedConf): bool
     {
         $pct = (float)config('payments.slippage.paid_coin_percent', 0.5);
         $expected = (float)$inv->amount_coin;
@@ -150,6 +172,12 @@ final class InvoiceStatusRefresher
         return $receivedConf + 1e-12 >= $need;
     }
 
+    /**
+     * Picks earliest known transaction for invoice address.
+     *
+     * @param array<int, array<string, mixed>> $txs
+     * @return array<string, mixed>|null
+     */
     private function pickFirstTx(array $txs): ?array
     {
         $best = null;
@@ -163,6 +191,12 @@ final class InvoiceStatusRefresher
         return $best ?? ($txs[0] ?? null);
     }
 
+    /**
+     * Returns first seen transaction timestamp in UTC seconds.
+     *
+     * @param array<int, array<string, mixed>> $txs
+     * @return int|null Unix timestamp.
+     */
     private function firstSeenTime(array $txs): ?int
     {
         $first = $this->pickFirstTx($txs);
@@ -170,6 +204,11 @@ final class InvoiceStatusRefresher
         return (int)$first['time'] ?? null;
     }
 
+    /**
+     * Returns decimal precision for coin-level rounding.
+     *
+     * @param string $coin Normalized coin symbol.
+     */
     private function scale(string $coin): int
     {
         return match ($coin) {
@@ -178,11 +217,22 @@ final class InvoiceStatusRefresher
         };
     }
 
+    /**
+     * Rounds value to configured coin precision.
+     *
+     * @param float $value Value to normalize.
+     * @param int $scale Number of decimal places for target coin.
+     */
     private function norm(float $value, int $scale): float
     {
         return round($value, $scale);
     }
 
+    /**
+     * Floating-point comparison threshold per coin precision.
+     *
+     * @param string $coin Normalized coin symbol.
+     */
     private function epsilon(string $coin): float
     {
         return match ($coin) {

@@ -5,6 +5,9 @@ namespace App\Services;
 use GuzzleHttp\Client;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * Base JSON-RPC adapter for UTXO nodes.
+ */
 class AbstractJsonRpcCoin implements CoinRpc
 {
     protected Client $http;
@@ -21,6 +24,13 @@ class AbstractJsonRpcCoin implements CoinRpc
         $this->http = new Client($options);
     }
 
+    /**
+     * Performs JSON-RPC request and returns "result" value.
+     *
+     * @param string $method JSON-RPC method.
+     * @param array<int, mixed> $params JSON-RPC params list.
+     * @return mixed
+     */
     protected function call(string $method, array $params = [])
     {
         try {
@@ -70,6 +80,9 @@ class AbstractJsonRpcCoin implements CoinRpc
         return ['confirmed' => $conf, 'unconfirmed' => $unconf, 'all' => $all];
     }
 
+    /**
+     * @return array<int, array<string, mixed>>
+     */
     public function getTransactionsByAddress(string $address, int $minConf = 1, int $count = 1000, ?string $label = null): array
     {
         $all = (array)$this->call('listtransactions', ['*', $count, 0, true]);

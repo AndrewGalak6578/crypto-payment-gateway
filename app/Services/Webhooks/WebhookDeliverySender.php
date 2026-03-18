@@ -8,8 +8,16 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Throwable;
 
+/**
+ * Sends webhook deliveries and manages retry lifecycle.
+ */
 final class WebhookDeliverySender
 {
+    /**
+     * Sends pending delivery if it is eligible for processing.
+     *
+     * @param int $deliveryId Webhook delivery record identifier.
+     */
     public function send(int $deliveryId): void
     {
         $delivery = DB::transaction(function () use ($deliveryId): ?WebhookDelivery {
@@ -70,6 +78,11 @@ final class WebhookDeliverySender
         }
     }
 
+    /**
+     * Marks delivery as successful and clears retry fields.
+     *
+     * @param int $deliveryId Webhook delivery record identifier.
+     */
     private function markDelivered(int $deliveryId): void
     {
         DB::transaction(function () use ($deliveryId): void {
@@ -87,6 +100,12 @@ final class WebhookDeliverySender
         });
     }
 
+    /**
+     * Stores delivery error and schedules retry when attempts are still available.
+     *
+     * @param int $deliveryId Webhook delivery record identifier.
+     * @param string $error Truncated error details.
+     */
     private function markRetryableFailure(int $deliveryId, string $error): void
     {
         $maxAttempts = (int) config('webhook.retries.max_attempts', 6);

@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
- * Class MerchantApiKey
+ * Merchant API key stored as SHA-256 token hash.
  *
  * @property int $id
  * @property int $merchant_id

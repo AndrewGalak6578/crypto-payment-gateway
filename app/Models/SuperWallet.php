@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
- * Class SuperWallet
+ * Destination wallet used for invoice forwarding.
  *
  * @property int $id
  * @property string $coin
@@ -18,6 +18,8 @@ use Illuminate\Support\Carbon;
  * @property int|null $merchant_id
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ *
+ * @property-read Merchant|null $merchant
  */
 class SuperWallet extends Model
 {
@@ -27,6 +29,9 @@ class SuperWallet extends Model
         'coin', 'wallet', 'fee_rate', 'merchant_id'
     ];
 
+    /**
+     * Legacy helper: returns first wallet by coin.
+     */
     public static function forCoin(string $coin): ?self
     {
         $coin = Coin::normalize($coin);

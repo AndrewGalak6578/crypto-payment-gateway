@@ -7,12 +7,17 @@ use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * Authenticates merchant API requests by Bearer token hash.
+ */
 class AuthMerchantApiKey
 {
     /**
      * Handle an incoming request.
      *
-     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     * @param Request $request
+     * @param Closure(Request): Response $next
+     * @return Response
      */
     public function handle(Request $request, Closure $next): Response
     {

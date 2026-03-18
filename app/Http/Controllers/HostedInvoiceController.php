@@ -8,8 +8,16 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
+/**
+ * Public hosted invoice page and status polling endpoint.
+ */
 class HostedInvoiceController extends Controller
 {
+    /**
+     * Renders hosted invoice page by public identifier.
+     *
+     * @param string $publicId Public invoice identifier.
+     */
     public function show(string $publicId): View
     {
         $invoice = Invoice::query()
@@ -23,6 +31,13 @@ class HostedInvoiceController extends Controller
         ]);
     }
 
+    /**
+     * Returns current hosted invoice status snapshot.
+     *
+     * @param string $publicId Public invoice identifier.
+     * @param Request $request
+     * @param InvoiceStatusRefresher $refresher
+     */
     public function status(
         string $publicId,
         Request $request,
@@ -58,6 +73,11 @@ class HostedInvoiceController extends Controller
         ]);
     }
 
+    /**
+     * Builds payment URI consumable by wallet apps.
+     *
+     * @param Invoice $invoice
+     */
     private function paymentUri(Invoice $invoice): string
     {
         $scheme = match ($invoice->coin) {

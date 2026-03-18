@@ -2,6 +2,9 @@
 
 namespace App\Services;
 
+/**
+ * Bitcoin JSON-RPC client.
+ */
 class BtcRpc extends AbstractJsonRpcCoin
 {
     public function __construct()

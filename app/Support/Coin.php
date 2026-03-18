@@ -10,10 +10,19 @@ use App\Services\DashRpc;
 use App\Services\LtcRpc;
 use App\Services\MockRpc;
 
+/**
+ * Coin utility helpers for normalization and RPC provider resolution.
+ */
 class Coin
 {
     public const SUPPORTED = ['dash', 'ltc', 'btc'];
 
+    /**
+     * Normalizes unsupported values to default coin.
+     *
+     * @param string|null $coin Raw coin symbol.
+     * @return string
+     */
     public static function normalize(?string $coin): string
     {
         $coin = strtolower($coin ?? 'dash');
@@ -25,6 +34,11 @@ class Coin
         return $coin;
     }
 
+    /**
+     * Returns RPC implementation based on runtime mode and coin symbol.
+     *
+     * @param string|null $coin Raw coin symbol.
+     */
     public static function rpc(?string $coin = null): CoinRpc
     {
         $coin = self::normalize($coin);

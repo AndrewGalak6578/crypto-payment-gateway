@@ -9,10 +9,26 @@ use App\Models\Merchant;
 use App\Support\Coin;
 use Illuminate\Support\Str;
 
+/**
+ * Creates invoices with rate snapshot, generated payment address, and monitoring schedule.
+ */
 class InvoiceCreator
 {
     public function __construct(private CoinRate $rates) {}
 
+    /**
+     * Creates or returns existing invoice for merchant/external_id pair.
+     *
+     * @param Merchant $merchant Authenticated merchant owner.
+     * @param array{
+     *     amount_usd: float|int|string,
+     *     coin?: string,
+     *     external_id?: string|null,
+     *     expires_minutes?: int|string,
+     *     metadata?: array<string, mixed>|null
+     * } $data
+     * @return Invoice
+     */
     public function create(Merchant $merchant, array $data): Invoice
     {
         $coin = Coin::normalize($data['coin'] ?? 'dash');

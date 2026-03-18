@@ -49,6 +49,16 @@
             "@php artisan config:clear --ansi",
             "@php artisan test"
         ],
+        "test:fast": [
+            "@php ./vendor/bin/phpunit tests/Feature/Api tests/Unit/Services tests/Unit/Webhooks"
+        ],
+        "test:integration": [
+            "RUN_REAL_RPC_TESTS=true COIN_RPC_MODE=real php ./vendor/bin/phpunit tests/Integration"
+        ],
+        "test:all": [
+            "@test:fast",
+            "@test:integration"
+        ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
             "@php artisan package:discover --ansi"

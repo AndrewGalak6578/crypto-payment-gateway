@@ -5,6 +5,8 @@ namespace App\Services;
 
 use App\Models\Invoice;
 use App\Models\SuperWallet;
+use App\Services\Settlement\MerchantBalanceCreditor;
+use App\Services\Settlement\SuperWalletResolver;
 use App\Services\Webhooks\EnqueueInvoiceWebhook;
 use App\Support\Coin;
 use Illuminate\Support\Facades\DB;
@@ -15,13 +17,33 @@ final class InvoiceForwarder
 {
     public function __construct(
         private readonly EnqueueInvoiceWebhook $enqueueWebhook,
+        private readonly SuperWalletResolver $walletResolver,
+        private readonly MerchantBalanceCreditor $balanceCreditor,
     )
     {
     }
 
     public function forward(int $invoiceId): void
     {
-        $plan = $this->reserveForwarding($invoiceId);
+        /** @var Invoice $invoice */
+        $invoice = Invoice::query()
+            ->with('merchant')
+            ->findOrFail($invoiceId);
+
+        $wallet = $this->walletResolver->resolve($invoice->merchant, $invoice->coin);
+
+        if (!$wallet) {
+            $this->balanceCreditor->credit($invoiceId);
+
+            $fresh = Invoice::query()->with('merchant')->find($invoiceId);
+            if ($fresh) {
+                $this->enqueueWebhook->enqueue('invoice.forwarded', $fresh);
+            }
+
+            return;
+        }
+
+        $plan = $this->reserveForwarding($invoiceId, $wallet);
 
         if ($plan === null) {
             return;
@@ -55,15 +77,15 @@ final class InvoiceForwarder
         }
     }
 
-    private function reserveForwarding(int $invoiceId): ?array
+    private function reserveForwarding(int $invoiceId, SuperWallet $wallet): ?array
     {
-        return DB::transaction(function () use ($invoiceId): ?array {
+        return DB::transaction(function () use ($invoiceId, $wallet): ?array {
             /** @var Invoice $invoice */
             $invoice = Invoice::query()
                 ->lockForUpdate()
                 ->findOrFail($invoiceId);
 
-            if ($invoice->status !== "paid") {
+            if ($invoice->status !== 'paid') {
                 return null;
             }
 
@@ -71,22 +93,18 @@ final class InvoiceForwarder
                 return null;
             }
 
-            $wallet = SuperWallet::query()
-                ->where('coin', $invoice->coin)
-                ->first();
-
-            if (!$wallet) {
-                throw new \RuntimeException("Super wallet for coin [{$invoice->coin}] not found.");
-            }
-
             $scale = $this->scale($invoice->coin);
             $epsilon = $this->epsilon($invoice->coin);
 
-            $confirmed = $this->norm((float)($invoice->received_conf_coin ?? 0), $scale);
-            $forwarded = $this->norm((float)($invoice->forwarded_coin ?? 0), $scale);
-            $delta = $this->norm($confirmed - $forwarded, $scale);
+            $confirmed = $this->norm((float) ($invoice->received_conf_coin ?? 0), $scale);
+            $forwarded = $this->norm((float) ($invoice->forwarded_coin ?? 0), $scale);
+            $feePercent = (float) ($invoice->merchant->fee_percent ?? 0.0);
+            $targetNet = $this->norm($confirmed - ($confirmed * ($feePercent / 100)), $scale);
+            $targetNet = max(0.0, $targetNet);
+            $amount = $this->norm($targetNet - $forwarded, $scale);
+            $amount = max(0.0, $amount);
 
-            if ($delta <= $epsilon) {
+            if ($amount <= $epsilon) {
                 $invoice->forward_status = 'done';
                 $invoice->save();
 
@@ -95,7 +113,7 @@ final class InvoiceForwarder
 
             $min = $this->norm((float) config("forwarding.min_coin.{$invoice->coin}", 0), $scale);
 
-            if ($delta < $min) {
+            if ($amount < $min) {
                 $invoice->forward_status = $forwarded > $epsilon ? 'partial' : 'none';
                 $invoice->save();
 
@@ -106,7 +124,7 @@ final class InvoiceForwarder
 
             $invoice->forward_status = 'processing';
             $invoice->forward_attempt_uuid = $attemptUuid;
-            $invoice->forwarding_coin = $delta;
+            $invoice->forwarding_coin = $amount;
             $invoice->forwarding_started_at = now('UTC');
             $invoice->save();
 
@@ -115,7 +133,7 @@ final class InvoiceForwarder
                 'coin' => $invoice->coin,
                 'wallet' => $wallet->wallet,
                 'fee_rate' => $wallet->fee_rate !== null ? (float) $wallet->fee_rate : null,
-                'amount' => $delta,
+                'amount' => $amount,
             ];
         });
     }
@@ -138,10 +156,16 @@ final class InvoiceForwarder
             $txids = $invoice->forward_txids ?? [];
             $txids[] = $txid;
 
-            $newForwarded = $this->norm((float)($invoice->forwarded_coin ?? 0) + $amount, $scale);
+            $newForwarded = $this->norm(
+                (float) ($invoice->forwarded_coin ?? 0) + $amount,
+                $scale
+            );
 
-            $confirmed = $this->norm((float)($invoice->received_conf_coin ?? 0), $scale);
-            $rest = $this->norm($confirmed - $newForwarded, $scale);
+            $confirmed = $this->norm((float) ($invoice->received_conf_coin ?? 0), $scale);
+            $feePercent = (float) ($invoice->merchant->fee_percent ?? 0.0);
+            $targetNet = $this->norm($confirmed - ($confirmed * ($feePercent / 100)), $scale);
+            $targetNet = max(0.0, $targetNet);
+            $rest = $this->norm($targetNet - $newForwarded, $scale);
 
             $invoice->forwarded_coin = $newForwarded;
             $invoice->forward_txids = $txids;
@@ -161,7 +185,7 @@ final class InvoiceForwarder
             /** @var Invoice $invoice */
             $invoice = Invoice::query()
                 ->lockForUpdate()
-                ->firstOrFail($invoiceId);
+                ->findOrFail($invoiceId);
 
             if ($invoice->forward_attempt_uuid !== $attemptUuid) {
                 return;
@@ -178,7 +202,6 @@ final class InvoiceForwarder
     {
         return match ($coin) {
             'dash' => 3,
-            'btc', 'ltc' => 8,
             default => 8,
         };
     }

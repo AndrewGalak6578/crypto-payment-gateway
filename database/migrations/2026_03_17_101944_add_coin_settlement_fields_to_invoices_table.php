@@ -12,9 +12,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('invoices', function (Blueprint $table) {
-            $table->uuid('forward_attempt_uuid')->nullable()->after('forward_status');
-            $table->decimal('forwarding_coin', 24, 8)->nullable()->after('forward_attempt_uuid');
-            $table->timestampTz('forwarding_started_at')->nullable()->after('forwarded_coin');
+            $table->decimal('fee_coin', 24, 8)->nullable()->after('paid_usd');
+            $table->decimal('merchant_payout_coin', 24, 8)->nullable()->after('fee_coin');
         });
     }
 
@@ -25,9 +24,8 @@ return new class extends Migration
     {
         Schema::table('invoices', function (Blueprint $table) {
             $table->dropColumn([
-                'forward_attempt_uuid',
-                'forwarding_coin',
-                'forwarding_started_at',
+                'fee_coin',
+                'merchant_payout_coin'
             ]);
         });
     }

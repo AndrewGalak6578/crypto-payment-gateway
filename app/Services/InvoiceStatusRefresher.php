@@ -106,11 +106,16 @@ final class InvoiceStatusRefresher
 
             $confirmed = (float) ($inv->received_conf_coin ?? 0);
             $forwarded = (float) ($inv->forwarded_coin ?? 0);
-            $delta = $confirmed - $forwarded;
+            $scale = $this->scale($inv->coin);
+            $epsilon = $this->epsilon($inv->coin);
+            $feePercent = (float) ($inv->merchant->fee_percent ?? 0.0);
+            $targetNet = $this->norm($confirmed - ($confirmed * ($feePercent / 100)), $scale);
+            $targetNet = max(0.0, $targetNet);
+            $remainingNet = $this->norm($targetNet - $forwarded, $scale);
 
             if (
                 $inv->status === 'paid'
-                && $delta > 0
+                && $remainingNet > $epsilon
                 && in_array($inv->forward_status, ['none', 'partial', 'failed'], true)
                 && $inv->forward_attempt_uuid === null
             ) {
@@ -163,5 +168,26 @@ final class InvoiceStatusRefresher
         $first = $this->pickFirstTx($txs);
         if (!$first) return  null;
         return (int)$first['time'] ?? null;
+    }
+
+    private function scale(string $coin): int
+    {
+        return match ($coin) {
+            'dash' => 3,
+            default => 8,
+        };
+    }
+
+    private function norm(float $value, int $scale): float
+    {
+        return round($value, $scale);
+    }
+
+    private function epsilon(string $coin): float
+    {
+        return match ($coin) {
+            'dash' => 0.001,
+            default => 0.00000001,
+        };
     }
 }

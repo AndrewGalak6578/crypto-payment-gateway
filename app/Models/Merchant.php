@@ -34,4 +34,14 @@ class Merchant extends Model
     {
         return $this->hasMany(Invoice::class);
     }
+
+    public function superWallets(): HasMany
+    {
+        return $this->hasMany(SuperWallet::class);
+    }
+
+    public function balances(): HasMany
+    {
+        return $this->hasMany(MerchantBalance::class);
+    }
 }

@@ -27,6 +27,8 @@ use Illuminate\Support\Carbon;
  * @property float|null $received_conf_coin
  * @property float|null $received_all_coin
  * @property float|null $paid_usd
+ * @property float|null $fee_coin
+ * @property float|null $merchant_payout_coin
  * @property float|null $fee_usd
  * @property float|null $merchant_payout_usd
  * @property string|null $forward_status
@@ -54,7 +56,7 @@ class Invoice extends Model
         'forward_status', 'metadata', 'forwarded_coin',
         'forward_txids', 'last_forwarded_at',
         'forward_attempt_uuid', 'forwarding_coin',
-        'forwarding_started_at',
+        'forwarding_started_at', 'fee_coin', 'merchant_payout_coin'
     ];
 
     protected $casts = [
@@ -70,7 +72,7 @@ class Invoice extends Model
         'forwarding_coin' => 'decimal:8',
     ];
 
-    protected function casts()
+    protected function casts(): array
     {
         return [
             'expires_at' => 'datetime',
@@ -83,6 +85,8 @@ class Invoice extends Model
             'forward_txids' => 'array',
             'forwarded_coin' => 'decimal:8',
             'forwarding_coin' => 'decimal:8',
+            'fee_coin' => 'decimal:8',
+            'merchant_payout_coin' => 'decimal:8',
         ];
     }
 

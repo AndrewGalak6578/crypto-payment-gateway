@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Invoice {{ $invoice->public_id }}</title>
     <meta name="robots" content="noindex,nofollow">
+
+    @vite('resources/js/app.js')
     <style>
         :root {
             --bg-primary: #0a0e1a;
@@ -381,7 +383,7 @@
                             <div class="panel-value monospace" id="payment-uri" style="font-size: 12px; line-height: 1.5;">{{ $paymentUri }}</div>
                             <div class="button-group">
                                 <button type="button" class="btn-secondary" id="copy-uri-btn">Copy URI</button>
-                                <a class="btn btn-primary" id="open-wallet-link" href="{{ $paymentUri }}" target="_blank">Open Wallet</a>
+                                <a class="btn btn-primary" id="open-wallet-link" href="{{ $paymentUri }}">Open Wallet</a>
                             </div>
                         </div>
 
@@ -447,6 +449,13 @@
         const statusUrl = @json($statusUrl);
         const initialStatus = @json($invoice->status);
         const initialExpiresAt = @json(optional($invoice->expires_at)->toIso8601String());
+        const statusLabels = {
+            pending: 'Awaiting Payment',
+            fixated: 'Payment Detected',
+            paid: 'Paid',
+            expired: 'Expired',
+        };
+        let currentExpiresAt = initialExpiresAt;
 
         const els = {
             statusBadge: document.getElementById('status-badge'),
@@ -472,8 +481,9 @@
         }
 
         function setStatusBadge(status) {
-            els.statusBadge.className = 'status-badge ' + status.toLowerCase();
-            els.statusBadge.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+            const normalized = (status || '').toLowerCase();
+            els.statusBadge.className = 'status-badge ' + normalized;
+            els.statusBadge.textContent = statusLabels[normalized] ?? status;
         }
 
         function formatDate(isoString) {
@@ -557,11 +567,23 @@
                 els.paidAt.textContent = formatDate(data.paid_at);
                 els.openWalletLink.href = data.payment_uri;
 
-                updateCountdown(data.expires_at);
+                currentExpiresAt = data.expires_at ?? null;
+                updateCountdown(currentExpiresAt);
 
-                if (data.status === 'paid' || data.status === 'expired') {
+                if (data.status === 'paid'){
+                    els.countdown.textContent = 'Paid';
+                    els.countdown.className = 'timer';
                     stopPolling();
                     stopCountdown();
+                    return
+                }
+
+                if (data.status === 'expired') {
+                    els.countdown.textContent = 'Expired';
+                    els.countdown.className = 'timer';
+                    stopPolling();
+                    stopCountdown();
+                    return;
                 }
             } catch (e) {
                 console.error('Invoice status refresh failed:', e);
@@ -587,9 +609,9 @@
         }
 
         function startCountdown() {
-            updateCountdown(initialExpiresAt);
+            updateCountdown(currentExpiresAt);
             countdownTimer = setInterval(() => {
-                updateCountdown(initialExpiresAt);
+                updateCountdown(currentExpiresAt);
             }, 1000);
         }
 
@@ -600,10 +622,18 @@
             }
         }
 
-        function generateQR(uri) {
-            const encodedUri = encodeURIComponent(uri);
-            const qrUrl = `https://chart.googleapis.com/chart?chs=220x220&cht=qr&chl=${encodedUri}&choe=UTF-8`;
-            els.qrPlaceholder.innerHTML = `<img src="${qrUrl}" alt="QR Code" style="max-width: 220px; height: auto;">`;
+        async function generateQR(uri) {
+            try {
+                const dataUrl = await window.QRCodeLib.toDataURL(uri, {
+                    width: 220,
+                    margin: 1
+                });
+
+                els.qrPlaceholder.innerHTML = `<img src="${dataUrl}" alt="QR Code" style="max-width: 220px; height: auto;">`;
+            } catch (e) {
+                console.error('QR code generation failed:', e);
+                els.qrPlaceholder.textContent = 'QR unavailable';
+            }
         }
 
         async function copyText(text, button, originalText) {
@@ -647,9 +677,11 @@
         });
 
         // Initialize
-        generateQR(@json($paymentUri));
-        startPolling();
-        startCountdown();
+        document.addEventListener('DOMContentLoaded', () => {
+            generateQR(@json($paymentUri));
+            startPolling();
+            startCountdown();
+        });
 
         // Cleanup on page unload
         window.addEventListener('beforeunload', () => {

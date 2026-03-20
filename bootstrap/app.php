@@ -14,6 +14,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'auth.merchant' => \App\Http\Middleware\AuthMerchantApiKey::class,
+            'auth.merchant.portal' => \App\Http\Middleware\AuthenticateMerchant::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -46,4 +46,9 @@ class Merchant extends Model
     {
         return $this->hasMany(MerchantBalance::class);
     }
+
+    public function users(): HasMany
+    {
+        return $this->hasMany(MerchantUser::class);
+    }
 }

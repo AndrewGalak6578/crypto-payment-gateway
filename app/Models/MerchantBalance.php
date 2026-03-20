@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 
 /**
@@ -13,6 +14,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $merchant_id
  * @property string $coin
  * @property float $amount
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
  *
  * @property-read Merchant $merchant
  */

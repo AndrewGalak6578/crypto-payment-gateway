@@ -9,3 +9,7 @@ Route::get('/', function () {
 
 Route::get('/i/{publicId}', [\App\Http\Controllers\HostedInvoiceController::class, 'show'])->name('hosted-invoice.show');
 Route::get('/i/{publicId}/status', [\App\Http\Controllers\HostedInvoiceController::class, 'status'])->name('hosted-invoice.status');
+
+Route::view('/merchant/{path?}', 'app')
+    ->where('path', '.*')
+    ->name('merchant.portal');

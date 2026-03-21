@@ -7,8 +7,11 @@
       </div>
 
       <nav class="nav">
-        <RouterLink class="nav-link" to="/merchant">Dashboard</RouterLink>
-        <RouterLink class="nav-link" to="/merchant/invoices">Invoices</RouterLink>
+          <RouterLink class="nav-link" to="/merchant" exact-active-class="router-link-active" active-class="">
+              Dashboard
+          </RouterLink>
+          <RouterLink class="nav-link" to="/merchant/balances">Balances</RouterLink>
+          <RouterLink class="nav-link" to="/merchant/invoices">Invoices</RouterLink>
       </nav>
 
       <button class="logout-btn" type="button" :disabled="authStore.loading" @click="handleLogout">

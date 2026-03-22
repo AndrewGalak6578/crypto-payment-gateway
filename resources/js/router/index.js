@@ -4,6 +4,7 @@ import MerchantLayout from '../layouts/MerchantLayout.vue';
 import MerchantLoginPage from '../pages/auth/MerchantLoginPage.vue';
 import MerchantDashboardPage from '../pages/merchant/MerchantDashboardPage.vue';
 import MerchantBalancesPage from "../pages/merchant/MerchantBalancesPage.vue";
+import MerchantWalletsPage from "../pages/MerchantWalletsPage.vue";
 import MerchantInvoicesPage from '../pages/merchant/invoices/MerchantInvoicesPage.vue';
 import MerchantInvoiceDetailPage from '../pages/merchant/invoices/MerchantInvoiceDetailPage.vue';
 import { useAuthStore } from '../stores/auth';
@@ -44,6 +45,11 @@ const routes = [
                 path: 'balances',
                 name: 'merchant.balances',
                 component: MerchantBalancesPage,
+            },
+            {
+                path: 'wallets',
+                name: 'merchant.wallets',
+                component: MerchantWalletsPage,
             },
             {
                 path: 'invoices/:id',

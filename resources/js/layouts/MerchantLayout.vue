@@ -11,6 +11,7 @@
               Dashboard
           </RouterLink>
           <RouterLink class="nav-link" to="/merchant/balances">Balances</RouterLink>
+          <RouterLink class="nav-link" to="/merchant/wallets">Wallets</RouterLink>
           <RouterLink class="nav-link" to="/merchant/invoices">Invoices</RouterLink>
       </nav>
 

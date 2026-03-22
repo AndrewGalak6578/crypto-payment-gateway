@@ -8,6 +8,7 @@ import MerchantWalletsPage from "../pages/MerchantWalletsPage.vue";
 import MerchantInvoicesPage from '../pages/merchant/invoices/MerchantInvoicesPage.vue';
 import MerchantInvoiceDetailPage from '../pages/merchant/invoices/MerchantInvoiceDetailPage.vue';
 import { useAuthStore } from '../stores/auth';
+import MerchantWebhookSettingsPage from "../pages/merchant/MerchantWebhookSettingsPage.vue";
 
 const routes = [
     {
@@ -50,6 +51,11 @@ const routes = [
                 path: 'wallets',
                 name: 'merchant.wallets',
                 component: MerchantWalletsPage,
+            },
+            {
+                path: 'webhook-settings',
+                name: 'merchant.webhook-settings',
+                component: MerchantWebhookSettingsPage,
             },
             {
                 path: 'invoices/:id',

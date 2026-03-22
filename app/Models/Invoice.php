@@ -62,19 +62,6 @@ class Invoice extends Model
         'forwarding_started_at', 'fee_coin', 'merchant_payout_coin'
     ];
 
-    protected $casts = [
-        'expires_at' => 'datetime',
-        'fixated_at' => 'datetime',
-        'paid_at' => 'datetime',
-        'monitor_until' => 'datetime',
-        'last_forwarded_at' => 'datetime',
-        'forwarding_started_at' => 'datetime',
-        'metadata' => 'array',
-        'forward_txids' => 'array',
-        'forwarded_coin' => 'decimal:8',
-        'forwarding_coin' => 'decimal:8',
-    ];
-
     /**
      * @return array<string, string>
      */

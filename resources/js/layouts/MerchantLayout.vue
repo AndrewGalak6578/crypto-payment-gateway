@@ -13,6 +13,7 @@
           <RouterLink class="nav-link" to="/merchant/balances">Balances</RouterLink>
           <RouterLink class="nav-link" to="/merchant/wallets">Wallets</RouterLink>
           <RouterLink class="nav-link" to="/merchant/invoices">Invoices</RouterLink>
+          <RouterLink class="nav-link" to="/merchant/webhook-deliveries">Webhook Deliveries</RouterLink>
           <RouterLink class="nav-link" to="/merchant/webhook-settings">Webhook Settings</RouterLink>
       </nav>
 

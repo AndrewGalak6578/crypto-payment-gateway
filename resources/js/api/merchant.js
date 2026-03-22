@@ -13,3 +13,5 @@ export const deleteMerchantWallet = (id) => api.delete(`/api/merchant/wallets/${
 export const getMerchantWebhookSettings = () => api.get('/api/merchant/webhook-settings');
 
 export const updateMerchantWebhookSettings = (payload) => api.put('/api/merchant/webhook-settings', payload);
+
+export const getMerchantWebhookDeliveries = (params = {}) => api.get('/api/merchant/webhook-deliveries', { params });

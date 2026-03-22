@@ -4,11 +4,12 @@ import MerchantLayout from '../layouts/MerchantLayout.vue';
 import MerchantLoginPage from '../pages/auth/MerchantLoginPage.vue';
 import MerchantDashboardPage from '../pages/merchant/MerchantDashboardPage.vue';
 import MerchantBalancesPage from "../pages/merchant/MerchantBalancesPage.vue";
-import MerchantWalletsPage from "../pages/MerchantWalletsPage.vue";
+import MerchantWalletsPage from "../pages/merchant/MerchantWalletsPage.vue";
 import MerchantInvoicesPage from '../pages/merchant/invoices/MerchantInvoicesPage.vue';
 import MerchantInvoiceDetailPage from '../pages/merchant/invoices/MerchantInvoiceDetailPage.vue';
 import { useAuthStore } from '../stores/auth';
 import MerchantWebhookSettingsPage from "../pages/merchant/MerchantWebhookSettingsPage.vue";
+import MerchantWebhookDeliveriesPage from "../pages/merchant/MerchantWebhookDeliveriesPage.vue";
 
 const routes = [
     {
@@ -51,6 +52,11 @@ const routes = [
                 path: 'wallets',
                 name: 'merchant.wallets',
                 component: MerchantWalletsPage,
+            },
+            {
+                path: 'webhook-deliveries',
+                name: 'merchant.webhook-deliveries',
+                component: MerchantWebhookDeliveriesPage,
             },
             {
                 path: 'webhook-settings',

@@ -131,7 +131,7 @@ import {
     updateMerchantWallet,
     getMerchantWallets,
     deleteMerchantWallet
-} from "../api/merchant.js";
+} from "../../api/merchant.js";
 
 const coinOptions = [
     { label: 'BTC', value: 'btc' },

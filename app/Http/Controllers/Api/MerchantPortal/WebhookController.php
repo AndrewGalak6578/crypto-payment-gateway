@@ -65,7 +65,9 @@ class WebhookController extends Controller
         $merchantUser = $request->attributes->get('merchant_user');
 
         $deliveries = WebhookDelivery::query()
-            ->where('invoice', fn($q) => $q->where('merchant_id', $merchantUser->merchant_id))
+            ->whereHas('invoice', function ($q) use ($merchantUser) {
+                $q->where('merchant_id', $merchantUser->merchant_id);
+            })
             ->latest('id')
             ->paginate((int) $request->input('per_page', 15));
 

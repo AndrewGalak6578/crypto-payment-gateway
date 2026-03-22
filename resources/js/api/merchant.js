@@ -15,3 +15,9 @@ export const getMerchantWebhookSettings = () => api.get('/api/merchant/webhook-s
 export const updateMerchantWebhookSettings = (payload) => api.put('/api/merchant/webhook-settings', payload);
 
 export const getMerchantWebhookDeliveries = (params = {}) => api.get('/api/merchant/webhook-deliveries', { params });
+
+export const getMerchantApiKeys = () => api.get('/api/merchant/api-keys');
+
+export const createMerchantApiKey = (payload) => api.post('/api/merchant/api-keys', payload);
+
+export const deleteMerchantApiKey = (id) => api.delete(`/api/merchant/api-keys/${id}`);

@@ -10,6 +10,7 @@ import MerchantInvoiceDetailPage from '../pages/merchant/invoices/MerchantInvoic
 import { useAuthStore } from '../stores/auth';
 import MerchantWebhookSettingsPage from "../pages/merchant/MerchantWebhookSettingsPage.vue";
 import MerchantWebhookDeliveriesPage from "../pages/merchant/MerchantWebhookDeliveriesPage.vue";
+import MerchantApiKeysPage from "../pages/merchant/MerchantApiKeysPage.vue";
 
 const routes = [
     {
@@ -62,6 +63,11 @@ const routes = [
                 path: 'webhook-settings',
                 name: 'merchant.webhook-settings',
                 component: MerchantWebhookSettingsPage,
+            },
+            {
+                path: 'api-keys',
+                name: 'merchant.api-keys',
+                component: MerchantApiKeysPage,
             },
             {
                 path: 'invoices/:id',

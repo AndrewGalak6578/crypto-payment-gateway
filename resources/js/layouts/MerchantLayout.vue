@@ -15,6 +15,7 @@
           <RouterLink class="nav-link" to="/merchant/invoices">Invoices</RouterLink>
           <RouterLink class="nav-link" to="/merchant/webhook-deliveries">Webhook Deliveries</RouterLink>
           <RouterLink class="nav-link" to="/merchant/webhook-settings">Webhook Settings</RouterLink>
+          <RouterLink class="nav-link" to="/merchant/api-keys">API Keys</RouterLink>
       </nav>
 
       <button class="logout-btn" type="button" :disabled="authStore.loading" @click="handleLogout">

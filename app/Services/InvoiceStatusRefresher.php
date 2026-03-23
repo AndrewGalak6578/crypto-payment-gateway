@@ -5,6 +5,7 @@ namespace App\Services;
 
 use App\Jobs\ForwardInvoiceJob;
 use App\Models\Invoice;
+use App\Services\CoinBasedLogic\CoinRate;
 use App\Services\Webhooks\EnqueueInvoiceWebhook;
 use App\Support\Coin;
 use Illuminate\Support\Carbon;

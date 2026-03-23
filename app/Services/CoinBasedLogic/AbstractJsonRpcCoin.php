@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\CoinBasedLogic;
 
 use GuzzleHttp\Client;
 use Illuminate\Support\Facades\Log;

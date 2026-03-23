@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Integration\RealChains;
 
-use App\Models\MerchantBalance;
 use App\Models\Invoice;
+use App\Models\MerchantBalance;
 use App\Models\SuperWallet;
-use App\Services\CoinRate;
+use App\Services\CoinBasedLogic\CoinRate;
 use App\Services\InvoiceForwarder;
 use App\Services\InvoiceStatusRefresher;
 use App\Support\Coin;

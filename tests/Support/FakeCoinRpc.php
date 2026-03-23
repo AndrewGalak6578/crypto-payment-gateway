@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Support;
 
-use App\Services\CoinRpc;
+use App\Services\CoinBasedLogic\CoinRpc;
 
 /**
  * In-memory RPC test double with controllable totals, transactions and send calls.

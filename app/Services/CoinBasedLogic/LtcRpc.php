@@ -1,15 +1,15 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\CoinBasedLogic;
 
 /**
- * Bitcoin JSON-RPC client.
+ * Litecoin JSON-RPC client.
  */
-class BtcRpc extends AbstractJsonRpcCoin
+class LtcRpc extends AbstractJsonRpcCoin
 {
     public function __construct()
     {
-        $cfg = config('btc');
+        $cfg = config('ltc');
 
         $uri = sprintf('http://%s:%d', $cfg['rpc_host'], $cfg['rpc_port']);
 

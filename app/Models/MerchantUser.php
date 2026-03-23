@@ -21,6 +21,7 @@ use Laravel\Sanctum\HasApiTokens;
  * @property string $status
  * @property Carbon|null $last_login_at
  * @property Merchant $merchant
+ * @property Role $role
  */
 class MerchantUser extends Authenticatable
 {
@@ -32,7 +33,8 @@ class MerchantUser extends Authenticatable
         'email',
         'password',
         'status',
-        'last_login_at'
+        'last_login_at',
+        'role_id'
     ];
 
     protected $hidden = [
@@ -51,5 +53,10 @@ class MerchantUser extends Authenticatable
     public function merchant(): BelongsTo
     {
         return $this->belongsTo(Merchant::class);
+    }
+
+    public function role(): BelongsTo
+    {
+        return $this->belongsTo(Role::class);
     }
 }

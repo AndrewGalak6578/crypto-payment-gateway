@@ -10,25 +10,25 @@ Route::prefix('auth/merchant')->middleware('web')->group(function () {
 });
 
 Route::prefix('merchant')->middleware(['auth.merchant.portal', 'web'])->group(function () {
-    Route::get('/dashboard', [\App\Http\Controllers\Api\MerchantPortal\DashboardController::class, '__invoke']);
+    Route::get('/dashboard', [\App\Http\Controllers\Api\MerchantPortal\DashboardController::class, '__invoke'])->middleware('merchant.capability:portal.view');
 
-    Route::get('/invoices', [\App\Http\Controllers\Api\MerchantPortal\InvoiceController::class, 'index']);
-    Route::get('/invoices/{id}', [\App\Http\Controllers\Api\MerchantPortal\InvoiceController::class, 'show']);
+    Route::get('/invoices', [\App\Http\Controllers\Api\MerchantPortal\InvoiceController::class, 'index'])->middleware('merchant.capability:invoices.read');
+    Route::get('/invoices/{id}', [\App\Http\Controllers\Api\MerchantPortal\InvoiceController::class, 'show'])->middleware('merchant.capability:invoices.read');
 
-    Route::get('/balances', [\App\Http\Controllers\Api\MerchantPortal\BalanceController::class, '__invoke']);
+    Route::get('/balances', [\App\Http\Controllers\Api\MerchantPortal\BalanceController::class, '__invoke'])->middleware('merchant.capability:balances.read');
 
-    Route::get('/wallets', [\App\Http\Controllers\Api\MerchantPortal\WalletController::class, 'index']);
-    Route::post('/wallets', [\App\Http\Controllers\Api\MerchantPortal\WalletController::class, 'store']);
-    Route::put('/wallets/{id}', [\App\Http\Controllers\Api\MerchantPortal\WalletController::class, 'update']);
-    Route::delete('/wallets/{id}', [\App\Http\Controllers\Api\MerchantPortal\WalletController::class, 'destroy']);
+    Route::get('/wallets', [\App\Http\Controllers\Api\MerchantPortal\WalletController::class, 'index'])->middleware('merchant.capability:wallets.read');
+    Route::post('/wallets', [\App\Http\Controllers\Api\MerchantPortal\WalletController::class, 'store'])->middleware('merchant.capability:wallets.write');
+    Route::put('/wallets/{id}', [\App\Http\Controllers\Api\MerchantPortal\WalletController::class, 'update'])->middleware('merchant.capability:wallets.write');
+    Route::delete('/wallets/{id}', [\App\Http\Controllers\Api\MerchantPortal\WalletController::class, 'destroy'])->middleware('merchant.capability:wallets.write');
 
-    Route::get('/webhook-settings', [\App\Http\Controllers\Api\MerchantPortal\WebhookController::class, 'settings']);
-    Route::put('/webhook-settings', [\App\Http\Controllers\Api\MerchantPortal\WebhookController::class, 'updateSettings']);
-    Route::get('/webhook-deliveries', [\App\Http\Controllers\Api\MerchantPortal\WebhookController::class, 'deliveries']);
+    Route::get('/webhook-settings', [\App\Http\Controllers\Api\MerchantPortal\WebhookController::class, 'settings'])->middleware('merchant.capability:webhooks.read');
+    Route::put('/webhook-settings', [\App\Http\Controllers\Api\MerchantPortal\WebhookController::class, 'updateSettings'])->middleware('merchant.capability:webhooks.write');
+    Route::get('/webhook-deliveries', [\App\Http\Controllers\Api\MerchantPortal\WebhookController::class, 'deliveries'])->middleware('merchant.capability:webhooks.read');
 
-    Route::get('/api-keys', [\App\Http\Controllers\Api\MerchantPortal\ApiKeyController::class, 'index']);
-    Route::post('/api-keys', [\App\Http\Controllers\Api\MerchantPortal\ApiKeyController::class, 'store']);
-    Route::delete('/api-keys/{id}', [\App\Http\Controllers\Api\MerchantPortal\ApiKeyController::class, 'destroy']);
+    Route::get('/api-keys', [\App\Http\Controllers\Api\MerchantPortal\ApiKeyController::class, 'index'])->middleware('merchant.capability:api_keys.read');
+    Route::post('/api-keys', [\App\Http\Controllers\Api\MerchantPortal\ApiKeyController::class, 'store'])->middleware('merchant.capability:api_keys.write');
+    Route::delete('/api-keys/{id}', [\App\Http\Controllers\Api\MerchantPortal\ApiKeyController::class, 'destroy'])->middleware('merchant.capability:api_keys.write');
 });
 
 Route::prefix('v1')->middleware('auth.merchant')->group(function () {

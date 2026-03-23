@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace App\Services;
+namespace App\Services\CoinBasedLogic;
 
 /**
  * Unified RPC contract used by invoice lifecycle and settlement services.

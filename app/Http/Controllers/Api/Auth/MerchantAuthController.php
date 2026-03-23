@@ -68,6 +68,8 @@ final class MerchantAuthController extends Controller
         }
 
         $user->load('merchant');
+        $user->load('role');
+        $user->load('role.capabilities');
 
         return response()->json([
             'success' => true,
@@ -97,6 +99,11 @@ final class MerchantAuthController extends Controller
                 'email' => $user->email,
                 'status' => $user->status,
                 'last_login_at' => optional($user->last_login_at)->toIso8601String(),
+                'role' => [
+                    'slug' => $user->role->slug,
+                    'name' => $user->role->name,
+                ],
+                'capabilities' => $user->role->capabilities->pluck('code')->values()->all(),
             ],
             'merchant' => [
                 'id' => $user->merchant->id,

@@ -6,6 +6,7 @@ namespace App\Services;
 use App\Jobs\MonitorInvoiceJob;
 use App\Models\Invoice;
 use App\Models\Merchant;
+use App\Services\CoinBasedLogic\CoinRate;
 use App\Support\Coin;
 use Illuminate\Support\Str;
 

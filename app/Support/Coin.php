@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Support;
 
-use App\Services\BtcRpc;
-use App\Services\CoinRpc;
-use App\Services\DashRpc;
-use App\Services\LtcRpc;
-use App\Services\MockRpc;
+use App\Services\CoinBasedLogic\BtcRpc;
+use App\Services\CoinBasedLogic\CoinRpc;
+use App\Services\CoinBasedLogic\DashRpc;
+use App\Services\CoinBasedLogic\LtcRpc;
+use App\Services\CoinBasedLogic\MockRpc;
 
 /**
  * Coin utility helpers for normalization and RPC provider resolution.

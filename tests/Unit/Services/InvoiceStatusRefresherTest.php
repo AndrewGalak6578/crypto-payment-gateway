@@ -6,9 +6,9 @@ namespace Tests\Unit\Services;
 
 use App\Jobs\ForwardInvoiceJob;
 use App\Models\WebhookDelivery;
-use App\Services\CoinRate;
+use App\Services\CoinBasedLogic\CoinRate;
+use App\Services\CoinBasedLogic\MockRpc;
 use App\Services\InvoiceStatusRefresher;
-use App\Services\MockRpc;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Tests\Support\BuildsDomainData;

@@ -7,15 +7,15 @@
       </div>
 
       <nav class="nav">
-          <RouterLink class="nav-link" to="/merchant" exact-active-class="router-link-active" active-class="">
-              Dashboard
+          <RouterLink v-for="item in navigationItems"
+                      :key="item.to"
+                      class="nav-link"
+                      :to="item.to"
+                      exact-active-class="router-link-active"
+                      active-class=""
+                      >
+              {{ item.label }}
           </RouterLink>
-          <RouterLink class="nav-link" to="/merchant/balances">Balances</RouterLink>
-          <RouterLink class="nav-link" to="/merchant/wallets">Wallets</RouterLink>
-          <RouterLink class="nav-link" to="/merchant/invoices">Invoices</RouterLink>
-          <RouterLink class="nav-link" to="/merchant/webhook-deliveries">Webhook Deliveries</RouterLink>
-          <RouterLink class="nav-link" to="/merchant/webhook-settings">Webhook Settings</RouterLink>
-          <RouterLink class="nav-link" to="/merchant/api-keys">API Keys</RouterLink>
       </nav>
 
       <button class="logout-btn" type="button" :disabled="authStore.loading" @click="handleLogout">
@@ -33,11 +33,22 @@
 </template>
 
 <script setup>
+import {computed} from "vue";
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 
 const router = useRouter();
 const authStore = useAuthStore();
+
+const navigationItems = computed(() => ([
+    { label: 'Dashboard', to: '/merchant', canView: authStore.hasCapability('portal.view') },
+    { label: 'Balances', to: '/merchant/balances', canView: authStore.hasCapability('balances.read') },
+    { label: 'Wallets', to: '/merchant/wallets', canView: authStore.hasCapability('wallets.read') },
+    { label: 'Invoices', to: '/merchant/invoices', canView: authStore.hasCapability('invoices.read') },
+    { label: 'Webhook Deliveries', to: '/merchant/webhook-deliveries', canView: authStore.hasCapability('webhooks.read') },
+    { label: 'Webhook Settings', to: '/merchant/webhook-settings', canView: authStore.hasCapability('webhooks.read') },
+    { label: 'API Keys', to: '/merchant/api-keys', canView: authStore.hasCapability('api_keys.read') },
+]).filter((item) => item.canView));
 
 const handleLogout = async () => {
   await authStore.logout();

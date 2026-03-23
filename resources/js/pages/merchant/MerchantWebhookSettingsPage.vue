@@ -7,6 +7,10 @@
             </div>
         </header>
 
+        <div v-if="isReadOnly" class="message message-info">
+            Webhook settings are read-only for your account.
+        </div>
+
         <p v-if="loading" class="muted">Loading webhook settings...</p>
 
         <div v-else class="card">
@@ -28,7 +32,7 @@
                         type="url"
                         autocomplete="url"
                         placeholder="https://example.com/webhook"
-                        :disabled="saving || loadingFailed"
+                        :disabled="isReadOnly || saving || loadingFailed"
                     />
                 </div>
 
@@ -44,7 +48,7 @@
                         type="password"
                         autocomplete="new-password"
                         placeholder="Enter a new secret"
-                        :disabled="saving || loadingFailed"
+                        :disabled="isReadOnly || saving || loadingFailed"
                     />
                     <p class="helper-text">The current secret is never shown. Leave blank to keep the current secret unchanged.</p>
                 </div>
@@ -54,7 +58,7 @@
                 </div>
 
                 <div class="actions">
-                    <button class="action-btn" type="submit" :disabled="saving || loadingFailed">
+                    <button v-if="canWriteWebhooks" class="action-btn" type="submit" :disabled="saving || loadingFailed">
                         {{ saving ? 'Saving...' : 'Save' }}
                     </button>
 
@@ -70,6 +74,9 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
 import { getMerchantWebhookSettings, updateMerchantWebhookSettings } from '../../api/merchant.js';
+import { useAuthStore } from "../../stores/auth.js";
+
+const authStore = useAuthStore();
 
 const loading = ref(true);
 const saving = ref(false);
@@ -82,6 +89,9 @@ const form = reactive({
     webhook_url: '',
     webhook_secret: '',
 });
+
+const canWriteWebhooks = computed(() => authStore.hasCapability('webhooks.write'));
+const isReadOnly = computed(() => authStore.hasCapability('webhooks.read') && !canWriteWebhooks.value);
 
 const loadingFailed = computed(() => Boolean(loadError.value));
 const secretStatusLabel = computed(() => (hasWebhookSecret.value ? 'Secret configured' : 'No secret configured'));
@@ -110,7 +120,7 @@ const loadSettings = async () => {
 };
 
 const saveSettings = async () => {
-    if (loadingFailed.value) {
+    if (isReadOnly.value || loadingFailed.value) {
         return;
     }
 
@@ -245,6 +255,7 @@ onMounted(loadSettings);
     border-radius: 8px;
     padding: 10px 12px;
     font-size: 14px;
+    margin-bottom: 16px;
 }
 
 .message-error {
@@ -255,6 +266,11 @@ onMounted(loadSettings);
 .message-success {
     background: #f0fdf4;
     color: #166534;
+}
+
+.message-info {
+    background: #f8fafc;
+    color: #475569;
 }
 
 .actions {

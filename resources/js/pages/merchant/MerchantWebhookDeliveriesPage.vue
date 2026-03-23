@@ -139,7 +139,6 @@ const loadDeliveries = async (page = 1) => {
         });
 
         deliveries.value = Array.isArray(response.data?.data?.data) ? response.data.data.data : [];
-        console.log(response.data?.data?.data);
         meta.value = {
             current_page: response.data?.meta?.current_page ?? page,
             last_page: response.data?.meta?.last_page ?? 1,
@@ -260,23 +259,23 @@ tbody tr:last-child td {
 .pagination {
     display: flex;
     align-items: center;
-    gap: 12px;
-    justify-content: flex-end;
+    gap: 10px;
+    justify-content: space-between;
     flex-wrap: wrap;
-    margin-top: 16px;
+    margin-top: 14px;
 }
 
 .pagination-status,
 .pagination-total {
     color: #475569;
-    font-size: 14px;
 }
 
 .action-btn,
 .secondary-btn {
     border-radius: 8px;
-    padding: 9px 14px;
+    padding: 9px 12px;
     cursor: pointer;
+    font: inherit;
 }
 
 .action-btn {

@@ -7,7 +7,11 @@
             </div>
         </header>
 
-        <article class="panel form-panel">
+        <div v-if="isReadOnly" class="info-banner">
+            API keys are read-only for your account.
+        </div>
+
+        <article v-if="canWriteApiKeys" class="panel form-panel">
             <div class="form-header">
                 <div>
                     <h3>Create API key</h3>
@@ -84,7 +88,7 @@
                     <td>{{ formatDate(apiKey.created_at) }}</td>
                     <td>
                         <button
-                            v-if="!apiKey.revoked_at"
+                            v-if="canWriteApiKeys && !apiKey.revoked_at"
                             type="button"
                             class="link-btn danger-btn"
                             :disabled="revokingId === apiKey.id"
@@ -102,8 +106,11 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { createMerchantApiKey, deleteMerchantApiKey, getMerchantApiKeys } from '../../api/merchant.js';
+import { useAuthStore } from "../../stores/auth.js";
+
+const authStore = useAuthStore();
 
 const loading = ref(true);
 const submitting = ref(false);
@@ -117,6 +124,9 @@ const createdToken = ref('');
 const form = reactive({
     name: '',
 });
+
+const canWriteApiKeys = computed(() => authStore.hasCapability('api_keys.write'));
+const isReadOnly = computed(() => authStore.hasCapability('api_keys.read') && !canWriteApiKeys.value);
 
 const formatDate = (dateString) => {
     if (!dateString) {
@@ -162,6 +172,10 @@ const loadApiKeys = async () => {
 };
 
 const submitForm = async () => {
+    if (!canWriteApiKeys.value) {
+        return;
+    }
+
     formError.value = '';
     formSuccess.value = '';
 
@@ -189,7 +203,7 @@ const submitForm = async () => {
 };
 
 const revokeApiKey = async (apiKey) => {
-    if (apiKey.revoked_at) {
+    if (!canWriteApiKeys.value || apiKey.revoked_at) {
         return;
     }
 
@@ -237,6 +251,7 @@ onMounted(loadApiKeys);
     color: #64748b;
 }
 
+.info-banner,
 .panel,
 .token-card,
 .state-card,
@@ -246,11 +261,16 @@ onMounted(loadApiKeys);
     border-radius: 10px;
 }
 
+.info-banner,
 .form-panel,
 .token-card,
 .state-card {
     padding: 14px;
     margin-bottom: 16px;
+}
+
+.info-banner {
+    color: #475569;
 }
 
 .form-header h3,
@@ -322,6 +342,10 @@ onMounted(loadApiKeys);
     color: #0f172a;
 }
 
+.danger-btn {
+    color: #b91c1c;
+}
+
 .primary-btn:disabled,
 .secondary-btn:disabled,
 .link-btn:disabled {
@@ -331,6 +355,18 @@ onMounted(loadApiKeys);
 
 .form-message {
     margin: 12px 0 0;
+}
+
+.success {
+    color: #166534;
+}
+
+.error {
+    color: #b91c1c;
+}
+
+.muted {
+    color: #64748b;
 }
 
 .token-value {
@@ -385,21 +421,6 @@ tbody tr:last-child td {
     color: #b91c1c;
 }
 
-.muted {
-    color: #64748b;
-}
-
-.error {
-    color: #b91c1c;
-}
-
-.success {
-    color: #15803d;
-}
-
-.danger-btn {
-    color: #b91c1c;
-}
 
 @media (min-width: 720px) {
     .api-key-form {

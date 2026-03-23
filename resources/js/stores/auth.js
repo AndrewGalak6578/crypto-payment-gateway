@@ -5,6 +5,8 @@ export const useAuthStore = defineStore('auth', {
     state: () => ({
         user: null,
         merchant: null,
+        role: null,
+        capabilities: [],
         isAuthenticated: false,
         loading: false,
         initialized: false,
@@ -12,14 +14,24 @@ export const useAuthStore = defineStore('auth', {
 
     actions: {
         setAuthPayload(payload) {
-            this.user = payload?.user ?? null;
+            const user = payload?.user ?? null;
+
+            this.user = user;
             this.merchant = payload?.merchant ?? null;
+            this.role = user?.role ?? null;
+            this.capabilities = Array.isArray(user?.capabilities) ? user.capabilities : [];
             this.isAuthenticated = Boolean(this.user && this.merchant);
+        },
+
+        hasCapability(code) {
+            return this.capabilities.includes(code);
         },
 
         clearAuth() {
             this.user = null;
             this.merchant = null;
+            this.role = null;
+            this.capabilities = [];
             this.isAuthenticated = false;
         },
 

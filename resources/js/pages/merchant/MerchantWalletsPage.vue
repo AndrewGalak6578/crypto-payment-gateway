@@ -7,7 +7,11 @@
             </div>
         </header>
 
-        <article class="panel form-panel">
+        <div v-if="isReadOnly" class="info-banner">
+            Wallet management is read-only for your account.
+        </div>
+
+        <article v-if="canWriteWallets" class="panel form-panel">
             <div class="form-header">
                 <div>
                     <h3>{{ isEditing ? 'Edit wallet' : 'Configure wallet' }}</h3>
@@ -105,7 +109,7 @@
                     <td>{{ wallet.fee_rate ?? '—' }}</td>
                     <td>{{ formatDate(wallet.updated_at) }}</td>
                     <td>
-                        <div class="table-actions">
+                        <div v-if="canWriteWallets" class="table-actions">
                             <button type="button" class="link-btn" @click="startEdit(wallet)">Edit</button>
                             <button
                                 type="button"
@@ -116,6 +120,7 @@
                                 {{ deletingId === wallet.id ? 'Deleting...' : 'Delete' }}
                             </button>
                         </div>
+                        <span v-else class="muted">Read-only</span>
                     </td>
                 </tr>
                 </tbody>
@@ -132,6 +137,9 @@ import {
     getMerchantWallets,
     deleteMerchantWallet
 } from "../../api/merchant.js";
+import { useAuthStore } from "../../stores/auth.js";
+
+const authStore = useAuthStore();
 
 const coinOptions = [
     { label: 'BTC', value: 'btc' },
@@ -155,6 +163,9 @@ const form = reactive({
 });
 
 const isEditing = computed(() => editingWalletId.value !== null);
+const canWriteWallets = computed(() => authStore.hasCapability('wallets.write'));
+const isReadOnly = computed(() => authStore.hasCapability('wallets.read') && !canWriteWallets.value);
+
 
 const resetForm = () => {
     editingWalletId.value = null;
@@ -214,6 +225,9 @@ const buildPayload = () => ({
 });
 
 const submitForm = async () => {
+    if (!canWriteWallets.value) {
+        return;
+    }
     formError.value = '';
     formSuccess.value = '';
     submitting.value = true;
@@ -241,6 +255,10 @@ const submitForm = async () => {
 };
 
 const startEdit = (wallet) => {
+    if (!canWriteWallets.value) {
+        return;
+    }
+
     editingWalletId.value = wallet.id;
     form.coin = wallet.coin.toLowerCase();
     form.wallet = wallet.wallet;
@@ -250,6 +268,9 @@ const startEdit = (wallet) => {
 };
 
 const removeWallet = async (wallet) => {
+    if (!canWriteWallets.value) {
+        return;
+    }
     if (!window.confirm(`Delete ${wallet.coin} wallet?`)) {
         return;
     }
@@ -293,6 +314,7 @@ onMounted(loadWallets);
     color: #64748b;
 }
 
+.info-banner,
 .panel,
 .state-card,
 .table-wrap {
@@ -301,6 +323,7 @@ onMounted(loadWallets);
     border-radius: 10px;
 }
 
+.info-banner,
 .form-panel,
 .state-card {
     padding: 14px;
@@ -366,7 +389,8 @@ onMounted(loadWallets);
     color: #fff;
 }
 
-.secondary-btn {
+.secondary-btn
+.link-btn{
     border: 1px solid #cbd5e1;
     background: #fff;
     color: #0f172a;
@@ -417,9 +441,6 @@ tbody tr:last-child td {
 }
 
 .link-btn {
-    border: 1px solid #cbd5e1;
-    background: #fff;
-    color: #0f172a;
     padding: 6px 10px;
 }
 
@@ -436,7 +457,7 @@ tbody tr:last-child td {
 }
 
 .success {
-    color: #15803d;
+    color: #166534;
 }
 
 @media (min-width: 720px) {

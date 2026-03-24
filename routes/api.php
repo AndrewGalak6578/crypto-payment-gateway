@@ -8,6 +8,11 @@ Route::prefix('auth/merchant')->middleware('web')->group(function () {
     Route::post('/logout', [\App\Http\Controllers\Api\Auth\MerchantAuthController::class, 'logout'])->middleware('auth.merchant.portal');
     Route::get('/me', [\App\Http\Controllers\Api\Auth\MerchantAuthController::class, 'me'])->middleware('auth.merchant.portal');
 });
+Route::prefix('auth/admin')->middleware('web')->group(function () {
+    Route::post('/login', [\App\Http\Controllers\Api\Auth\AdminAuthController::class, 'login']);
+    Route::post('/logout', [\App\Http\Controllers\Api\Auth\AdminAuthController::class, 'logout'])->middleware('auth.admin');
+    Route::get('/me', [\App\Http\Controllers\Api\Auth\AdminAuthController::class, 'me'])->middleware('auth.admin');
+});
 
 Route::prefix('merchant')->middleware(['auth.merchant.portal', 'web'])->group(function () {
     Route::get('/dashboard', [\App\Http\Controllers\Api\MerchantPortal\DashboardController::class, '__invoke'])->middleware('merchant.capability:portal.view');

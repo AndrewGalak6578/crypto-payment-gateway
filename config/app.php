@@ -123,4 +123,9 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    'admin_bootstrap_name' => env('ADMIN_BOOTSTRAP_NAME', 'Super Admin'),
+    'admin_bootstrap_email' => env('ADMIN_BOOTSTRAP_EMAIL', 'admin@example.com'),
+    'admin_bootstrap_password' => env('ADMIN_BOOTSTRAP_PASSWORD', 'password'),
+
+
 ];

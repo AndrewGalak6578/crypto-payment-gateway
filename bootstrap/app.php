@@ -16,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'auth.merchant' => \App\Http\Middleware\AuthMerchantApiKey::class,
             'auth.merchant.portal' => \App\Http\Middleware\AuthenticateMerchant::class,
             'merchant.capability' => \App\Http\Middleware\EnsureMerchantCapability::class,
+            'auth.admin' => \App\Http\Middleware\AuthenticateAdmin::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

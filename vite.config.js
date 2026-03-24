@@ -9,7 +9,11 @@ const devPort = Number(process.env.VITE_DEV_SERVER_PORT) || 5173;
 export default defineConfig({
     plugins: [
         laravel({
-            input: ['resources/css/app.css', 'resources/js/app.js', 'resources/js/merchant-portal/main.js'],
+            input: ['resources/css/app.css',
+                'resources/js/app.js',
+                'resources/js/merchant-portal/main.js',
+                'resources/js/admin-portal/main.js',
+            ],
             refresh: true,
         }),
         vue(),

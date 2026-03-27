@@ -1,28 +1,33 @@
 <template>
-  <section>
-    <h2 class="page-title">Dashboard</h2>
+  <section class="portal-shell">
+    <header class="page-header">
+      <div>
+        <h2 class="page-title">Dashboard</h2>
+        <p class="page-subtitle">Operational summary across balances, wallets and recent invoices.</p>
+      </div>
+    </header>
 
-    <p v-if="loading" class="muted">Loading dashboard...</p>
-    <p v-else-if="error" class="error">{{ error }}</p>
+    <p v-if="loading" class="loading-state">Loading dashboard...</p>
+    <p v-else-if="error" class="empty-state error">{{ error }}</p>
 
     <template v-else>
       <div class="stats-grid">
-        <article class="card">
+        <article class="card-surface stats-card">
           <h3>Paid Invoices</h3>
           <strong>{{ dashboard.stats?.paid_invoices_count ?? 0 }}</strong>
         </article>
-        <article class="card">
+        <article class="card-surface stats-card">
           <h3>Pending / Fixated</h3>
           <strong>{{ dashboard.stats?.pending_invoices_count ?? 0 }}</strong>
         </article>
-        <article class="card">
+        <article class="card-surface stats-card">
           <h3>Failed Webhooks</h3>
           <strong>{{ dashboard.stats?.failed_webhook_deliveries_count ?? 0 }}</strong>
         </article>
       </div>
 
       <div class="panel-grid">
-        <article class="panel">
+        <article class="card-surface panel">
           <h3>Balances</h3>
           <ul class="list" v-if="dashboard.balances?.length">
             <li v-for="balance in dashboard.balances" :key="balance.coin">
@@ -30,10 +35,10 @@
               <strong>{{ balance.amount }}</strong>
             </li>
           </ul>
-          <p v-else class="muted">No balances.</p>
+          <p v-else class="empty-state inline-state">No balances.</p>
         </article>
 
-        <article class="panel">
+        <article class="card-surface panel">
           <h3>Wallets</h3>
           <ul class="list" v-if="dashboard.wallets?.length">
             <li v-for="wallet in dashboard.wallets" :key="wallet.id">
@@ -41,14 +46,13 @@
               <strong>{{ wallet.wallet }}</strong>
             </li>
           </ul>
-          <p v-else class="muted">No wallets.</p>
+          <p v-else class="empty-state inline-state">No wallets.</p>
         </article>
       </div>
 
-      <article class="panel">
-        <h3>Recent Invoices</h3>
+      <article class="table-shell">
         <div class="table-wrap">
-          <table>
+          <table class="table-base">
             <thead>
               <tr>
                 <th>Public ID</th>
@@ -64,11 +68,16 @@
                 <td>
                   <RouterLink :to="`/merchant/invoices/${invoice.id}`">{{ invoice.public_id }}</RouterLink>
                 </td>
-                <td>{{ invoice.status }}</td>
+                <td>
+                  <span class="status-badge status-badge-muted">{{ invoice.status }}</span>
+                </td>
                 <td>{{ invoice.coin }}</td>
                 <td>{{ invoice.amount_coin }}</td>
                 <td>{{ invoice.expected_usd }}</td>
                 <td>{{ formatDate(invoice.created_at) }}</td>
+              </tr>
+              <tr v-if="!(dashboard.recent_invoices || []).length">
+                <td colspan="6" class="empty-row">No recent invoices yet.</td>
               </tr>
             </tbody>
           </table>
@@ -118,50 +127,37 @@ onMounted(loadDashboard);
 </script>
 
 <style scoped>
-.page-title {
-  margin: 0 0 16px;
-  color: #0f172a;
-}
-
-.stats-grid,
 .panel-grid {
   display: grid;
   gap: 12px;
-  margin-bottom: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
-.stats-grid {
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-}
-
-.panel-grid {
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-}
-
-.card,
+.stats-card,
 .panel {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
   padding: 14px;
 }
 
-.card h3,
+.stats-card h3,
 .panel h3 {
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   color: #475569;
 }
 
-.card strong {
+.stats-card strong {
   display: block;
   margin-top: 8px;
   font-size: 24px;
   color: #0f172a;
 }
 
+.panel h3 {
+  margin-bottom: 6px;
+}
+
 .list {
-  margin: 10px 0 0;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
@@ -178,29 +174,16 @@ onMounted(loadDashboard);
   border-bottom: 0;
 }
 
-.table-wrap {
-  overflow-x: auto;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 10px;
-}
-
-th,
-td {
-  text-align: left;
-  font-size: 13px;
-  padding: 9px;
-  border-bottom: 1px solid #f1f5f9;
-}
-
-.muted {
-  color: #64748b;
+.inline-state {
+  padding: 10px;
+  margin: 8px 0 0;
 }
 
 .error {
   color: #b91c1c;
+}
+
+.empty-row {
+  color: #64748b;
 }
 </style>

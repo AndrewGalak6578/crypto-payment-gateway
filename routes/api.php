@@ -1,8 +1,14 @@
 <?php
 
+use App\Http\Controllers\Api\AdminPortal\InvoiceController;
+use App\Http\Controllers\Api\AdminPortal\MerchantApiKeyController;
+use App\Http\Controllers\Api\AdminPortal\MerchantController;
+use App\Http\Controllers\Api\AdminPortal\MerchantUserController;
+use App\Http\Controllers\Api\AdminPortal\WebhookDeliveryController;
+use App\Http\Controllers\Api\AdminPortal\DashboardController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-
+/** Auth routes for admin and merchant */
 Route::prefix('auth/merchant')->middleware('web')->group(function () {
     Route::post('/login', [\App\Http\Controllers\Api\Auth\MerchantAuthController::class, 'login']);
     Route::post('/logout', [\App\Http\Controllers\Api\Auth\MerchantAuthController::class, 'logout'])->middleware('auth.merchant.portal');
@@ -12,6 +18,31 @@ Route::prefix('auth/admin')->middleware('web')->group(function () {
     Route::post('/login', [\App\Http\Controllers\Api\Auth\AdminAuthController::class, 'login']);
     Route::post('/logout', [\App\Http\Controllers\Api\Auth\AdminAuthController::class, 'logout'])->middleware('auth.admin');
     Route::get('/me', [\App\Http\Controllers\Api\Auth\AdminAuthController::class, 'me'])->middleware('auth.admin');
+});
+
+/** Functional routes for admin and merchant */
+Route::prefix('admin')->middleware(['web', 'auth.admin'])->group(function () {
+    Route::get('/dashboard', DashboardController::class);
+
+    Route::get('/merchants', [MerchantController::class, 'index']);
+    Route::get('/merchants/{merchant}', [MerchantController::class, 'show']);
+    Route::patch('/merchants/{merchant}/status', [MerchantController::class, 'updateStatus']);
+
+    Route::get('/merchant-users', [MerchantUserController::class, 'index']);
+    Route::post('/merchant-users', [MerchantUserController::class, 'store']);
+    Route::patch('/merchant-users/{merchantUser}/role', [MerchantUserController::class, 'updateRole']);
+    Route::patch('/merchant-users/{merchantUser}/status', [MerchantUserController::class, 'updateStatus']);
+
+    Route::get('/invoices', [InvoiceController::class, 'index']);
+    Route::get('/invoices/{invoice}', [InvoiceController::class, 'show']);
+    Route::post('/invoices/{invoice}/refresh', [InvoiceController::class, 'refresh']);
+
+    Route::get('/webhook-deliveries', [WebhookDeliveryController::class, 'index']);
+    Route::get('/webhook-deliveries/{delivery}', [WebhookDeliveryController::class, 'show']);
+    Route::post('/webhook-deliveries/{delivery}/retry', [WebhookDeliveryController::class, 'retry']);
+
+    Route::get('/merchant-api-keys', [MerchantApiKeyController::class, 'index']);
+    Route::post('/merchant-api-keys/{apiKey}/revoke', [MerchantApiKeyController::class, 'revoke']);
 });
 
 Route::prefix('merchant')->middleware(['auth.merchant.portal', 'web'])->group(function () {

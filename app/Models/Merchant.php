@@ -20,6 +20,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property-read Collection<int, Invoice> $invoices
  * @property-read Collection<int, SuperWallet> $superWallets
  * @property-read Collection<int, MerchantBalance> $balances
+ * @property-read Collection<int, MerchantUser> $users
  */
 class Merchant extends Model
 {

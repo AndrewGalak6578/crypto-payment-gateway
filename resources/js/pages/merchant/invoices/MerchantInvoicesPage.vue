@@ -1,8 +1,13 @@
 <template>
-  <section>
-    <h2 class="page-title">Invoices</h2>
+  <section class="portal-shell">
+    <header class="page-header">
+      <div>
+        <h2 class="page-title">Invoices</h2>
+        <p class="page-subtitle">Track status, filters and hosted invoice links.</p>
+      </div>
+    </header>
 
-    <form class="filters" @submit.prevent="applyFilters">
+    <form class="filters-row" @submit.prevent="applyFilters">
       <input v-model="filters.search" placeholder="Search public_id / external_id" />
       <input v-model="filters.status" placeholder="Status" />
       <input v-model="filters.coin" placeholder="Coin" />
@@ -10,54 +15,56 @@
       <button type="button" @click="resetFilters">Reset</button>
     </form>
 
-    <p v-if="loading" class="muted">Loading invoices...</p>
-    <p v-else-if="error" class="error">{{ error }}</p>
+    <p v-if="loading" class="loading-state">Loading invoices...</p>
+    <p v-else-if="error" class="empty-state error">{{ error }}</p>
 
-    <div v-else class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>public_id</th>
-            <th>external_id</th>
-            <th>status</th>
-            <th>coin</th>
-            <th>amount_coin</th>
-            <th>expected_usd</th>
-            <th>received_conf_coin</th>
-            <th>forward_status</th>
-            <th>created_at</th>
-            <th>hosted_url</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="invoice in invoices" :key="invoice.id" class="click-row" @click="goToDetail(invoice.id)">
-            <td>{{ invoice.public_id }}</td>
-            <td>{{ invoice.external_id || '—' }}</td>
-            <td>{{ invoice.status }}</td>
-            <td>{{ invoice.coin }}</td>
-            <td>{{ invoice.amount_coin }}</td>
-            <td>{{ invoice.expected_usd }}</td>
-            <td>{{ invoice.received_conf_coin }}</td>
-            <td>{{ invoice.forward_status || '—' }}</td>
-            <td>{{ formatDate(invoice.created_at) }}</td>
-            <td>
-              <a
-                v-if="invoice.hosted_url"
-                :href="invoice.hosted_url"
-                target="_blank"
-                rel="noopener noreferrer"
-                @click.stop
-              >
-                open
-              </a>
-              <span v-else>—</span>
-            </td>
-          </tr>
-          <tr v-if="!invoices.length">
-            <td colspan="10" class="muted">No invoices found.</td>
-          </tr>
-        </tbody>
-      </table>
+    <div v-else class="table-shell">
+      <div class="table-wrap">
+        <table class="table-base">
+          <thead>
+            <tr>
+              <th>public_id</th>
+              <th>external_id</th>
+              <th>status</th>
+              <th>coin</th>
+              <th>amount_coin</th>
+              <th>expected_usd</th>
+              <th>received_conf_coin</th>
+              <th>forward_status</th>
+              <th>created_at</th>
+              <th>hosted_url</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="invoice in invoices" :key="invoice.id" class="click-row" @click="goToDetail(invoice.id)">
+              <td>{{ invoice.public_id }}</td>
+              <td>{{ invoice.external_id || '—' }}</td>
+              <td><span class="status-badge status-badge-muted">{{ invoice.status }}</span></td>
+              <td>{{ invoice.coin }}</td>
+              <td>{{ invoice.amount_coin }}</td>
+              <td>{{ invoice.expected_usd }}</td>
+              <td>{{ invoice.received_conf_coin }}</td>
+              <td>{{ invoice.forward_status || '—' }}</td>
+              <td>{{ formatDate(invoice.created_at) }}</td>
+              <td>
+                <a
+                  v-if="invoice.hosted_url"
+                  :href="invoice.hosted_url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  @click.stop
+                >
+                  open
+                </a>
+                <span v-else>—</span>
+              </td>
+            </tr>
+            <tr v-if="!invoices.length">
+              <td colspan="10" class="empty-row">No invoices found.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <div class="pagination">
@@ -178,49 +185,18 @@ watch(
 </script>
 
 <style scoped>
-.page-title {
-  margin: 0 0 16px;
-  color: #0f172a;
-}
-
-.filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.filters input,
-.filters button {
+.filters-row input,
+.filters-row button,
+.pagination button {
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   padding: 8px 10px;
   background: #fff;
 }
 
-.filters button {
+.filters-row button,
+.pagination button {
   cursor: pointer;
-}
-
-.table-wrap {
-  overflow-x: auto;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-th,
-td {
-  border-bottom: 1px solid #f1f5f9;
-  padding: 9px;
-  text-align: left;
-  font-size: 13px;
-  white-space: nowrap;
 }
 
 .click-row {
@@ -234,18 +210,11 @@ td {
 .pagination {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
-  margin-top: 12px;
 }
 
-.pagination button {
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  padding: 7px 12px;
-  background: #fff;
-}
-
-.muted {
+.empty-row {
   color: #64748b;
 }
 

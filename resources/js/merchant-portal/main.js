@@ -4,6 +4,7 @@ import router from '../router';
 import { useAuthStore } from '../stores/auth';
 import App from './App.vue';
 import '../../css/app.css';
+import '../styles/portal-ui.css';
 
 const app = createApp(App);
 const pinia = createPinia();

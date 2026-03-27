@@ -16,7 +16,7 @@
                     active-class=""
                     @click="closeSidebar"
                 >
-                    <span>{{ item.label }}</span>
+                    <span class="nav-link-label">{{ item.label }}</span>
                 </RouterLink>
             </nav>
 

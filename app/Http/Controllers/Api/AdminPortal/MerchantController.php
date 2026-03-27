@@ -57,7 +57,7 @@ class MerchantController extends Controller
     {
         $merchant->load('users.role');
 
-        $recent_invoices = $merchant->query()
+        $recent_invoices = Invoice::query()
             ->where('merchant_id', $merchant->id)
             ->latest('id')
             ->take(10)

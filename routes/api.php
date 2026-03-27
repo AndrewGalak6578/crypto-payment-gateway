@@ -45,7 +45,7 @@ Route::prefix('admin')->middleware(['web', 'auth.admin'])->group(function () {
     Route::post('/merchant-api-keys/{apiKey}/revoke', [MerchantApiKeyController::class, 'revoke']);
 });
 
-Route::prefix('merchant')->middleware(['auth.merchant.portal', 'web'])->group(function () {
+Route::prefix('merchant')->middleware(['auth.merchant.portal', 'web', 'merchant.enabled'])->group(function () {
     Route::get('/dashboard', [\App\Http\Controllers\Api\MerchantPortal\DashboardController::class, '__invoke'])->middleware('merchant.capability:portal.view');
 
     Route::get('/invoices', [\App\Http\Controllers\Api\MerchantPortal\InvoiceController::class, 'index'])->middleware('merchant.capability:invoices.read');

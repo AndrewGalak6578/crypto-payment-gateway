@@ -8,6 +8,7 @@ use App\Http\Requests\Admin\StoreMerchantUserRequest;
 use App\Http\Requests\Admin\UpdateMerchantUserRoleRequest;
 use App\Http\Requests\Admin\UpdateMerchantUserStatusRequest;
 use App\Models\MerchantUser;
+use App\Models\Role;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -46,6 +47,10 @@ class MerchantUserController extends Controller
 
         $users = $query->paginate((int) $request->query('per_page', 15));
 
+        $roles = Role::query()
+            ->latest('id')
+            ->get(['id', 'slug', 'name']);
+
         return response()->json([
             'success' => true,
             'data' => $users->through(fn (MerchantUser $user) => [
@@ -60,6 +65,11 @@ class MerchantUserController extends Controller
                 'status' => $user->status,
                 'last_login_at' => optional($user->last_login_at)->toIso8601String(),
                 'created_at' => optional($user->created_at)->toIso8601String(),
+            ]),
+            'roles' => $roles->map(fn(Role $role) => [
+                'id' => $role->id,
+                'slug' => $role->slug,
+                'name' => $role->name,
             ]),
             'meta' => [
                 'current_page' => $users->currentPage(),

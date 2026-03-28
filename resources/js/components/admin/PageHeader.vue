@@ -33,6 +33,10 @@ defineProps({
     margin-bottom: 16px;
 }
 
+.page-header > :first-child {
+    min-width: 0;
+}
+
 .page-title {
     margin: 0;
     color: #0f172a;
@@ -50,5 +54,15 @@ defineProps({
     display: inline-flex;
     gap: 8px;
     flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+    .page-title {
+        font-size: 22px;
+    }
+
+    .page-actions {
+        width: 100%;
+    }
 }
 </style>

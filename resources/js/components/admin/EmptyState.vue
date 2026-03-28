@@ -21,8 +21,8 @@ defineProps({
 <style scoped>
 .state-card {
     border: 1px dashed #cbd5e1;
-    border-radius: 12px;
-    padding: 22px;
+    border-radius: 14px;
+    padding: 20px;
     background: #fff;
 }
 
@@ -30,10 +30,13 @@ defineProps({
     margin: 0;
     color: #334155;
     font-weight: 600;
+    font-size: 15px;
 }
 
 .description {
     margin: 6px 0 0;
     color: #64748b;
+    font-size: 14px;
+    line-height: 1.45;
 }
 </style>

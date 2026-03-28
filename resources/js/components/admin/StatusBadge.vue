@@ -23,10 +23,14 @@ const variantClass = computed(() => `status-badge-${props.variant}`);
 .status-badge {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
+    gap: 6px;
     border-radius: 999px;
-    padding: 3px 10px;
-    font-size: 12px;
+    padding: 2px 9px;
+    font-size: 11px;
     font-weight: 600;
+    padding: 2px 9px;
+    font-size: 11px;
     text-transform: capitalize;
     white-space: nowrap;
 }

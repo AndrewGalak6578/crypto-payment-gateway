@@ -18,8 +18,14 @@ defineProps({
 .loading-state {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
+    width: 100%;
+    padding: 16px;
+    border-radius: 14px;
+    border: 1px dashed #cbd5e1;
+    background: #fff;
     color: #475569;
+    font-size: 14px;
 }
 
 .dot {

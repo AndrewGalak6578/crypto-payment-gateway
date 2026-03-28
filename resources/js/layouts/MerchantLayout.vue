@@ -45,12 +45,12 @@
             ☰
           </button>
           <div>
-            <p class="portal-topbar-title">Merchant Portal</p>
+              <p class="portal-topbar-title">{{ currentSectionTitle }}</p>
             <p class="portal-topbar-subtitle">Operational workspace</p>
           </div>
         </div>
 
-        <p class="portal-topbar-user">{{ userLabel }}</p>
+        <p class="portal-topbar-user" :title="userLabel">{{ userLabel }}</p>
       </header>
 
       <div class="portal-shell">
@@ -82,6 +82,18 @@ const navigationItems = computed(() => ([
 
 const merchantLabel = computed(() => authStore.merchant?.name || 'Merchant');
 const userLabel = computed(() => authStore.user?.name || authStore.user?.email || 'Merchant User');
+const currentSectionTitle = computed(() => {
+    const match = navigationItems.value.find((item) => {
+        if (item.to === '/merchant') {
+            return route.path === '/merchant';
+        }
+
+        return route.path.startsWith(item.to);
+    });
+
+    return match?.label || 'Merchant Portal';
+});
+
 
 const closeSidebar = () => {
   sidebarOpen.value = false;

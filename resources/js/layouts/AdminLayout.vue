@@ -54,7 +54,7 @@
                         <p class="portal-topbar-subtitle">Internal operations panel</p>
                     </div>
                 </div>
-                <p class="portal-topbar-user">{{ adminLabel }}</p>
+                <p class="portal-topbar-user" :title="adminLabel">{{ adminLabel }}</p>
             </header>
 
             <div class="portal-shell">

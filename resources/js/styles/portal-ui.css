@@ -1,13 +1,16 @@
 :root {
     --portal-bg: #f3f6fb;
-    --portal-surface: #ffffff;
-    --portal-border: #dbe4ef;
+    --portal-surface: rgba(255, 255, 255, 0.96);
+    --portal-surface-strong: #ffffff;
+    --portal-border: #d9e2ec;
     --portal-text: #0f172a;
     --portal-muted: #64748b;
     --portal-sidebar-bg: #0f172a;
-    --portal-sidebar-border: #1f2937;
+    --portal-sidebar-border: rgba(51, 65, 85, 0.9);
     --portal-sidebar-text: #cbd5e1;
     --portal-sidebar-active: #1e293b;
+    --portal-shadow-sm: 0 4px 14px rgba(15, 23, 42, 0.05);
+    --portal-shadow-md: 0 10px 30px rgba(15, 23, 42, 0.08);
 }
 
 * {
@@ -16,7 +19,9 @@
 
 .portal-layout {
     min-height: 100vh;
-    background: linear-gradient(180deg, #f8fafc 0%, var(--portal-bg) 100%);
+    background:
+        radial-gradient(circle at top left, rgba(148, 163, 184, 0.10), transparent 24%),
+        linear-gradient(180deg, #f8fafc 0%, var(--portal-bg) 100%);
     color: var(--portal-text);
 }
 
@@ -25,16 +30,19 @@
     inset: 0 auto 0 0;
     width: min(84vw, 292px);
     z-index: 50;
-    background: linear-gradient(180deg, var(--portal-sidebar-bg) 0%, #111827 100%);
+    background:
+        radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 20%),
+        linear-gradient(180deg, var(--portal-sidebar-bg) 0%, #111827 100%);
     color: var(--portal-sidebar-text);
-    padding: 18px;
+    padding: 20px 18px 18px;
     border-right: 1px solid var(--portal-sidebar-border);
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 18px;
     overflow-y: auto;
     transform: translateX(-110%);
     transition: transform 0.22s ease;
+    box-shadow: 0 20px 50px rgba(15, 23, 42, 0.28);
 }
 
 .portal-sidebar.is-open {
@@ -49,64 +57,78 @@
 }
 
 .portal-brand-wrap {
-    border: 1px solid #1e293b;
-    border-radius: 12px;
-    background: rgba(15, 23, 42, 0.45);
-    padding: 11px 12px;
+    border: 1px solid rgba(51, 65, 85, 0.95);
+    border-radius: 16px;
+    background: rgba(15, 23, 42, 0.5);
+    padding: 14px 14px 12px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .portal-brand {
     margin: 0;
     color: #f8fafc;
-    font-size: 18px;
-    line-height: 1.2;
+    font-size: 24px;
+    line-height: 1.1;
+    font-weight: 700;
+    letter-spacing: -0.02em;
 }
 
 .portal-meta {
-    margin: 6px 0 0;
+    margin: 8px 0 0;
     color: #94a3b8;
-    font-size: 12px;
+    font-size: 13px;
+    line-height: 1.4;
 }
 
 .portal-nav {
     display: grid;
-    gap: 7px;
+    gap: 8px;
 }
 
 .portal-nav-link {
     color: var(--portal-sidebar-text);
     text-decoration: none;
     border: 1px solid transparent;
-    border-radius: 9px;
-    padding: 9px 11px;
-    transition: all 0.14s ease;
+    border-radius: 12px;
+    padding: 11px 12px;
+    transition:
+        background-color 0.14s ease,
+        border-color 0.14s ease,
+        color 0.14s ease,
+        transform 0.14s ease;
 }
 
 .portal-nav-link:hover {
     border-color: #334155;
-    background: #0b1220;
+    background: rgba(15, 23, 42, 0.75);
+    color: #f8fafc;
 }
 
 .portal-nav-link.router-link-active {
-    background: var(--portal-sidebar-active);
-    border-color: #334155;
+    background: linear-gradient(180deg, rgba(37, 99, 235, 0.16), rgba(37, 99, 235, 0.08));
+    border-color: rgba(59, 130, 246, 0.22);
     color: #f8fafc;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .portal-logout-btn,
 .portal-btn,
 .portal-btn-secondary {
-    border-radius: 8px;
-    padding: 8px 12px;
+    border-radius: 10px;
+    padding: 10px 14px;
     font: inherit;
-    border: 1px solid #334155;
 }
 
 .portal-logout-btn {
     margin-top: auto;
-    background: transparent;
+    background: rgba(15, 23, 42, 0.5);
     color: #f8fafc;
     cursor: pointer;
+    border: 1px solid rgba(51, 65, 85, 0.95);
+}
+
+.portal-logout-btn:hover {
+    background: rgba(30, 41, 59, 0.9);
 }
 
 .portal-logout-btn:disabled {
@@ -116,7 +138,7 @@
 
 .portal-main {
     min-width: 0;
-    padding: 12px;
+    padding: 14px;
 }
 
 .portal-topbar {
@@ -124,21 +146,22 @@
     top: 10px;
     z-index: 20;
     border: 1px solid var(--portal-border);
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.94);
-    backdrop-filter: blur(3px);
-    padding: 9px 12px;
-    margin-bottom: 12px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(10px);
+    padding: 14px 16px;
+    margin-bottom: 16px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
+    gap: 14px;
+    box-shadow: var(--portal-shadow-sm);
 }
 
 .portal-topbar-main {
     display: flex;
     align-items: center;
-    gap: 9px;
+    gap: 12px;
     min-width: 0;
 }
 
@@ -146,35 +169,43 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 34px;
-    height: 34px;
+    min-width: 40px;
+    height: 40px;
     border: 1px solid #cbd5e1;
-    border-radius: 8px;
+    border-radius: 10px;
     background: #fff;
     color: #334155;
     cursor: pointer;
+    font-size: 16px;
+    font-weight: 600;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .portal-topbar-title {
     margin: 0;
-    font-size: 14px;
+    font-size: 15px;
+    font-weight: 700;
     color: #0f172a;
 }
 
 .portal-topbar-subtitle {
-    margin: 1px 0 0;
+    margin: 3px 0 0;
     font-size: 12px;
     color: var(--portal-muted);
 }
 
 .portal-topbar-user {
     margin: 0;
-    font-size: 12px;
+    font-size: 13px;
     color: #334155;
-    max-width: 210px;
+    max-width: 220px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: rgba(248, 250, 252, 0.95);
+    border: 1px solid #e2e8f0;
 }
 
 .portal-shell {
@@ -219,7 +250,8 @@
 .card-surface {
     background: var(--portal-surface);
     border: 1px solid #e2e8f0;
-    border-radius: 12px;
+    border-radius: 16px;
+    box-shadow: var(--portal-shadow-sm);
 }
 
 .table-wrap {
@@ -235,9 +267,20 @@
 .table-base td {
     text-align: left;
     font-size: 13px;
-    padding: 9px;
+    padding: 12px 12px;
     border-bottom: 1px solid #f1f5f9;
     white-space: nowrap;
+}
+
+.table-base thead th {
+    font-size: 12px;
+    font-weight: 700;
+    color: #475569;
+    background: rgba(248, 250, 252, 0.9);
+}
+
+.table-base tbody tr:hover {
+    background: rgba(248, 250, 252, 0.75);
 }
 
 .status-badge {
@@ -256,8 +299,8 @@
 
 .empty-state,
 .loading-state {
-    padding: 16px;
-    border-radius: 12px;
+    padding: 18px;
+    border-radius: 14px;
     border: 1px dashed #cbd5e1;
     background: #fff;
     color: #475569;

@@ -50,7 +50,7 @@
                         ☰
                     </button>
                     <div>
-                        <p class="portal-topbar-title">Admin Portal</p>
+                        <p class="portal-topbar-title">{{ currentSectionTitle }}</p>
                         <p class="portal-topbar-subtitle">Internal operations panel</p>
                     </div>
                 </div>
@@ -87,6 +87,17 @@ const adminLabel = computed(() => {
     return adminAuthStore.admin?.name || adminAuthStore.admin?.email || 'Admin User';
 });
 
+const currentSectionTitle = computed(() => {
+    const match = navigationItems.find((item) => {
+        if (item.to === '/admin') {
+            return route.path === '/admin'
+        }
+
+        return route.path.startsWith(item.to)
+    });
+
+    return match?.label || 'Admin Portal';
+})
 const closeSidebar = () => {
     sidebarOpen.value = false;
 };

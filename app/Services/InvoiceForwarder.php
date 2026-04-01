@@ -8,6 +8,7 @@ use App\Models\SuperWallet;
 use App\Services\Settlement\MerchantBalanceCreditor;
 use App\Services\Settlement\SuperWalletResolver;
 use App\Services\Webhooks\EnqueueInvoiceWebhook;
+use App\Support\Assets\AssetRegistry;
 use App\Support\Coin;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -26,6 +27,7 @@ final class InvoiceForwarder
         private readonly EnqueueInvoiceWebhook $enqueueWebhook,
         private readonly SuperWalletResolver $walletResolver,
         private readonly MerchantBalanceCreditor $balanceCreditor,
+        private readonly AssetRegistry $assets,
     )
     {
     }
@@ -119,8 +121,8 @@ final class InvoiceForwarder
                 return null;
             }
 
-            $scale = $this->scale($invoice->coin);
-            $epsilon = $this->epsilon($invoice->coin);
+            $scale = $this->assets->settlementScale($invoice->coin);
+            $epsilon = $this->assets->epsilon($invoice->coin);
 
             $confirmed = $this->norm((float) ($invoice->received_conf_coin ?? 0), $scale);
             $forwarded = $this->norm((float) ($invoice->forwarded_coin ?? 0), $scale);
@@ -138,7 +140,7 @@ final class InvoiceForwarder
                 return null;
             }
 
-            $min = $this->norm((float) config("forwarding.min_coin.{$invoice->coin}", 0), $scale);
+            $min = $this->norm((float) config("forwarding.assets.{$invoice->coin}.min", 0), $scale);
 
             if ($amount < $min) {
                 $invoice->forward_status = $forwarded > $epsilon ? 'partial' : 'none';
@@ -185,8 +187,8 @@ final class InvoiceForwarder
                 return;
             }
 
-            $scale = $this->scale($invoice->coin);
-            $epsilon = $this->epsilon($invoice->coin);
+            $scale = $this->assets->settlementScale($invoice->coin);
+            $epsilon = $this->assets->epsilon($invoice->coin);
 
             $txids = $invoice->forward_txids ?? [];
             $txids[] = $txid;
@@ -241,13 +243,6 @@ final class InvoiceForwarder
         });
     }
 
-    private function scale(string $coin): int
-    {
-        return match ($coin) {
-            'dash' => 3,
-            default => 8,
-        };
-    }
 
     /**
      * Rounds coin values to chain-specific precision.
@@ -260,17 +255,4 @@ final class InvoiceForwarder
         return round($value, $scale);
     }
 
-    /**
-     * Defines floating-point tolerance per coin precision.
-     *
-     * @param string $coin Normalized coin symbol.
-     */
-    private function epsilon(string $coin): float
-    {
-        return match ($coin) {
-            'dash' => 0.001,
-            'btc', 'ltc' => 0.00000001,
-            default => 0.00000001,
-        };
-    }
 }

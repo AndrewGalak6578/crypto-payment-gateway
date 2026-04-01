@@ -30,7 +30,7 @@ class SuperWallet extends Model
     ];
 
     /**
-     * Legacy helper: returns first wallet by coin.
+     * Legacy helper: returns first wallet by asset key stored in coin column.
      */
     public static function forCoin(string $coin): ?self
     {

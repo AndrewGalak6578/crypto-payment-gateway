@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests;
 
+use App\Support\Assets\AssetRegistry;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
  * Validation rules for merchant invoice creation endpoint.
@@ -26,10 +28,11 @@ class CreateInvoiceRequest extends FormRequest
      */
     public function rules(): array
     {
+        $assetKeys = app(AssetRegistry::class)->keys();
         return [
             'external_id' => 'nullable|string|max:120',
             'amount_usd' => 'required|numeric|min:0.01',
-            'coin' => 'sometimes|string|in:dash,btc,ltc',
+            'coin' => ['sometimes', 'string', Rule::in($assetKeys)],
             'expires_minutes' => 'sometimes|integer|min:1|max:240',
             'metadata' => 'sometimes|array'
         ];

@@ -2,10 +2,14 @@
 
 namespace App\Models;
 
+use App\Support\Assets\AssetRegistry;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Psr\Container\ContainerExceptionInterface;
+use Psr\Container\NotFoundExceptionInterface;
+use RuntimeException;
 
 /**
  * Invoice state snapshot used by API, hosted page and settlement pipeline.
@@ -16,6 +20,8 @@ use Illuminate\Support\Carbon;
  * @property string|null $external_id
  * @property string|null $status
  * @property string|null $coin
+ * @property string $asset_key
+ * @property string $network_key
  * @property string|null $pay_address
  * @property float|null $amount_coin
  * @property float|null $expected_usd
@@ -50,7 +56,8 @@ class Invoice extends Model
 
     protected $fillable = [
         'merchant_id', 'public_id', 'external_id',
-        'status', 'coin', 'pay_address',
+        'status', 'coin', 'asset_key', 'network_key',
+        'pay_address',
         'amount_coin', 'expected_usd', 'rate_usd',
         'expires_at', 'fixated_at', 'paid_at', 'monitor_until',
         'first_txid', 'first_amount_coin',
@@ -91,5 +98,46 @@ class Invoice extends Model
     public function webhookDeliveries(): HasMany
     {
         return $this->hasMany(WebhookDelivery::class);
+    }
+
+    public function resolvedAssetKey(): string
+    {
+        if (is_string($this->asset_key) && $this->asset_key !== '') {
+            return strtolower($this->asset_key);
+        }
+
+        if (is_string($this->coin) && $this->coin !== '') {
+            return strtolower($this->coin);
+        }
+
+        throw new RuntimeException('Invoice has no asset key');
+    }
+
+    /**
+     * @throws ContainerExceptionInterface
+     * @throws NotFoundExceptionInterface
+     */
+    public function resolvedNetworkKey(): string
+    {
+        if (is_string($this->network_key) && $this->network_key !== '') {
+            return strtolower($this->network_key);
+        }
+
+        $asset = app(AssetRegistry::class)->get($this->resolvedAssetKey());
+
+        return (string) $asset['network'];
+    }
+
+    public function syncResolvedAssetFields(): void
+    {
+        $assetKey = $this->resolvedAssetKey();
+        $asset = app(AssetRegistry::class)->get($assetKey);
+
+        $this->asset_key = $assetKey;
+        $this->network_key = (string) $asset['network'];
+
+        if (!$this->coin) {
+            $this->coin = $assetKey;
+        }
     }
 }

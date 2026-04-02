@@ -36,13 +36,13 @@ class CoinRate
         $lastGoodKey = "coinrate.usd.$coin.last_good";
 
         $cached = Cache::get($cacheKey);
-        if (is_numeric($cached) && $this->isSaneRate($coin, (float)$cached)) {
+        if (is_numeric($cached) && $this->isSaneRate($rateMeta, (float)$cached)) {
             return (float)$cached;
         }
 
         $providers = [
-            'coingecko' => fn() => $this->fromCoinGecko($coin),
-            'coinbase' => fn() => $this->fromCoinbase($coin)
+            'coingecko' => fn() => $this->fromCoinGecko($rateMeta),
+            'coinbase' => fn() => $this->fromCoinbase($rateMeta)
         ];
 
         foreach ($providers as $name => $fetch) {

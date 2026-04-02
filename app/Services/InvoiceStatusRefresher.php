@@ -7,6 +7,7 @@ use App\Jobs\ForwardInvoiceJob;
 use App\Models\Invoice;
 use App\Services\CoinBasedLogic\CoinRate;
 use App\Services\Webhooks\EnqueueInvoiceWebhook;
+use App\Support\Assets\AssetRegistry;
 use App\Support\Coin;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +20,7 @@ final class InvoiceStatusRefresher
     public function __construct(
         private CoinRate $rates,
         private EnqueueInvoiceWebhook $enqueueWebhook,
+        private readonly AssetRegistry $assets
     ){}
 
     /**
@@ -44,10 +46,13 @@ final class InvoiceStatusRefresher
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            $assetKey = $inv->resolvedAssetKey();
+            $networkKey = $inv->resolvedNetworkKey();
+
             $now = now('UTC');
             $confirmations = (int) config('payments.confirmations', 1);
 
-            $rpc = Coin::rpc($inv->coin);
+            $rpc = Coin::rpc($assetKey);
             $label = "inv:{$inv->public_id}";
 
             $txs = $rpc->getTransactionsByAddress($inv->pay_address, 0, 1000, $label);
@@ -81,7 +86,7 @@ final class InvoiceStatusRefresher
                     $inv->status = 'fixated';
                     $inv->fixated_at = $now;
 
-                    $rate = (float) $this->rates->usd($inv->coin);
+                    $rate = (float) $this->rates->usd($assetKey);
                     $receivedUsd = $receivedAll * $rate;
                     $slip = $receivedUsd - (float) $inv->expected_usd;
 
@@ -121,8 +126,8 @@ final class InvoiceStatusRefresher
 
             $confirmed = (float) ($inv->received_conf_coin ?? 0);
             $forwarded = (float) ($inv->forwarded_coin ?? 0);
-            $scale = $this->scale($inv->coin);
-            $epsilon = $this->epsilon($inv->coin);
+            $scale = $this->assets->settlementScale($assetKey);
+            $epsilon = $this->assets->epsilon($assetKey);
             $feePercent = (float) ($inv->merchant->fee_percent ?? 0.0);
             // Forwarding target must be based on merchant net amount, not gross received amount.
             $targetNet = $this->norm($confirmed - ($confirmed * ($feePercent / 100)), $scale);
@@ -205,18 +210,6 @@ final class InvoiceStatusRefresher
         return (int)$first['time'] ?? null;
     }
 
-    /**
-     * Returns decimal precision for coin-level rounding.
-     *
-     * @param string $coin Normalized coin symbol.
-     */
-    private function scale(string $coin): int
-    {
-        return match ($coin) {
-            'dash' => 3,
-            default => 8,
-        };
-    }
 
     /**
      * Rounds value to configured coin precision.
@@ -229,16 +222,5 @@ final class InvoiceStatusRefresher
         return round($value, $scale);
     }
 
-    /**
-     * Floating-point comparison threshold per coin precision.
-     *
-     * @param string $coin Normalized coin symbol.
-     */
-    private function epsilon(string $coin): float
-    {
-        return match ($coin) {
-            'dash' => 0.001,
-            default => 0.00000001,
-        };
-    }
+
 }

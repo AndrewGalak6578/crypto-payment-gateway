@@ -22,18 +22,49 @@ final class SuperWalletResolver
      */
     public function resolve(Merchant $merchant, string $coin): ?SuperWallet
     {
-        $merchantWallet = $merchant
-            ->superWallets()
-            ->where('coin', $coin)
+        return $this->resolveByAsset(
+            merchant: $merchant,
+            assetKey: strtolower($coin),
+            networkKey: '',
+        );
+    }
+
+    public function resolveByAsset(Merchant $merchant, string $assetKey, string $networkKey): ?SuperWallet
+    {
+        $assetKey = strtolower($assetKey);
+        $networkKey = strtolower($networkKey);
+
+        $merchantWallet = $merchant->superWallets()
+            ->when($networkKey !== '', fn($query) => $query->where('network_key', $networkKey))
+            ->where('asset_key', $assetKey)
             ->first();
 
         if ($merchantWallet) {
             return $merchantWallet;
         }
 
+        $globalWallet = SuperWallet::query()
+            ->whereNull('merchant_id')
+            ->where('asset_key', $assetKey)
+            ->when($networkKey !== '', fn($query) => $query->where('network_key', $networkKey))
+            ->where('asset_key', $assetKey)
+            ->first();
+
+        if ($globalWallet) {
+            return $globalWallet;
+        }
+
+        $merchantLegacy = $merchant->superWallets()
+            ->where('coin', $assetKey)
+            ->first();
+
+        if ($merchantLegacy) {
+            return $merchantLegacy;
+        }
+
         return SuperWallet::query()
             ->whereNull('merchant_id')
-            ->where('coin', $coin)
+            ->where('coin', $assetKey)
             ->first();
     }
 }

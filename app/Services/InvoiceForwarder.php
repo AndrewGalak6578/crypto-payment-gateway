@@ -45,7 +45,14 @@ final class InvoiceForwarder
             ->with('merchant')
             ->findOrFail($invoiceId);
 
-        $wallet = $this->walletResolver->resolve($invoice->merchant, $invoice->coin);
+        $assetKey = $invoice->resolvedAssetKey();
+        $networkKey = $invoice->resolvedNetworkKey();
+
+        $wallet = $this->walletResolver->resolveByAsset(
+            merchant: $invoice->merchant,
+            assetKey: $assetKey,
+            networkKey: $networkKey,
+        );
 
         if (!$wallet) {
             $this->balanceCreditor->credit($invoiceId);
@@ -65,7 +72,7 @@ final class InvoiceForwarder
         }
 
         try {
-            $rpc = Coin::rpc($plan['coin']);
+            $rpc = Coin::rpc($plan['asset_key']);
 
             $txid = $rpc->sendToAddress(
                 $plan['wallet'],
@@ -121,8 +128,9 @@ final class InvoiceForwarder
                 return null;
             }
 
-            $scale = $this->assets->settlementScale($invoice->coin);
-            $epsilon = $this->assets->epsilon($invoice->coin);
+            $assetKey = $invoice->resolvedAssetKey();
+            $scale = $this->assets->settlementScale($assetKey);
+            $epsilon = $this->assets->epsilon($assetKey);
 
             $confirmed = $this->norm((float) ($invoice->received_conf_coin ?? 0), $scale);
             $forwarded = $this->norm((float) ($invoice->forwarded_coin ?? 0), $scale);
@@ -159,7 +167,8 @@ final class InvoiceForwarder
 
             return [
                 'attempt_uuid' => $attemptUuid,
-                'coin' => $invoice->coin,
+                'asset_key' => $assetKey,
+                'network_key' => $invoice->resolvedNetworkKey(),
                 'wallet' => $wallet->wallet,
                 'fee_rate' => $wallet->fee_rate !== null ? (float) $wallet->fee_rate : null,
                 'amount' => $amount,

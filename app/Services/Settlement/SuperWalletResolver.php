@@ -47,7 +47,6 @@ final class SuperWalletResolver
             ->whereNull('merchant_id')
             ->where('asset_key', $assetKey)
             ->when($networkKey !== '', fn($query) => $query->where('network_key', $networkKey))
-            ->where('asset_key', $assetKey)
             ->first();
 
         if ($globalWallet) {

@@ -17,9 +17,6 @@ use App\Support\Chains\ChainManager;
  */
 class Coin
 {
-    public const SUPPORTED = ['dash', 'ltc', 'btc'];
-
-
     public static function supported(): array
     {
         return app(AssetRegistry::class)->keys();

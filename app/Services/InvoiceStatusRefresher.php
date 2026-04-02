@@ -47,8 +47,6 @@ final class InvoiceStatusRefresher
                 ->firstOrFail();
 
             $assetKey = $inv->resolvedAssetKey();
-            $networkKey = $inv->resolvedNetworkKey();
-
             $now = now('UTC');
             $confirmations = (int) config('payments.confirmations', 1);
 
@@ -109,7 +107,7 @@ final class InvoiceStatusRefresher
                 $inv->paid_at = $inv->paid_at ?? $now;
 
                 if ($inv->paid_usd === null) {
-                    $rate = (float) $this->rates->usd($inv->coin);
+                    $rate = (float) $this->rates->usd($assetKey);
                     $paidUsd = $receivedConf * $rate;
                     $inv->paid_usd = $paidUsd;
 

@@ -148,7 +148,7 @@ final class InvoiceForwarder
                 return null;
             }
 
-            $min = $this->norm((float) config("forwarding.assets.{$invoice->coin}.min", 0), $scale);
+            $min = $this->norm((float) config("forwarding.assets.{$assetKey}.min", 0), $scale);
 
             if ($amount < $min) {
                 $invoice->forward_status = $forwarded > $epsilon ? 'partial' : 'none';
@@ -196,8 +196,8 @@ final class InvoiceForwarder
                 return;
             }
 
-            $scale = $this->assets->settlementScale($invoice->coin);
-            $epsilon = $this->assets->epsilon($invoice->coin);
+            $scale = $this->assets->settlementScale($invoice->resolvedAssetKey());
+            $epsilon = $this->assets->epsilon($invoice->resolvedAssetKey());
 
             $txids = $invoice->forward_txids ?? [];
             $txids[] = $txid;

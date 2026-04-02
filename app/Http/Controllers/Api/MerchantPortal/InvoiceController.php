@@ -87,6 +87,8 @@ class InvoiceController extends Controller
                 'external_id' => $invoice->external_id,
                 'status' => $invoice->status,
                 'coin' => strtoupper($invoice->coin),
+                'asset_key' => $invoice->asset_key,
+                'network_key' => $invoice->network_key,
                 'pay_address' => $invoice->pay_address,
                 'amount_coin' => (string) $invoice->amount_coin,
                 'expected_usd' => (string) $invoice->expected_usd,

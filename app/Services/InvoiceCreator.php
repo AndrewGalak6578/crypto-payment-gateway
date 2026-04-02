@@ -7,6 +7,7 @@ use App\Jobs\MonitorInvoiceJob;
 use App\Models\Invoice;
 use App\Models\Merchant;
 use App\Services\CoinBasedLogic\CoinRate;
+use App\Support\Assets\AssetRegistry;
 use App\Support\Coin;
 use Illuminate\Support\Str;
 
@@ -15,7 +16,10 @@ use Illuminate\Support\Str;
  */
 class InvoiceCreator
 {
-    public function __construct(private CoinRate $rates) {}
+    public function __construct(
+        private CoinRate $rates,
+        private readonly AssetRegistry $assets
+    ) {}
 
     /**
      * Creates or returns existing invoice for merchant/external_id pair.
@@ -32,7 +36,11 @@ class InvoiceCreator
      */
     public function create(Merchant $merchant, array $data): Invoice
     {
-        $coin = Coin::normalize($data['coin'] ?? 'dash');
+        $assetKey = Coin::normalize($data['coin'] ?? 'dash');
+        $asset = $this->assets->get($assetKey);
+        $networkKey = (string) $asset['network'];
+
+
         $externalId = $data['external_id'] ?? null;
 
         if ($externalId) {
@@ -45,19 +53,18 @@ class InvoiceCreator
 
         $amountUsd = round((float)$data['amount_usd'], 3);
 
-        $rateUsd = $this->rates->usd($coin);
+        $rateUsd = $this->rates->usd($assetKey);
 
-        $decimals = $coin === 'dash' ? 3 : 8;
-        $amountCoin = round($amountUsd / max($rateUsd, 1e-8), $decimals);
+        $settlementScale = (int) ($asset['settlement_scale'] ?? 8);
+        $amountCoin = round($amountUsd / max($rateUsd, 1e-8), $settlementScale);
 
         $expiresMin = (int)($data['expires_minutes'] ?? config('payments.invoice.ttl_minutes', 60));
         $deadline = now('UTC')->addMinutes($expiresMin);
-
         $monitorTtlHours = (int)config('payments.monitor.ttl_hours', 24);
 
         $publicId = Str::lower(Str::random(16));
 
-        $rpc = Coin::rpc($coin);
+        $rpc = Coin::rpc($assetKey);
         $address = $rpc->getNewAddress("inv:{$publicId}");
 
         $inv = Invoice::create([
@@ -65,7 +72,9 @@ class InvoiceCreator
             'public_id' => $publicId,
             'external_id' => $externalId,
             'status' => 'pending',
-            'coin' => $coin,
+            'coin' => $assetKey,
+            'asset_key' => $assetKey,
+            'network_key' => $networkKey,
             'pay_address' => $address,
             'amount_coin' => $amountCoin,
             'expected_usd' => $amountUsd,

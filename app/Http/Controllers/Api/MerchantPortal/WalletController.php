@@ -49,12 +49,19 @@ class WalletController extends Controller
             'fee_rate' => 'nullable|numeric|min:0',
         ]);
 
+        $assetKey = strtolower($data['coin']);
+        $asset = app(AssetRegistry::class)->get($assetKey);
+        $networkKey = (string) $asset['network'];
+
         $wallet = SuperWallet::query()->updateOrCreate(
             [
                 'merchant_id' => $merchantUser->merchant_id,
-                'coin' => $data['coin'],
+                'coin' => $assetKey,
             ],
             [
+                'coin' => $assetKey,
+                'asset_key' => $assetKey,
+                'network_key' => $networkKey,
                 'wallet' => $data['wallet'],
                 'fee_rate' => $data['fee_rate'] ?? null,
             ]
@@ -65,8 +72,9 @@ class WalletController extends Controller
             'success' => true,
             'data' => [
                 'id' => $wallet->id,
-                'coin' => $wallet->coin,
-                'coin_symbol' => $assets->symbol($wallet->coin),
+                'coin' => strtoupper($wallet->coin),
+                'asset_key' => $wallet->asset_key,
+                'network_key' => $wallet->network_key,
                 'wallet' => $wallet->wallet,
                 'fee_rate' => $wallet->fee_rate !== null ? (string)$wallet->fee_rate : null,
             ]

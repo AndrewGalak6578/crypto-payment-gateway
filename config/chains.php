@@ -29,7 +29,7 @@ return [
     'evm_local' => [
         'family' => 'evm',
         'driver' => 'evm',
-        'display_name' => 'Local EVM',
+        'display_name' => 'Local Evm',
         'chain_id' => 31337,
         'confirmations' => 1,
         'enabled' => false,

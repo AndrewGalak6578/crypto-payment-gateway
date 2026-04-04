@@ -7,6 +7,7 @@ use App\Services\CoinBasedLogic\BtcRpc;
 use App\Services\CoinBasedLogic\CoinRpc;
 use App\Services\CoinBasedLogic\DashRpc;
 use App\Services\CoinBasedLogic\LtcRpc;
+use App\Services\Evm\EvmChainDriver;
 use App\Support\Assets\AssetRegistry;
 
 use RuntimeException;
@@ -46,6 +47,9 @@ final class ChainManager
             'btc' => app(BtcRpc::class),
             'ltc' => app(LtcRpc::class),
             'dash' => app(DashRpc::class),
+            'evm' => app()->makeWith(EvmChainDriver::class, [
+                'networkKey' => $networkKey
+            ]),
             default => throw new RuntimeException("Unsupported chain driver: {$driver}")
         };
     }

@@ -8,6 +8,7 @@ use App\Models\SuperWallet;
 use App\Services\Settlement\MerchantBalanceCreditor;
 use App\Services\Settlement\SuperWalletResolver;
 use App\Services\Webhooks\EnqueueInvoiceWebhook;
+use App\Support\Assets\AssetRegistry;
 use App\Support\Coin;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -26,6 +27,7 @@ final class InvoiceForwarder
         private readonly EnqueueInvoiceWebhook $enqueueWebhook,
         private readonly SuperWalletResolver $walletResolver,
         private readonly MerchantBalanceCreditor $balanceCreditor,
+        private readonly AssetRegistry $assets,
     )
     {
     }
@@ -43,7 +45,14 @@ final class InvoiceForwarder
             ->with('merchant')
             ->findOrFail($invoiceId);
 
-        $wallet = $this->walletResolver->resolve($invoice->merchant, $invoice->coin);
+        $assetKey = $invoice->resolvedAssetKey();
+        $networkKey = $invoice->resolvedNetworkKey();
+
+        $wallet = $this->walletResolver->resolveByAsset(
+            merchant: $invoice->merchant,
+            assetKey: $assetKey,
+            networkKey: $networkKey,
+        );
 
         if (!$wallet) {
             $this->balanceCreditor->credit($invoiceId);
@@ -63,7 +72,7 @@ final class InvoiceForwarder
         }
 
         try {
-            $rpc = Coin::rpc($plan['coin']);
+            $rpc = Coin::rpc($plan['asset_key']);
 
             $txid = $rpc->sendToAddress(
                 $plan['wallet'],
@@ -119,8 +128,9 @@ final class InvoiceForwarder
                 return null;
             }
 
-            $scale = $this->scale($invoice->coin);
-            $epsilon = $this->epsilon($invoice->coin);
+            $assetKey = $invoice->resolvedAssetKey();
+            $scale = $this->assets->settlementScale($assetKey);
+            $epsilon = $this->assets->epsilon($assetKey);
 
             $confirmed = $this->norm((float) ($invoice->received_conf_coin ?? 0), $scale);
             $forwarded = $this->norm((float) ($invoice->forwarded_coin ?? 0), $scale);
@@ -138,7 +148,7 @@ final class InvoiceForwarder
                 return null;
             }
 
-            $min = $this->norm((float) config("forwarding.min_coin.{$invoice->coin}", 0), $scale);
+            $min = $this->norm((float) config("forwarding.assets.{$assetKey}.min", 0), $scale);
 
             if ($amount < $min) {
                 $invoice->forward_status = $forwarded > $epsilon ? 'partial' : 'none';
@@ -157,7 +167,8 @@ final class InvoiceForwarder
 
             return [
                 'attempt_uuid' => $attemptUuid,
-                'coin' => $invoice->coin,
+                'asset_key' => $assetKey,
+                'network_key' => $invoice->resolvedNetworkKey(),
                 'wallet' => $wallet->wallet,
                 'fee_rate' => $wallet->fee_rate !== null ? (float) $wallet->fee_rate : null,
                 'amount' => $amount,
@@ -185,8 +196,8 @@ final class InvoiceForwarder
                 return;
             }
 
-            $scale = $this->scale($invoice->coin);
-            $epsilon = $this->epsilon($invoice->coin);
+            $scale = $this->assets->settlementScale($invoice->resolvedAssetKey());
+            $epsilon = $this->assets->epsilon($invoice->resolvedAssetKey());
 
             $txids = $invoice->forward_txids ?? [];
             $txids[] = $txid;
@@ -241,13 +252,6 @@ final class InvoiceForwarder
         });
     }
 
-    private function scale(string $coin): int
-    {
-        return match ($coin) {
-            'dash' => 3,
-            default => 8,
-        };
-    }
 
     /**
      * Rounds coin values to chain-specific precision.
@@ -260,17 +264,4 @@ final class InvoiceForwarder
         return round($value, $scale);
     }
 
-    /**
-     * Defines floating-point tolerance per coin precision.
-     *
-     * @param string $coin Normalized coin symbol.
-     */
-    private function epsilon(string $coin): float
-    {
-        return match ($coin) {
-            'dash' => 0.001,
-            'btc', 'ltc' => 0.00000001,
-            default => 0.00000001,
-        };
-    }
 }

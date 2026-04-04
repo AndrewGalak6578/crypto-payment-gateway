@@ -52,4 +52,9 @@ class Merchant extends Model
     {
         return $this->hasMany(MerchantUser::class);
     }
+
+    public function paymentAddresses(): HasMany
+    {
+        return $this->hasMany(PaymentAddress::class);
+    }
 }

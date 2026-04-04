@@ -9,13 +9,18 @@ use App\Services\CoinBasedLogic\CoinRpc;
 use App\Services\CoinBasedLogic\DashRpc;
 use App\Services\CoinBasedLogic\LtcRpc;
 use App\Services\CoinBasedLogic\MockRpc;
+use App\Support\Assets\AssetRegistry;
+use App\Support\Chains\ChainManager;
 
 /**
  * Coin utility helpers for normalization and RPC provider resolution.
  */
 class Coin
 {
-    public const SUPPORTED = ['dash', 'ltc', 'btc'];
+    public static function supported(): array
+    {
+        return app(AssetRegistry::class)->keys();
+    }
 
     /**
      * Normalizes unsupported values to default coin.
@@ -25,13 +30,15 @@ class Coin
      */
     public static function normalize(?string $coin): string
     {
-        $coin = strtolower($coin ?? 'dash');
+        $coin = strtolower((string) $coin);
+        $registry = app(AssetRegistry::class);
 
-        if (!in_array($coin, self::SUPPORTED, true)) {
-            return 'dash';
+        if ($coin !== '' && $registry->exists($coin)) {
+            return $coin;
         }
 
-        return $coin;
+        // Сохраняем текущее поведение, чтобы не ломать старый flow
+        return 'dash';
     }
 
     /**
@@ -47,10 +54,6 @@ class Coin
             return app(MockRpc::class);
         }
 
-        return match ($coin) {
-            'btc' => app(BtcRpc::class),
-            'ltc' => app(LtcRpc::class),
-            default => app(DashRpc::class)
-        };
+        return app(ChainManager::class)->driverForAsset($coin);
     }
 }

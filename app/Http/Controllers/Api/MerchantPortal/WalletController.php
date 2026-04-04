@@ -6,8 +6,10 @@ namespace App\Http\Controllers\Api\MerchantPortal;
 use App\Http\Controllers\Controller;
 use App\Models\MerchantUser;
 use App\Models\SuperWallet;
+use App\Support\Assets\AssetRegistry;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use function Termwind\renderUsing;
 
 class WalletController extends Controller
@@ -42,27 +44,37 @@ class WalletController extends Controller
         $merchantUser = $request->attributes->get('merchant_user');
 
         $data = $request->validate([
-            'coin' => 'required|string|in:btc,ltc,dash',
+            'coin' => ['required', 'string', Rule::in(app(AssetRegistry::class)->keys())],
             'wallet' => 'required|string|max:255',
             'fee_rate' => 'nullable|numeric|min:0',
         ]);
 
+        $assetKey = strtolower($data['coin']);
+        $asset = app(AssetRegistry::class)->get($assetKey);
+        $networkKey = (string) $asset['network'];
+
         $wallet = SuperWallet::query()->updateOrCreate(
             [
                 'merchant_id' => $merchantUser->merchant_id,
-                'coin' => $data['coin'],
+                'coin' => $assetKey,
             ],
             [
+                'coin' => $assetKey,
+                'asset_key' => $assetKey,
+                'network_key' => $networkKey,
                 'wallet' => $data['wallet'],
                 'fee_rate' => $data['fee_rate'] ?? null,
             ]
         );
+        $assets = app(AssetRegistry::class);
 
         return response()->json([
             'success' => true,
             'data' => [
                 'id' => $wallet->id,
                 'coin' => strtoupper($wallet->coin),
+                'asset_key' => $wallet->asset_key,
+                'network_key' => $wallet->network_key,
                 'wallet' => $wallet->wallet,
                 'fee_rate' => $wallet->fee_rate !== null ? (string)$wallet->fee_rate : null,
             ]
@@ -88,11 +100,14 @@ class WalletController extends Controller
             'fee_rate' => $data['fee_rate'] ?? null,
         ]);
 
+        $assets = app(AssetRegistry::class);
+
         return response()->json([
             'success' => true,
             'data' => [
                 'id' => $wallet->id,
                 'coin' => strtoupper($wallet->coin),
+                'coin_symbol' => $assets->symbol($wallet->coin),
                 'wallet' => $wallet->wallet,
                 'fee_rate' => $wallet->fee_rate !== null ? (string)$wallet->fee_rate : null,
             ]

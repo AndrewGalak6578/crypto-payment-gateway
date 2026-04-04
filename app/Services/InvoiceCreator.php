@@ -3,10 +3,12 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Data\InvoiceAddressContext;
 use App\Jobs\MonitorInvoiceJob;
 use App\Models\Invoice;
 use App\Models\Merchant;
 use App\Services\CoinBasedLogic\CoinRate;
+use App\Services\PaymentAddresses\PaymentAddressAllocatorManager;
 use App\Support\Assets\AssetRegistry;
 use App\Support\Coin;
 use Illuminate\Support\Str;
@@ -18,7 +20,8 @@ class InvoiceCreator
 {
     public function __construct(
         private CoinRate $rates,
-        private readonly AssetRegistry $assets
+        private readonly AssetRegistry $assets,
+        private readonly PaymentAddressAllocatorManager $allocators,
     ) {}
 
     /**
@@ -40,7 +43,6 @@ class InvoiceCreator
         $asset = $this->assets->get($assetKey);
         $networkKey = (string) $asset['network'];
 
-
         $externalId = $data['external_id'] ?? null;
 
         if ($externalId) {
@@ -52,7 +54,6 @@ class InvoiceCreator
         }
 
         $amountUsd = round((float)$data['amount_usd'], 3);
-
         $rateUsd = $this->rates->usd($assetKey);
 
         $settlementScale = (int) ($asset['settlement_scale'] ?? 8);
@@ -64,8 +65,14 @@ class InvoiceCreator
 
         $publicId = Str::lower(Str::random(16));
 
-        $rpc = Coin::rpc($assetKey);
-        $address = $rpc->getNewAddress("inv:{$publicId}");
+        $context = new InvoiceAddressContext(
+            publicId: $publicId,
+            externalId: $externalId,
+            metadata: is_array($data['metadata'] ?? null) ? $data['metadata'] : [],
+        );
+
+        $allocator = $this->allocators->forNetwork($networkKey);
+        $paymentAddress = $allocator->allocate($merchant, $assetKey, $networkKey, $context);
 
         $inv = Invoice::create([
             'merchant_id' => $merchant->id,
@@ -75,7 +82,7 @@ class InvoiceCreator
             'coin' => $assetKey,
             'asset_key' => $assetKey,
             'network_key' => $networkKey,
-            'pay_address' => $address,
+            'pay_address' => $paymentAddress->address,
             'amount_coin' => $amountCoin,
             'expected_usd' => $amountUsd,
             'rate_usd' => $rateUsd,
@@ -83,6 +90,8 @@ class InvoiceCreator
             'monitor_until' => $deadline->copy()->addHours($monitorTtlHours),
             'metadata' => $data['metadata'] ?? null,
         ])->fresh();
+
+        $allocator->attachToInvoice($paymentAddress, $inv);
 
         if ((bool)config('payments.monitor.enabled', true)) {
             MonitorInvoiceJob::dispatch($inv->id)->delay(now('UTC')->addSeconds(2));

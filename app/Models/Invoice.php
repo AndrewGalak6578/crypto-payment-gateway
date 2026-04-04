@@ -140,4 +140,9 @@ class Invoice extends Model
             $this->coin = $assetKey;
         }
     }
+
+    public function paymentAddresses(): HasMany
+    {
+        return $this->hasMany(PaymentAddress::class);
+    }
 }

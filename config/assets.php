@@ -64,7 +64,7 @@ return [
         'decimals' => 18,
         'settlement_scale' => 18,
         'epsilon' => 0.000000000000000001,
-        'enabled' => false,
+        'enabled' => true,
         'legacy_coin' => null,
         'rate' => [
             'coingecko_id' => 'ethereum',

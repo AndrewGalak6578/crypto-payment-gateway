@@ -32,7 +32,7 @@ return [
         'display_name' => 'Local Evm',
         'chain_id' => 31337,
         'confirmations' => 1,
-        'enabled' => false,
+        'enabled' => true,
         'rpc_url' => env('EVM_LOCAL_RPC_URL'),
     ],
 ];

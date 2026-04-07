@@ -100,6 +100,39 @@ final class EvmRpcClient
         return is_array($result) ? $result : null;
     }
 
+    public function getBlockByNumber(string $block = 'latest', bool $fullTransactions = false): ?array
+    {
+        $result = $this->call('eth_getBlockByNumber', [$block, $fullTransactions]);
+
+        return is_array($result) ? $result : null;
+    }
+
+    public function getTransactionByHash(string $txHash): ?array
+    {
+        $result = $this->call('eth_getTransactionByHash', [$txHash]);
+
+        return is_array($result) ? $result : null;
+    }
+
+    public function getTransactionReceiptByHash(string $txHash): ?array
+    {
+        return $this->getTransactionReceipt($txHash);
+    }
+
+    public function getBlockTransactionCountByNumber(string $block = 'latest'): int
+    {
+        $result = $this->call('eth_getBlockTransactionCountByNumber', [$block]);
+
+        return $this->hexToInt((string) $result);
+    }
+
+    public function getTransactionByBlockNumberAndIndex(string $blockNumberHex, string $txIndexHex): ?array
+    {
+        $result = $this->call('eth_getTransactionByBlockNumberAndIndex', [$blockNumberHex, $txIndexHex]);
+
+        return is_array($result) ? $result : null;
+    }
+
     private function hexToInt(string $value): int
     {
         $value = strtolower(trim($value));
@@ -109,6 +142,67 @@ final class EvmRpcClient
         }
 
         return intval($value, 16);
+    }
+
+    public function toHexQuantity(int $value): string
+    {
+        if ($value < 0) {
+            return '0x0';
+        }
+
+        return '0x' . dechex($value);
+    }
+
+    public function hexToNullableInt(?string $value): ?int
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $value = trim($value);
+
+        if ($value === '' || strtolower($value) === '0x') {
+            return null;
+        }
+
+        return $this->hexToInt($value);
+    }
+
+    public function weiToDecimalString(string $wei, int $decimals = 18): string
+    {
+        $wei = ltrim(trim($wei), '0');
+
+        if ($wei === '') {
+            return '0';
+        }
+
+        if ($decimals <= 0) {
+            return $wei;
+        }
+
+        if (strlen($wei) <= $decimals) {
+            $wei = str_pad($wei, $decimals + 1, '0', STR_PAD_LEFT);
+        }
+
+        $integer = substr($wei, 0, -$decimals);
+        $fraction = substr($wei, -$decimals);
+
+        $integer = ltrim($integer, '0');
+        $integer = $integer === '' ? '0' : $integer;
+        $fraction = rtrim($fraction, '0');
+
+        if ($fraction === '') {
+            return $integer;
+        }
+
+        return $integer . '.' . $fraction;
+    }
+
+    public function hexToDecimalValueString(string $hex, int $decimals = 18): string
+    {
+        $atomic = $this->hexToDecimalString($hex);
+
+        return $this->weiToDecimalString($atomic, $decimals);
     }
 
     private function hexToDecimalString(string $hex): string

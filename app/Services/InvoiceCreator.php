@@ -10,6 +10,7 @@ use App\Models\Merchant;
 use App\Services\CoinBasedLogic\CoinRate;
 use App\Services\PaymentAddresses\PaymentAddressAllocatorManager;
 use App\Support\Assets\AssetRegistry;
+use App\Support\Chains\ChainRegistry;
 use App\Support\Coin;
 use Illuminate\Support\Str;
 
@@ -21,6 +22,7 @@ class InvoiceCreator
     public function __construct(
         private CoinRate $rates,
         private readonly AssetRegistry $assets,
+        private readonly ChainRegistry $chains,
         private readonly PaymentAddressAllocatorManager $allocators,
     ) {}
 
@@ -74,6 +76,16 @@ class InvoiceCreator
         $allocator = $this->allocators->forNetwork($networkKey);
         $paymentAddress = $allocator->allocate($merchant, $assetKey, $networkKey, $context);
 
+        $metadata = is_array($data['metadata'] ?? null) ? $data['metadata'] : [];
+
+        if ($this->chains->family($this->assets->network($assetKey)) === 'evm') {
+            $driver = app(\App\Support\Chains\ChainManager::class)->driverForNetwork($networkKey);
+
+            if (method_exists($driver, 'blockNumber')) {
+                $metadata['evm']['monitor_from_block'] = $driver->blockNumber();
+            }
+        }
+
         $inv = Invoice::create([
             'merchant_id' => $merchant->id,
             'public_id' => $publicId,
@@ -88,7 +100,7 @@ class InvoiceCreator
             'rate_usd' => $rateUsd,
             'expires_at' => $deadline,
             'monitor_until' => $deadline->copy()->addHours($monitorTtlHours),
-            'metadata' => $data['metadata'] ?? null,
+            'metadata' => $metadata,
         ])->fresh();
 
         $allocator->attachToInvoice($paymentAddress, $inv);

@@ -3,14 +3,17 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Contracts\EvmInvoiceMonitorInterface;
 use App\Jobs\ForwardInvoiceJob;
 use App\Models\Invoice;
 use App\Services\CoinBasedLogic\CoinRate;
 use App\Services\Webhooks\EnqueueInvoiceWebhook;
 use App\Support\Assets\AssetRegistry;
+use App\Support\Chains\ChainRegistry;
 use App\Support\Coin;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
 /**
  * Recalculates invoice blockchain state and emits state transition webhooks.
@@ -20,7 +23,9 @@ final class InvoiceStatusRefresher
     public function __construct(
         private CoinRate $rates,
         private EnqueueInvoiceWebhook $enqueueWebhook,
-        private readonly AssetRegistry $assets
+        private readonly AssetRegistry $assets,
+        private readonly ChainRegistry $chains,
+        private readonly EvmInvoiceMonitorInterface $evmMonitor
     ){}
 
     /**
@@ -50,14 +55,18 @@ final class InvoiceStatusRefresher
             $now = now('UTC');
             $confirmations = (int) config('payments.confirmations', 1);
 
-            $rpc = Coin::rpc($assetKey);
-            $label = "inv:{$inv->public_id}";
+            $networkKey = $inv->resolvedNetworkKey();
+            $family = $this->chains->family($networkKey);
 
-            $txs = $rpc->getTransactionsByAddress($inv->pay_address, 0, 1000, $label);
-            $totals = $rpc->getReceivedTotals($inv->pay_address, $confirmations);
+            $state = match ($family) {
+                'utxo' => $this->collectUtxoState($inv, $confirmations),
+                'evm' => $this->collectEvmState($inv, $confirmations),
+                default => throw new RuntimeException("Unsupported chain family [{$family}] for invoice refresh."),
+            };
 
-            $receivedAll = (float) ($totals['all'] ?? 0.0);
-            $receivedConf = (float) ($totals['confirmed'] ?? 0.0);
+            $txs = $state['txs'];
+            $receivedAll = $state['received_all'];
+            $receivedConf = $state['received_confirmed'];
 
             $inv->received_all_coin = $receivedAll;
             $inv->received_conf_coin = $receivedConf;
@@ -66,7 +75,7 @@ final class InvoiceStatusRefresher
                 $first = $this->pickFirstTx($txs);
                 if ($first) {
                     $inv->first_txid = (string) ($first['txid'] ?? null);
-                    $inv->first_amount_coin = (float) ($first['amount'] ?? null);
+                    $inv->first_amount_coin = (string) ($first['amount'] ?? null);
                 }
             }
 
@@ -220,5 +229,38 @@ final class InvoiceStatusRefresher
         return round($value, $scale);
     }
 
+    /**
+     * Collects UTXO chains state
+     *
+     * @param Invoice $invoice
+     * @param int $confirmations
+     * @return array
+     */
+    private function collectUtxoState(Invoice $invoice, int $confirmations): array
+    {
+        $assetKey = $invoice->resolvedAssetKey();
+        $rpc = Coin::rpc($assetKey);
+        $label = "inv:{$invoice->public_id}";
+
+        $txs = $rpc->getTransactionsByAddress($invoice->pay_address, 0, 1000, $label);
+        $totals = $rpc->getReceivedTotals($invoice->pay_address, $confirmations);
+
+        return [
+            'txs' => $txs,
+            'received_all' => (float)($totals['all'] ?? 0.0),
+            'received_confirmed' => (float)($totals['confirmed'] ?? 0.0),
+        ];
+    }
+
+    private function collectEvmState(Invoice $invoice, int $confirmations): array
+    {
+        $result = $this->evmMonitor->detect($invoice, $confirmations);
+
+        return [
+            'txs' => $result->transactions,
+            'received_all' => (float) $result->receivedAllDecimal,
+            'received_confirmed' => (float) $result->receivedConfirmedDecimal,
+        ];
+    }
 
 }

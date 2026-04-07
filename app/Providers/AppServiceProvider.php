@@ -4,6 +4,8 @@ namespace App\Providers;
 
 use App\Contracts\DerivationIndexStoreInterface;
 use App\Contracts\EvmAddressDeriverInterface;
+use App\Contracts\EvmInvoiceMonitorInterface;
+use App\Services\Evm\EvmInvoiceMonitor;
 use App\Services\PaymentAddresses\Evm\DatabaseDerivationIndexStore;
 use App\Services\PaymentAddresses\Evm\DevRpcAccountAddressDeriver;
 use Illuminate\Support\ServiceProvider;
@@ -19,6 +21,10 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(
             DerivationIndexStoreInterface::class,
             DatabaseDerivationIndexStore::class
+        );
+        $this->app->bind(
+            EvmInvoiceMonitorInterface::class,
+            EvmInvoiceMonitor::class
         );
 
         $this->app->bind(EvmAddressDeriverInterface::class, function ($app) {

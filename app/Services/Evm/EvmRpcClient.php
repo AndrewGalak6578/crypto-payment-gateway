@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use GuzzleHttp\Client;
 use Throwable;
+use function Symfony\Component\Translation\t;
 
 final class EvmRpcClient
 {
@@ -131,6 +132,33 @@ final class EvmRpcClient
         $result = $this->call('eth_getTransactionByBlockNumberAndIndex', [$blockNumberHex, $txIndexHex]);
 
         return is_array($result) ? $result : null;
+    }
+
+    /**
+     * Returns current gas price
+     */
+    public function gasPriceWei(): string
+    {
+        return $this->hexToDecimalString((string) $this->call('eth_gasPrice'));
+    }
+
+    public function getTransactionCount(string $address, string $block = 'pending'): int
+    {
+        $result = $this->call('eth_getTransactionCount', [$address, $block]);
+
+        return $this->hexToInt((string) $result);
+    }
+
+    public function estimateGas(array $transaction): string
+    {
+        $result = $this->call('eth_estimateGas', [$transaction]);
+
+        return $this->hexToDecimalString((string) $result);
+    }
+
+    public function sendRawTransaction(string $rawTransaction): string
+    {
+        return (string) $this->call('eth_sendRawTransaction', [$rawTransaction]);
     }
 
     private function hexToInt(string $value): int
@@ -263,5 +291,77 @@ final class EvmRpcClient
         }
 
         return ltrim($result, '0') ?: '0';
+    }
+
+    public function decimalToHexQuantity(string $value): string
+    {
+        $value = trim($value);
+
+        if ($value === '' || $value === '0') {
+            return '0x0';
+        }
+
+        $value = ltrim($value, '0');
+        if ($value === '') {
+            return '0x0';
+        }
+
+        $hex = '';
+
+        while ($value !== '0') {
+            [$value, $remainder] = $this->decimalDivmod($value, 16);
+            $hex = dechex($remainder) . $hex;
+        }
+
+        return '0x' . $hex;
+    }
+
+    public function decimalStringToAtomic(string $amountDecimal, int $decimals = 18): string
+    {
+        $amountDecimal = trim($amountDecimal);
+
+        if ($amountDecimal === '' || $amountDecimal === '0') {
+            return '0';
+        }
+
+        if (!str_contains($amountDecimal, '.')) {
+            return $amountDecimal . str_repeat('0', $decimals);
+        }
+
+        [$integer, $fraction] = explode('.', $amountDecimal, 2);
+
+        $integer = preg_replace('/\D/', '', $integer ?? '') ?: '0';
+        $fraction = preg_replace('/\D/', '', $fraction ?? '') ?: '';
+
+        if (strlen($fraction) > $decimals) {
+            $fraction = substr($fraction, 0, $decimals);
+        }
+
+        $fraction = str_pad($fraction, $decimals, '0', STR_PAD_RIGHT);
+
+        $result = ltrim($integer . $fraction, '0');
+
+        return  $result === '' ? '0' : $result;
+    }
+
+    private function decimalDivmod(string $number, int $divisor): array
+    {
+        $number = ltrim($number, '0');
+        $number = $number === '' ? '0' : $number;
+
+        $quotient = '';
+        $remainder = 0;
+
+        foreach (str_split($number) as $digit) {
+            $current = ($remainder * 10) + (int) $digit;
+            $quotientDigit = intdiv($current, $divisor);
+            $remainder = $current % $divisor;
+
+            if ($quotient !== '' || $quotientDigit > 0) {
+                $quotient .= (string) $quotientDigit;
+            }
+        }
+
+        return [$quotient === '' ? '0' : $quotient, $remainder];
     }
 }

@@ -30,7 +30,7 @@ final class DevRpcAccountEvmTransactionSigner implements EvmTransactionSignerInt
         }
 
         $chain = $this->chains->get($networkKey);
-        $rpcUrl = (string) ($chain['rpcUrl'] ?? '');
+        $rpcUrl = (string) ($chain['rpc_url'] ?? '');
 
         if ($rpcUrl === '') {
             throw new RuntimeException("Missing rpc_url for EVM network [{$networkKey}]");

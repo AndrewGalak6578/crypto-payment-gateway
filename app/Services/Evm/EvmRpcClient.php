@@ -364,4 +364,124 @@ final class EvmRpcClient
 
         return [$quotient === '' ? '0' : $quotient, $remainder];
     }
+
+    public function addDecimalStrings(string $left, string $right): string
+    {
+        $left = ltrim($left, '0');
+        $right = ltrim($right, '0');
+
+        $left = $right === '' ? '0' : $left;
+        $right = $right === '' ? '0' : $right;
+
+        $carry = 0;
+        $result = '';
+
+        $i = strlen($left) - 1;
+        $j = strlen($right) - 1;
+
+        while ($i >= 0 || $j >= 0 || $carry > 0) {
+            $a = $i >= 0 ? (int) $left[$i] : 0;
+            $b = $j >= 0 ? (int) $right[$j] : 0;
+            $sum = $a + $b + $carry;
+
+            $result = ($sum % 10) . $result;
+            $carry = intdiv($sum, 10);
+
+            $i--;
+            $j--;
+        }
+
+        return ltrim($result, '0') ?: '0';
+    }
+
+    public function subtractDecimalStrings(string $left, string $right): string
+    {
+        $left = ltrim($left, '0');
+        $right = ltrim($right, '0');
+
+        $left = $left === '' ? '0' : $left;
+        $right = $right === '' ? '0' : $right;
+
+        if ($this->compareDecimalStrings($left, $right) < 0) {
+            return '0';
+        }
+
+        $borrow = 0;
+        $result = '';
+
+        $i = strlen($left) - 1;
+        $j = strlen($right) - 1;
+
+        while ($i >= 0) {
+            $a = (int) $left[$i] - $borrow;
+            $b = $j >= 0 ? (int) $right[$j] : 0;
+
+            if ($a < $b) {
+                $a += 10;
+                $borrow = 1;
+            } else {
+                $borrow = 0;
+            }
+
+            $result = (string) ($a - $b) . $result;
+
+            $i--;
+            $j--;
+        }
+
+        return ltrim($result, '0') ?: '0';
+    }
+
+    public function multiplyDecimalStrings(string $left, string $right): string
+    {
+        $left = ltrim($left, '0');
+        $right = ltrim($right, '0');
+
+        $left = $left === '' ? '0' : $left;
+        $right = $right === '' ? '0' : $right;
+
+        if ($left === '0' || $right === '0') {
+            return '0';
+        }
+
+        $leftLen = strlen($left);
+        $rightLen = strlen($right);
+        $result = array_fill(0, $leftLen + $rightLen, 0);
+
+        for ($i = $leftLen - 1; $i >= 0; $i--) {
+            for ($j = $rightLen - 1; $j >= 0; $j--) {
+                $mul = ((int) $left[$i]) * ((int) $right[$j]);
+                $sum = $mul + $result[$i + $j + 1];
+
+                $result[$i + $j + 1] = $sum % 10;
+                $result[$i + $j] += intdiv($sum, 10);
+            }
+        }
+
+        $out = implode('', $result);
+
+        return ltrim($out, '0') ?: '0';
+    }
+
+    public function compareDecimalStrings(string $left, string $right): int
+    {
+        $left = ltrim($left, '0');
+        $right = ltrim($right, '0');
+
+        $left = $left === '' ? '0' : $left;
+        $right = $right === '' ? '0' : $right;
+
+        $leftLen = strlen($left);
+        $rightLen = strlen($right);
+
+        if ($leftLen < $rightLen) {
+            return -1;
+        }
+
+        if ($leftLen > $rightLen) {
+            return 1;
+        }
+
+        return $left <=> $right;
+    }
 }

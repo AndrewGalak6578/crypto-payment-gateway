@@ -6,6 +6,7 @@ use App\Support\Assets\AssetRegistry;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\NotFoundExceptionInterface;
@@ -48,6 +49,7 @@ use RuntimeException;
  * @property float|null $forwarded_coin
  * @property float|null $forwarding_coin
  * @property-read Merchant $merchant
+ * @property-read PaymentAddress $paymentAddress
  * @property-read HasMany<WebhookDelivery> $webhookDeliveries
  */
 class Invoice extends Model
@@ -141,8 +143,8 @@ class Invoice extends Model
         }
     }
 
-    public function paymentAddresses(): HasMany
+    public function paymentAddress(): HasOne
     {
-        return $this->hasMany(PaymentAddress::class);
+        return $this->hasOne(PaymentAddress::class);
     }
 }

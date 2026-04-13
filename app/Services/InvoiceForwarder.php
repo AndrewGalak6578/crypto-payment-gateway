@@ -3,16 +3,20 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Contracts\EvmPayoutSenderInterface;
+use App\Contracts\EvmSweepSourceResolverInterface;
 use App\Models\Invoice;
 use App\Models\SuperWallet;
 use App\Services\Settlement\MerchantBalanceCreditor;
 use App\Services\Settlement\SuperWalletResolver;
 use App\Services\Webhooks\EnqueueInvoiceWebhook;
 use App\Support\Assets\AssetRegistry;
+use App\Support\Chains\ChainRegistry;
 use App\Support\Coin;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Throwable;
+use RuntimeException;
 
 /**
  * Handles merchant settlement after invoice payment.
@@ -24,10 +28,13 @@ use Throwable;
 final class InvoiceForwarder
 {
     public function __construct(
-        private readonly EnqueueInvoiceWebhook $enqueueWebhook,
-        private readonly SuperWalletResolver $walletResolver,
-        private readonly MerchantBalanceCreditor $balanceCreditor,
-        private readonly AssetRegistry $assets,
+        private readonly EnqueueInvoiceWebhook           $enqueueWebhook,
+        private readonly SuperWalletResolver             $walletResolver,
+        private readonly MerchantBalanceCreditor         $balanceCreditor,
+        private readonly AssetRegistry                   $assets,
+        private readonly ChainRegistry                   $chains,
+        private readonly EvmSweepSourceResolverInterface $evmSweepSourceResolver,
+        private readonly EvmPayoutSenderInterface        $evmPayoutSender,
     )
     {
     }
@@ -42,7 +49,7 @@ final class InvoiceForwarder
     {
         /** @var Invoice $invoice */
         $invoice = Invoice::query()
-            ->with('merchant')
+            ->with(['merchant', 'paymentAddress'])
             ->findOrFail($invoiceId);
 
         $assetKey = $invoice->resolvedAssetKey();
@@ -72,22 +79,27 @@ final class InvoiceForwarder
         }
 
         try {
-            $rpc = Coin::rpc($plan['asset_key']);
+            $family = $this->chains->family($plan['network_key']);
 
-            $txid = $rpc->sendToAddress(
-                $plan['wallet'],
-                $plan['amount'],
-                $plan['fee_rate'],
-            );
+            $forwardResult = match ($family) {
+                'utxo' => [
+                    'txid' => $this->forwardUtxo($plan),
+                    'amount' => $plan['amount'],
+                ],
+                'evm' => $this->forwardEvmNative($invoice, $wallet, $plan),
+                default => throw new RuntimeException(
+                    "Unsupported forwarding family [{$family}] for network [{$plan['network_key']}]."
+                )
+            };
 
             $this->markForwarded(
                 invoiceId: $invoiceId,
                 attemptUuid: $plan['attempt_uuid'],
-                amount: $plan['amount'],
-                txid: $txid
+                amount: (float) $forwardResult['amount'],
+                txid: (string) $forwardResult['txid'],
             );
 
-            $fresh = Invoice::query()->with('merchant')->find($invoiceId);
+            $fresh = Invoice::query()->with('merchant')->findOrFail($invoiceId);
 
             if ($fresh) {
                 $this->enqueueWebhook->enqueue('invoice.forwarded', $fresh);
@@ -106,7 +118,8 @@ final class InvoiceForwarder
      * @param SuperWallet $wallet Resolved destination wallet.
      * @return array{
      *     attempt_uuid: string,
-     *     coin: string,
+     *     asset_key: string,
+     *     network_key: string,
      *     wallet: string,
      *     fee_rate: float|null,
      *     amount: float
@@ -132,9 +145,9 @@ final class InvoiceForwarder
             $scale = $this->assets->settlementScale($assetKey);
             $epsilon = $this->assets->epsilon($assetKey);
 
-            $confirmed = $this->norm((float) ($invoice->received_conf_coin ?? 0), $scale);
-            $forwarded = $this->norm((float) ($invoice->forwarded_coin ?? 0), $scale);
-            $feePercent = (float) ($invoice->merchant->fee_percent ?? 0.0);
+            $confirmed = $this->norm((float)($invoice->received_conf_coin ?? 0), $scale);
+            $forwarded = $this->norm((float)($invoice->forwarded_coin ?? 0), $scale);
+            $feePercent = (float)($invoice->merchant->fee_percent ?? 0.0);
             // Merchant receives net amount after fee retention by the gateway.
             $targetNet = $this->norm($confirmed - ($confirmed * ($feePercent / 100)), $scale);
             $targetNet = max(0.0, $targetNet);
@@ -148,7 +161,7 @@ final class InvoiceForwarder
                 return null;
             }
 
-            $min = $this->norm((float) config("forwarding.assets.{$assetKey}.min", 0), $scale);
+            $min = $this->norm((float)config("forwarding.assets.{$assetKey}.min", 0), $scale);
 
             if ($amount < $min) {
                 $invoice->forward_status = $forwarded > $epsilon ? 'partial' : 'none';
@@ -157,7 +170,7 @@ final class InvoiceForwarder
                 return null;
             }
 
-            $attemptUuid = (string) Str::uuid();
+            $attemptUuid = (string)Str::uuid();
 
             $invoice->forward_status = 'processing';
             $invoice->forward_attempt_uuid = $attemptUuid;
@@ -170,7 +183,7 @@ final class InvoiceForwarder
                 'asset_key' => $assetKey,
                 'network_key' => $invoice->resolvedNetworkKey(),
                 'wallet' => $wallet->wallet,
-                'fee_rate' => $wallet->fee_rate !== null ? (float) $wallet->fee_rate : null,
+                'fee_rate' => $wallet->fee_rate !== null ? (float)$wallet->fee_rate : null,
                 'amount' => $amount,
             ];
         });
@@ -203,12 +216,12 @@ final class InvoiceForwarder
             $txids[] = $txid;
 
             $newForwarded = $this->norm(
-                (float) ($invoice->forwarded_coin ?? 0) + $amount,
+                (float)($invoice->forwarded_coin ?? 0) + $amount,
                 $scale
             );
 
-            $confirmed = $this->norm((float) ($invoice->received_conf_coin ?? 0), $scale);
-            $feePercent = (float) ($invoice->merchant->fee_percent ?? 0.0);
+            $confirmed = $this->norm((float)($invoice->received_conf_coin ?? 0), $scale);
+            $feePercent = (float)($invoice->merchant->fee_percent ?? 0.0);
             $targetNet = $this->norm($confirmed - ($confirmed * ($feePercent / 100)), $scale);
             $targetNet = max(0.0, $targetNet);
             $rest = $this->norm($targetNet - $newForwarded, $scale);
@@ -262,6 +275,60 @@ final class InvoiceForwarder
     private function norm(float $value, int $scale): float
     {
         return round($value, $scale);
+    }
+
+    /**
+     * Forwarding logic for UTXO chains (like BTC)
+     * basically just sendToAddress()
+     *
+     * @param array $plan
+     * @return string
+     */
+    private function forwardUtxo(array $plan): string
+    {
+        $rpc = Coin::rpc($plan['asset_key']);
+
+        return $rpc->sendToAddress(
+            address: $plan['wallet'],
+            amount: $plan['amount'],
+            feeRate: $plan['fee_rate'],
+        );
+    }
+
+    /**
+     * Forwarding logic for EVM based chains (like Ethereum)
+     *
+     * @param Invoice $invoice
+     * @param SuperWallet $wallet
+     * @param array $plan
+     * @return string
+     */
+    private function forwardEvmNative(Invoice $invoice, SuperWallet $wallet, array $plan): array
+    {
+        $freshInvoice = Invoice::query()
+            ->with(['merchant', 'paymentAddress'])
+            ->findOrFail($invoice->id);
+
+        $source = $this->evmSweepSourceResolver->resolveForInvoice($freshInvoice);
+
+        $result = $this->evmPayoutSender->sendNative(
+            invoice: $freshInvoice,
+            source: $source,
+            destination: $wallet,
+            amountDecimal: $this->formatAmountForEvm($plan['amount'], $plan['asset_key']),
+        );
+
+        return [
+            'txid' => $result->txHash,
+            'amount' => (float) $result->amountDecimal
+        ]; //0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc
+    }
+
+    private function formatAmountForEvm(float $amount, string $assetKey): string
+    {
+        $scale = $this->assets->settlementScale($assetKey);
+
+        return number_format($amount, $scale, '.', '');
     }
 
 }

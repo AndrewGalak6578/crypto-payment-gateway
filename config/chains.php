@@ -25,7 +25,7 @@ return [
         'enabled' => true,
     ],
 
-    // NOT RUN YET
+    // Already run
     'evm_local' => [
         'family' => 'evm',
         'driver' => 'evm',

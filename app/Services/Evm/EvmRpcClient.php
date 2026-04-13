@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use GuzzleHttp\Client;
 use Throwable;
+use function Symfony\Component\Translation\t;
 
 final class EvmRpcClient
 {
@@ -131,6 +132,33 @@ final class EvmRpcClient
         $result = $this->call('eth_getTransactionByBlockNumberAndIndex', [$blockNumberHex, $txIndexHex]);
 
         return is_array($result) ? $result : null;
+    }
+
+    /**
+     * Returns current gas price
+     */
+    public function gasPriceWei(): string
+    {
+        return $this->hexToDecimalString((string) $this->call('eth_gasPrice'));
+    }
+
+    public function getTransactionCount(string $address, string $block = 'pending'): int
+    {
+        $result = $this->call('eth_getTransactionCount', [$address, $block]);
+
+        return $this->hexToInt((string) $result);
+    }
+
+    public function estimateGas(array $transaction): string
+    {
+        $result = $this->call('eth_estimateGas', [$transaction]);
+
+        return $this->hexToDecimalString((string) $result);
+    }
+
+    public function sendRawTransaction(string $rawTransaction): string
+    {
+        return (string) $this->call('eth_sendRawTransaction', [$rawTransaction]);
     }
 
     private function hexToInt(string $value): int
@@ -263,5 +291,197 @@ final class EvmRpcClient
         }
 
         return ltrim($result, '0') ?: '0';
+    }
+
+    public function decimalToHexQuantity(string $value): string
+    {
+        $value = trim($value);
+
+        if ($value === '' || $value === '0') {
+            return '0x0';
+        }
+
+        $value = ltrim($value, '0');
+        if ($value === '') {
+            return '0x0';
+        }
+
+        $hex = '';
+
+        while ($value !== '0') {
+            [$value, $remainder] = $this->decimalDivmod($value, 16);
+            $hex = dechex($remainder) . $hex;
+        }
+
+        return '0x' . $hex;
+    }
+
+    public function decimalStringToAtomic(string $amountDecimal, int $decimals = 18): string
+    {
+        $amountDecimal = trim($amountDecimal);
+
+        if ($amountDecimal === '' || $amountDecimal === '0') {
+            return '0';
+        }
+
+        if (!str_contains($amountDecimal, '.')) {
+            return $amountDecimal . str_repeat('0', $decimals);
+        }
+
+        [$integer, $fraction] = explode('.', $amountDecimal, 2);
+
+        $integer = preg_replace('/\D/', '', $integer ?? '') ?: '0';
+        $fraction = preg_replace('/\D/', '', $fraction ?? '') ?: '';
+
+        if (strlen($fraction) > $decimals) {
+            $fraction = substr($fraction, 0, $decimals);
+        }
+
+        $fraction = str_pad($fraction, $decimals, '0', STR_PAD_RIGHT);
+
+        $result = ltrim($integer . $fraction, '0');
+
+        return  $result === '' ? '0' : $result;
+    }
+
+    private function decimalDivmod(string $number, int $divisor): array
+    {
+        $number = ltrim($number, '0');
+        $number = $number === '' ? '0' : $number;
+
+        $quotient = '';
+        $remainder = 0;
+
+        foreach (str_split($number) as $digit) {
+            $current = ($remainder * 10) + (int) $digit;
+            $quotientDigit = intdiv($current, $divisor);
+            $remainder = $current % $divisor;
+
+            if ($quotient !== '' || $quotientDigit > 0) {
+                $quotient .= (string) $quotientDigit;
+            }
+        }
+
+        return [$quotient === '' ? '0' : $quotient, $remainder];
+    }
+
+    public function addDecimalStrings(string $left, string $right): string
+    {
+        $left = ltrim($left, '0');
+        $right = ltrim($right, '0');
+
+        $left = $right === '' ? '0' : $left;
+        $right = $right === '' ? '0' : $right;
+
+        $carry = 0;
+        $result = '';
+
+        $i = strlen($left) - 1;
+        $j = strlen($right) - 1;
+
+        while ($i >= 0 || $j >= 0 || $carry > 0) {
+            $a = $i >= 0 ? (int) $left[$i] : 0;
+            $b = $j >= 0 ? (int) $right[$j] : 0;
+            $sum = $a + $b + $carry;
+
+            $result = ($sum % 10) . $result;
+            $carry = intdiv($sum, 10);
+
+            $i--;
+            $j--;
+        }
+
+        return ltrim($result, '0') ?: '0';
+    }
+
+    public function subtractDecimalStrings(string $left, string $right): string
+    {
+        $left = ltrim($left, '0');
+        $right = ltrim($right, '0');
+
+        $left = $left === '' ? '0' : $left;
+        $right = $right === '' ? '0' : $right;
+
+        if ($this->compareDecimalStrings($left, $right) < 0) {
+            return '0';
+        }
+
+        $borrow = 0;
+        $result = '';
+
+        $i = strlen($left) - 1;
+        $j = strlen($right) - 1;
+
+        while ($i >= 0) {
+            $a = (int) $left[$i] - $borrow;
+            $b = $j >= 0 ? (int) $right[$j] : 0;
+
+            if ($a < $b) {
+                $a += 10;
+                $borrow = 1;
+            } else {
+                $borrow = 0;
+            }
+
+            $result = (string) ($a - $b) . $result;
+
+            $i--;
+            $j--;
+        }
+
+        return ltrim($result, '0') ?: '0';
+    }
+
+    public function multiplyDecimalStrings(string $left, string $right): string
+    {
+        $left = ltrim($left, '0');
+        $right = ltrim($right, '0');
+
+        $left = $left === '' ? '0' : $left;
+        $right = $right === '' ? '0' : $right;
+
+        if ($left === '0' || $right === '0') {
+            return '0';
+        }
+
+        $leftLen = strlen($left);
+        $rightLen = strlen($right);
+        $result = array_fill(0, $leftLen + $rightLen, 0);
+
+        for ($i = $leftLen - 1; $i >= 0; $i--) {
+            for ($j = $rightLen - 1; $j >= 0; $j--) {
+                $mul = ((int) $left[$i]) * ((int) $right[$j]);
+                $sum = $mul + $result[$i + $j + 1];
+
+                $result[$i + $j + 1] = $sum % 10;
+                $result[$i + $j] += intdiv($sum, 10);
+            }
+        }
+
+        $out = implode('', $result);
+
+        return ltrim($out, '0') ?: '0';
+    }
+
+    public function compareDecimalStrings(string $left, string $right): int
+    {
+        $left = ltrim($left, '0');
+        $right = ltrim($right, '0');
+
+        $left = $left === '' ? '0' : $left;
+        $right = $right === '' ? '0' : $right;
+
+        $leftLen = strlen($left);
+        $rightLen = strlen($right);
+
+        if ($leftLen < $rightLen) {
+            return -1;
+        }
+
+        if ($leftLen > $rightLen) {
+            return 1;
+        }
+
+        return $left <=> $right;
     }
 }

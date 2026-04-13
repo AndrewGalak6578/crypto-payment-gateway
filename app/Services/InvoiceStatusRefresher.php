@@ -68,19 +68,30 @@ final class InvoiceStatusRefresher
             $receivedAll = $state['received_all'];
             $receivedConf = $state['received_confirmed'];
 
+            $firstTxId = $state['first_txid'] ?? null;
+            $firstAmount = $state['first_amount'] ?? null;
+            $firstSeenAt = $state['first_seen_at'] ?? null;
+
             $inv->received_all_coin = $receivedAll;
             $inv->received_conf_coin = $receivedConf;
 
-            if (! $inv->first_txid && ! empty($txs)) {
-                $first = $this->pickFirstTx($txs);
-                if ($first) {
-                    $inv->first_txid = (string) ($first['txid'] ?? null);
-                    $inv->first_amount_coin = (string) ($first['amount'] ?? null);
+            if (! $inv->first_txid) {
+                if ($family === 'evm' && $firstTxId !== null) {
+                    $inv->first_txid = (string) $firstTxId;
+                    $inv->first_amount_coin = $firstAmount !== null ? (string) $firstAmount : null;
+                } elseif (! empty($txs)) {
+                    $first = $this->pickFirstTx($txs);
+                    if ($first) {
+                        $inv->first_txid = (string) ($first['txid'] ?? null);
+                        $inv->first_amount_coin = (string) ($first['amount'] ?? null);
+                    }
                 }
             }
 
             if ($inv->status === 'pending' && $receivedAll > 0.0) {
-                $firstTime = $this->firstSeenTime($txs);
+                $firstTime = $family === 'evm'
+                    ? $firstSeenAt
+                    : $this->firstSeenTime($txs);
 
                 $beforeExpiry = false;
                 if ($firstTime !== null && $inv->expires_at) {
@@ -260,6 +271,9 @@ final class InvoiceStatusRefresher
             'txs' => $result->transactions,
             'received_all' => (float) $result->receivedAllDecimal,
             'received_confirmed' => (float) $result->receivedConfirmedDecimal,
+            'first_txid' => $result->firstTxHash,
+            'first_amount' => $result->firstAmountDecimal,
+            'first_seen_at' => $result->firstSeenAt,
         ];
     }
 

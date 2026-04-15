@@ -8,7 +8,6 @@ use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use GuzzleHttp\Client;
 use Throwable;
-use function Symfony\Component\Translation\t;
 
 final class EvmRpcClient
 {
@@ -132,6 +131,28 @@ final class EvmRpcClient
         $result = $this->call('eth_getTransactionByBlockNumberAndIndex', [$blockNumberHex, $txIndexHex]);
 
         return is_array($result) ? $result : null;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function getLogs(array $filter): array
+    {
+        $result = $this->call('eth_getLogs', [$filter]);
+
+        if (!is_array($result)) {
+            return [];
+        }
+
+        $logs = [];
+
+        foreach ($result as $entry) {
+            if (is_array($entry)) {
+                $logs[] = $entry;
+            }
+        }
+
+        return $logs;
     }
 
     /**

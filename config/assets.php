@@ -73,4 +73,24 @@ return [
             'sanity_max' => 50000,
         ],
     ],
+
+    'eth_usdt_local' => [
+        'network' => 'evm_local',
+        'type' => 'token',
+        'token_standard' => 'erc20',
+        'contract_address' => env('EVM_LOCAL_USDT_CONTRACT_ADDRESS', ''),
+        'symbol' => 'USDT',
+        'display_name' => 'Tether USD (Local)',
+        'decimals' => 6,
+        'settlement_scale' => 6,
+        'epsilon' => 0.000001,
+        'enabled' => true,
+        'legacy_coin' => null,
+        'rate' => [
+            'coingecko_id' => 'tether',
+            'coinbase_pair' => null,
+            'sanity_min' => 0.5,
+            'sanity_max' => 2,
+        ],
+    ],
 ];

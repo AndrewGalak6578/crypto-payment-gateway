@@ -65,6 +65,10 @@ final class EvmRpcClient
         return $payload['result'] ?? null;
     }
 
+    public function callContract(array $transaction, string $block = 'latest'): string
+    {
+        return (string) $this->call('eth_call', [$transaction, $block]);
+    }
     /**
      * @throws GuzzleException
      * @throws Throwable
@@ -180,6 +184,61 @@ final class EvmRpcClient
     public function sendRawTransaction(string $rawTransaction): string
     {
         return (string) $this->call('eth_sendRawTransaction', [$rawTransaction]);
+    }
+
+    public function encodeErc20TransferData(string $toAddress, string $amountAtomic): string
+    {
+        $toAddress = strtolower(trim($toAddress));
+
+        if (!preg_match('/^0x[a-f0-9]{40}$/', $toAddress)) {
+            throw new RuntimeException("Invalid ERC-20 transfer recipient address [{$toAddress}].");
+        }
+
+        $selector = 'a9059cbb';
+        $addressWord = str_pad(substr($toAddress, 2), 64, '0', STR_PAD_LEFT);
+        $amountWord = str_pad(ltrim($this->decimalToHexWithoutPrefix($amountAtomic), '0'), 64, '0', STR_PAD_LEFT);
+
+        return '0x' . $selector . $addressWord . $amountWord;
+    }
+
+    public function isTruthyErc20CallResult(string $result): bool
+    {
+        $result = strtolower(trim($result));
+
+        if ($result === '' || $result === '0x') {
+            return true;
+        }
+
+        if (str_starts_with($result, '0x')) {
+            $result = substr($result, 2);
+        }
+
+        $result = ltrim($result, '0');
+
+        return $result === '' || $result === '1';
+    }
+
+    private function decimalToHexWithoutPrefix(string $value): string
+    {
+        $value = trim($value);
+
+        if ($value === '' || $value === '0') {
+            return '0';
+        }
+
+        $value = ltrim($value, '0');
+        if ($value === '') {
+            return '0';
+        }
+
+        $hex = '';
+
+        while ($value !== '0') {
+            [$value, $remainder] = $this->decimalDivmod($value, 16);
+            $hex = dechex($remainder) . $hex;
+        }
+
+        return $hex === '' ? '0' : $hex;
     }
 
     private function hexToInt(string $value): int

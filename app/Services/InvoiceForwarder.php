@@ -5,6 +5,7 @@ namespace App\Services;
 
 use App\Contracts\EvmPayoutSenderInterface;
 use App\Contracts\EvmSweepSourceResolverInterface;
+use App\Contracts\EvmTokenPayoutSenderInterface;
 use App\Models\Invoice;
 use App\Models\SuperWallet;
 use App\Services\Settlement\MerchantBalanceCreditor;
@@ -35,6 +36,7 @@ final class InvoiceForwarder
         private readonly ChainRegistry                   $chains,
         private readonly EvmSweepSourceResolverInterface $evmSweepSourceResolver,
         private readonly EvmPayoutSenderInterface        $evmPayoutSender,
+        private readonly EvmTokenPayoutSenderInterface   $evmTokenPayoutSender,
     )
     {
     }
@@ -86,7 +88,9 @@ final class InvoiceForwarder
                     'txid' => $this->forwardUtxo($plan),
                     'amount' => $plan['amount'],
                 ],
-                'evm' => $this->forwardEvmNative($invoice, $wallet, $plan),
+                'evm' => $this->isEvmTokenAsset($plan['asset_key'])
+                    ? $this->forwardEvmErc20($invoice, $wallet, $plan)
+                    : $this->forwardEvmNative($invoice, $wallet, $plan),
                 default => throw new RuntimeException(
                     "Unsupported forwarding family [{$family}] for network [{$plan['network_key']}]."
                 )
@@ -95,8 +99,8 @@ final class InvoiceForwarder
             $this->markForwarded(
                 invoiceId: $invoiceId,
                 attemptUuid: $plan['attempt_uuid'],
-                amount: (float) $forwardResult['amount'],
-                txid: (string) $forwardResult['txid'],
+                amount: (float)$forwardResult['amount'],
+                txid: (string)$forwardResult['txid'],
             );
 
             $fresh = Invoice::query()->with('merchant')->findOrFail($invoiceId);
@@ -301,7 +305,7 @@ final class InvoiceForwarder
      * @param Invoice $invoice
      * @param SuperWallet $wallet
      * @param array $plan
-     * @return string
+     * @return array
      */
     private function forwardEvmNative(Invoice $invoice, SuperWallet $wallet, array $plan): array
     {
@@ -320,8 +324,37 @@ final class InvoiceForwarder
 
         return [
             'txid' => $result->txHash,
-            'amount' => (float) $result->amountDecimal
+            'amount' => (float)$result->amountDecimal
         ]; //0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc
+    }
+
+    /**
+     * Forwarding logic for EVM ERC-20 tokens
+     *
+     * @param Invoice $invoice
+     * @param SuperWallet $wallet
+     * @param array $plan
+     * @return array
+     */
+    private function forwardEvmErc20(Invoice $invoice, SuperWallet $wallet, array $plan): array
+    {
+        $freshInvoice = Invoice::query()
+            ->with(['merchant', 'paymentAddress'])
+            ->findOrFail($invoice->id);
+
+        $source = $this->evmSweepSourceResolver->resolveForInvoice($freshInvoice);
+
+        $result = $this->evmTokenPayoutSender->sendToken(
+            invoice: $freshInvoice,
+            source: $source,
+            destination: $wallet,
+            amountDecimal: $this->formatAmountForEvm($plan['amount'], $plan['asset_key']),
+        );
+
+        return [
+            'txid' => $result->txHash,
+            'amount' => (float) $result->amountDecimal,
+        ];
     }
 
     private function formatAmountForEvm(float $amount, string $assetKey): string
@@ -329,6 +362,14 @@ final class InvoiceForwarder
         $scale = $this->assets->settlementScale($assetKey);
 
         return number_format($amount, $scale, '.', '');
+    }
+
+    private function isEvmTokenAsset(string $assetKey): bool
+    {
+        $asset = $this->assets->get($assetKey);
+
+        return strtolower((string)($asset['type'] ?? 'native')) === 'token'
+            && strtolower((string)($asset['token_standard'] ?? '')) === 'erc20';
     }
 
 }

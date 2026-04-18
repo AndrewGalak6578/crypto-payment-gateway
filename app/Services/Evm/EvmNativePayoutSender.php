@@ -13,12 +13,12 @@ use App\Support\Assets\AssetRegistry;
 use App\Support\Chains\ChainRegistry;
 use RuntimeException;
 
-final class EvmNativePayoutSender implements EvmPayoutSenderInterface
+final readonly class EvmNativePayoutSender implements EvmPayoutSenderInterface
 {
     public function __construct(
-        private readonly ChainRegistry $chains,
-        private readonly AssetRegistry $assets,
-        private readonly EvmTransactionSignerInterface $signer,
+        private ChainRegistry                 $chains,
+        private AssetRegistry                 $assets,
+        private EvmTransactionSignerInterface $signer,
     )
     {
     }

@@ -9,11 +9,11 @@ use App\Services\Evm\EvmRpcClient;
 use App\Support\Chains\ChainRegistry;
 use RuntimeException;
 
-final class DevRpcAccountEvmTransactionSigner implements EvmTransactionSignerInterface
+final readonly class DevRpcAccountEvmTransactionSigner implements EvmTransactionSignerInterface
 {
 
     public function __construct(
-        private readonly ChainRegistry $chains,
+        private ChainRegistry $chains,
     )
     {
     }
@@ -43,6 +43,10 @@ final class DevRpcAccountEvmTransactionSigner implements EvmTransactionSignerInt
             'to' => (string) ($transaction['to'] ?? ''),
             'value' => (string) ($transaction['value'] ?? '0x0'),
         ];
+
+        if (isset($transaction['data'])) {
+            $payload['data'] = (string) $transaction['data'];
+        }
 
         if (isset($transaction['gas'])) {
             $payload['gas'] = (string) $transaction['gas'];

@@ -96,7 +96,7 @@ final class EvmErc20PayoutSender implements EvmTokenPayoutSenderInterface
 
         $callResult = $client->callContract([
             'from' => $sourceAddress,
-            'to' => $destinationAddress,
+            'to' => $contractAddress,
             'value' => '0x0',
             'data' => $data,
         ]);
@@ -108,9 +108,10 @@ final class EvmErc20PayoutSender implements EvmTokenPayoutSenderInterface
         }
 
         $gasCheck = $this->gasChecker->checkForTransaction(
+            client: $client,
             fromAddress: $sourceAddress,
-            toAddress: $destinationAddress,
-            data: $data
+            toAddress: $contractAddress,
+            data: $data,
         );
 
         if (!$gasCheck->hasEnoughGas) {
@@ -123,7 +124,7 @@ final class EvmErc20PayoutSender implements EvmTokenPayoutSenderInterface
 
         $transaction = [
             'from' => $sourceAddress,
-            'to' => $destinationAddress,
+            'to' => $contractAddress,
             'value' => '0x0',
             'data' => $data,
             'nonce' => $client->toHexQuantity($nonce),

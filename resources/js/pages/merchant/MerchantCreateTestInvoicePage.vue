@@ -3,12 +3,12 @@
         <header class="page-header">
             <div>
                 <h2 class="page-title">Create Test Invoice</h2>
-                <p class="page-subtitle">Runs against existing merchant API (`/api/v1/invoices`) using a temporary API key.</p>
+                <p class="page-subtitle">Create a test invoice using your current merchant portal session.</p>
             </div>
         </header>
 
         <div v-if="!canCreateTestInvoice" class="state-card">
-            <p class="error">You need both `invoices.read` and `api_keys.write` capabilities to run this flow.</p>
+            <p class="error">You need `invoices.read` capability to run this flow.</p>
         </div>
 
         <article v-else class="panel form-panel">
@@ -78,10 +78,6 @@
 
             <p v-if="formError" class="error form-message">{{ formError }}</p>
             <p v-else-if="formSuccess" class="success form-message">{{ formSuccess }}</p>
-            <p v-if="cleanupWarning" class="warning form-message">{{ cleanupWarning }}</p>
-            <RouterLink v-if="cleanupKeyId" class="warning-link" to="/merchant/api-keys">
-                Open API Keys (temporary key id: {{ cleanupKeyId }})
-            </RouterLink>
         </article>
 
         <article v-if="createdInvoice" class="panel result-panel">
@@ -112,9 +108,7 @@
 import { computed, reactive, ref } from 'vue';
 import { useAuthStore } from '../../stores/auth.js';
 import {
-    createMerchantApiKey,
-    createMerchantInvoiceWithToken,
-    deleteMerchantApiKey
+    createMerchantInvoice
 } from '../../api/merchant.js';
 import { MERCHANT_ASSET_CATALOG } from '../../utils/merchantAssetCatalog.js';
 
@@ -123,8 +117,6 @@ const submitting = ref(false);
 const formError = ref('');
 const formSuccess = ref('');
 const createdInvoice = ref(null);
-const cleanupWarning = ref('');
-const cleanupKeyId = ref(null);
 
 const form = reactive({
     asset_key: MERCHANT_ASSET_CATALOG[0]?.assetKey || 'btc',
@@ -135,7 +127,7 @@ const form = reactive({
 });
 
 const canCreateTestInvoice = computed(() => {
-    return authStore.hasCapability('invoices.read') && authStore.hasCapability('api_keys.write');
+    return authStore.hasCapability('invoices.read');
 });
 
 const assetOptions = computed(() => {
@@ -212,40 +204,17 @@ const submitForm = async () => {
 
     formError.value = '';
     formSuccess.value = '';
-    cleanupWarning.value = '';
-    cleanupKeyId.value = null;
     createdInvoice.value = null;
     submitting.value = true;
 
-    let tempApiKeyId = null;
-
     try {
-        const keyResponse = await createMerchantApiKey({
-            name: `tmp-test-invoice-${Date.now()}`,
-        });
-
-        tempApiKeyId = keyResponse.data?.data?.id ?? null;
-        const tempToken = keyResponse.data?.data?.token ?? '';
-        if (!tempToken) {
-            throw new Error('Failed to obtain temporary API token.');
-        }
-
         const payload = buildInvoicePayload();
-        const invoiceResponse = await createMerchantInvoiceWithToken(tempToken, payload);
+        const invoiceResponse = await createMerchantInvoice(payload);
         createdInvoice.value = invoiceResponse.data?.data ?? null;
         formSuccess.value = 'Test invoice created.';
     } catch (requestError) {
         formError.value = extractErrorMessage(requestError, 'Failed to create test invoice.');
     } finally {
-        if (tempApiKeyId) {
-            try {
-                await deleteMerchantApiKey(tempApiKeyId);
-            } catch (cleanupError) {
-                cleanupWarning.value = 'Temporary API key cleanup failed. Revoke it manually in API Keys.';
-                cleanupKeyId.value = tempApiKeyId;
-            }
-        }
-
         submitting.value = false;
     }
 };

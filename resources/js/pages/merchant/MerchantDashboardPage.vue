@@ -92,8 +92,8 @@
                 <td>
                   <span class="status-badge status-badge-muted">{{ invoice.status }}</span>
                 </td>
-                <td>{{ displayAssetKey(invoice) }}</td>
-                <td>{{ displayNetworkKey(invoice) }}</td>
+                <td>{{ displayAssetLabel(invoice) }} <span class="muted mono">({{ displayAssetKey(invoice) }})</span></td>
+                <td>{{ displayNetworkLabel(invoice) }} <span class="muted mono">({{ displayNetworkKey(invoice) }})</span></td>
                 <td>{{ invoice.amount_coin }}</td>
                 <td>{{ invoice.expected_usd }}</td>
                 <td>{{ formatDate(invoice.created_at) }}</td>
@@ -112,7 +112,13 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
 import api from '../../api/axios';
-import { displayAssetKey, displayAssetNetwork, displayNetworkKey } from '../../utils/assetDisplay';
+import {
+  displayAssetKey,
+  displayAssetLabel,
+  displayAssetNetwork,
+  displayNetworkKey,
+  displayNetworkLabel,
+} from '../../utils/assetDisplay';
 import { useAuthStore } from '../../stores/auth';
 
 const authStore = useAuthStore();
@@ -147,7 +153,7 @@ const checklist = computed(() => [
   {
     key: 'api-key',
     label: 'API key created',
-    description: 'Required to call merchant invoice API (`/api/v1/invoices`).',
+    description: 'Required for external API integrations and server-to-server invoice creation.',
     state: toChecklistState(checklistState.hasApiKey),
     actionLabel: 'Open API keys',
     to: '/merchant/api-keys',
@@ -169,7 +175,7 @@ const checklist = computed(() => [
     state: checklistState.hasTestInvoice ? 'done' : 'todo',
     actionLabel: 'Create test invoice',
     to: '/merchant/test-invoice',
-    canOpen: authStore.hasCapability('invoices.read') && authStore.hasCapability('api_keys.write'),
+    canOpen: authStore.hasCapability('invoices.read'),
   },
   {
     key: 'webhook-delivery',
@@ -408,5 +414,14 @@ onMounted(loadDashboard);
 .checklist-action.disabled {
   cursor: not-allowed;
   opacity: 0.7;
+}
+
+.muted {
+  color: #64748b;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
 }
 </style>

@@ -15,6 +15,7 @@ export const getMerchantWebhookSettings = () => api.get('/api/merchant/webhook-s
 export const updateMerchantWebhookSettings = (payload) => api.put('/api/merchant/webhook-settings', payload);
 
 export const getMerchantWebhookDeliveries = (params = {}) => api.get('/api/merchant/webhook-deliveries', { params });
+export const getMerchantWebhookDeliveryDetail = (id) => api.get(`/api/merchant/webhook-deliveries/${id}`);
 
 export const getMerchantApiKeys = () => api.get('/api/merchant/api-keys');
 
@@ -27,3 +28,6 @@ export const createMerchantInvoiceWithToken = (token, payload) => api.post('/api
         Authorization: `Bearer ${token}`,
     },
 });
+
+export const createMerchantInvoice = (payload) => api.post('/api/merchant/invoices', payload);
+export const refreshMerchantInvoice = (id) => api.post(`/api/merchant/invoices/${id}/refresh`);

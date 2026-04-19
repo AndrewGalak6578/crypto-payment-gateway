@@ -11,6 +11,26 @@
     <p v-else-if="error" class="empty-state error">{{ error }}</p>
 
     <template v-else>
+      <article class="card-surface checklist-card">
+        <div class="checklist-header">
+          <h3>Setup checklist</h3>
+          <p>Quick onboarding for first end-to-end payment flow.</p>
+        </div>
+        <ul class="checklist">
+          <li v-for="item in checklist" :key="item.key" class="checklist-item">
+            <div class="checklist-state" :class="stateClass(item.state)">{{ stateLabel(item.state) }}</div>
+            <div class="checklist-body">
+              <strong>{{ item.label }}</strong>
+              <p>{{ item.description }}</p>
+            </div>
+            <RouterLink v-if="item.canOpen !== false" :to="item.to" class="checklist-action">
+              {{ item.actionLabel }}
+            </RouterLink>
+            <span v-else class="checklist-action disabled">No access</span>
+          </li>
+        </ul>
+      </article>
+
       <div class="stats-grid">
         <article class="card-surface stats-card">
           <h3>Paid Invoices</h3>
@@ -30,8 +50,8 @@
         <article class="card-surface panel">
           <h3>Balances</h3>
           <ul class="list" v-if="dashboard.balances?.length">
-            <li v-for="balance in dashboard.balances" :key="balance.coin">
-              <span>{{ balance.coin }}</span>
+            <li v-for="(balance, index) in dashboard.balances" :key="`${displayAssetKey(balance)}:${index}`">
+              <span>{{ displayAssetNetwork(balance) }}</span>
               <strong>{{ balance.amount }}</strong>
             </li>
           </ul>
@@ -42,7 +62,7 @@
           <h3>Wallets</h3>
           <ul class="list" v-if="dashboard.wallets?.length">
             <li v-for="wallet in dashboard.wallets" :key="wallet.id">
-              <span>{{ wallet.coin }}</span>
+              <span>{{ displayAssetNetwork(wallet) }}</span>
               <strong>{{ wallet.wallet }}</strong>
             </li>
           </ul>
@@ -57,7 +77,8 @@
               <tr>
                 <th>Public ID</th>
                 <th>Status</th>
-                <th>Coin</th>
+                <th>Asset</th>
+                <th>Network</th>
                 <th>Amount</th>
                 <th>Expected USD</th>
                 <th>Created</th>
@@ -71,13 +92,14 @@
                 <td>
                   <span class="status-badge status-badge-muted">{{ invoice.status }}</span>
                 </td>
-                <td>{{ invoice.coin }}</td>
+                <td>{{ displayAssetKey(invoice) }}</td>
+                <td>{{ displayNetworkKey(invoice) }}</td>
                 <td>{{ invoice.amount_coin }}</td>
                 <td>{{ invoice.expected_usd }}</td>
                 <td>{{ formatDate(invoice.created_at) }}</td>
               </tr>
               <tr v-if="!(dashboard.recent_invoices || []).length">
-                <td colspan="6" class="empty-row">No recent invoices yet.</td>
+                <td colspan="7" class="empty-row">No recent invoices yet.</td>
               </tr>
             </tbody>
           </table>
@@ -88,9 +110,12 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import api from '../../api/axios';
+import { displayAssetKey, displayAssetNetwork, displayNetworkKey } from '../../utils/assetDisplay';
+import { useAuthStore } from '../../stores/auth';
 
+const authStore = useAuthStore();
 const loading = ref(true);
 const error = ref('');
 
@@ -99,6 +124,88 @@ const dashboard = reactive({
   balances: [],
   recent_invoices: [],
   wallets: [],
+});
+
+const checklistState = reactive({
+  hasWallet: false,
+  hasApiKey: null,
+  hasWebhookConfigured: null,
+  hasTestInvoice: false,
+  hasSuccessfulWebhookDelivery: null,
+});
+
+const checklist = computed(() => [
+  {
+    key: 'wallet',
+    label: 'Wallet configured',
+    description: 'Set at least one forwarding wallet for settlements.',
+    state: checklistState.hasWallet ? 'done' : 'todo',
+    actionLabel: 'Open wallets',
+    to: '/merchant/wallets',
+    canOpen: authStore.hasCapability('wallets.read'),
+  },
+  {
+    key: 'api-key',
+    label: 'API key created',
+    description: 'Required to call merchant invoice API (`/api/v1/invoices`).',
+    state: toChecklistState(checklistState.hasApiKey),
+    actionLabel: 'Open API keys',
+    to: '/merchant/api-keys',
+    canOpen: authStore.hasCapability('api_keys.read'),
+  },
+  {
+    key: 'webhook',
+    label: 'Webhook configured',
+    description: 'Set webhook URL and secret for status notifications.',
+    state: toChecklistState(checklistState.hasWebhookConfigured),
+    actionLabel: 'Open webhook settings',
+    to: '/merchant/webhook-settings',
+    canOpen: authStore.hasCapability('webhooks.read'),
+  },
+  {
+    key: 'test-invoice',
+    label: 'Test invoice created',
+    description: 'Create a test invoice and validate hosted payment page.',
+    state: checklistState.hasTestInvoice ? 'done' : 'todo',
+    actionLabel: 'Create test invoice',
+    to: '/merchant/test-invoice',
+    canOpen: authStore.hasCapability('invoices.read') && authStore.hasCapability('api_keys.write'),
+  },
+  {
+    key: 'webhook-delivery',
+    label: 'Successful webhook delivery received',
+    description: 'At least one webhook delivery completed successfully.',
+    state: toChecklistState(checklistState.hasSuccessfulWebhookDelivery),
+    actionLabel: 'Open webhook deliveries',
+    to: '/merchant/webhook-deliveries',
+    canOpen: authStore.hasCapability('webhooks.read'),
+  },
+]);
+
+const toChecklistState = (value) => {
+  if (value === null) {
+    return 'unknown';
+  }
+
+  return value ? 'done' : 'todo';
+};
+
+const stateLabel = (state) => {
+  if (state === 'done') {
+    return 'Done';
+  }
+
+  if (state === 'unknown') {
+    return 'Unknown';
+  }
+
+  return 'Todo';
+};
+
+const stateClass = (state) => ({
+  'is-done': state === 'done',
+  'is-unknown': state === 'unknown',
+  'is-todo': state === 'todo',
 });
 
 const formatDate = (dateString) => {
@@ -115,7 +222,39 @@ const loadDashboard = async () => {
 
   try {
     const response = await api.get('/api/merchant/dashboard');
-    Object.assign(dashboard, response.data?.data ?? {});
+    const payload = response.data?.data ?? {};
+    Object.assign(dashboard, payload);
+
+    checklistState.hasWallet = Array.isArray(payload.wallets) && payload.wallets.length > 0;
+    checklistState.hasTestInvoice = Array.isArray(payload.recent_invoices) && payload.recent_invoices.length > 0;
+
+    if (authStore.hasCapability('api_keys.read')) {
+      const apiKeysResponse = await api.get('/api/merchant/api-keys');
+      const keys = Array.isArray(apiKeysResponse.data?.data) ? apiKeysResponse.data.data : [];
+      checklistState.hasApiKey = keys.some((item) => !item.revoked_at);
+    } else {
+      checklistState.hasApiKey = null;
+    }
+
+    if (authStore.hasCapability('webhooks.read')) {
+      const [settingsResponse, deliveriesResponse] = await Promise.all([
+        api.get('/api/merchant/webhook-settings'),
+        api.get('/api/merchant/webhook-deliveries', { params: { per_page: 30 } }),
+      ]);
+
+      const settings = settingsResponse.data?.data ?? {};
+      checklistState.hasWebhookConfigured = Boolean(settings.webhook_url) && Boolean(settings.has_webhook_secret);
+
+      const deliveries = Array.isArray(deliveriesResponse.data?.data?.data)
+        ? deliveriesResponse.data.data.data
+        : Array.isArray(deliveriesResponse.data?.data)
+          ? deliveriesResponse.data.data
+          : [];
+      checklistState.hasSuccessfulWebhookDelivery = deliveries.some((item) => item.status === 'delivered');
+    } else {
+      checklistState.hasWebhookConfigured = null;
+      checklistState.hasSuccessfulWebhookDelivery = null;
+    }
   } catch {
     error.value = 'Failed to load dashboard.';
   } finally {
@@ -185,5 +324,89 @@ onMounted(loadDashboard);
 
 .empty-row {
   color: #64748b;
+}
+
+.checklist-card {
+  padding: 14px;
+}
+
+.checklist-header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #0f172a;
+}
+
+.checklist-header p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.checklist {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.checklist-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.checklist-state {
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.checklist-state.is-done {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.checklist-state.is-todo {
+  color: #9a3412;
+  background: #ffedd5;
+}
+
+.checklist-state.is-unknown {
+  color: #475569;
+  background: #e2e8f0;
+}
+
+.checklist-body strong {
+  display: block;
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.checklist-body p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.checklist-action {
+  text-decoration: none;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: #0f172a;
+  background: #fff;
+}
+
+.checklist-action.disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 </style>

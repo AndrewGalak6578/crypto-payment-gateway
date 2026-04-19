@@ -3,7 +3,11 @@
         <header class="page-header">
             <div>
                 <h2 class="page-title">Balances</h2>
-                <p class="page-subtitle">Internal merchant balances by coin.</p>
+                <p class="page-subtitle">Internal merchant balances (asset/network view with legacy fallback).</p>
+            </div>
+            <div class="quick-actions">
+                <RouterLink class="action-link" to="/merchant/wallets">Manage wallets</RouterLink>
+                <RouterLink class="action-link" to="/merchant/invoices">View invoices</RouterLink>
             </div>
         </header>
 
@@ -22,15 +26,23 @@
             <table>
                 <thead>
                 <tr>
-                    <th>Coin</th>
+                    <th>Asset</th>
+                    <th>Network</th>
                     <th>Amount</th>
+                    <th>Source</th>
                     <th>Updated</th>
                 </tr>
                 </thead>
                 <tbody>
                 <tr v-for="balance in balances" :key="balance.id">
-                    <td>{{ balance.coin }}</td>
+                    <td>{{ displayAssetLabel(balance) }} <span class="muted mono">({{ displayAssetKey(balance) }})</span></td>
+                    <td>{{ displayNetworkLabel(balance) }} <span class="muted mono">({{ displayNetworkKey(balance) }})</span></td>
                     <td>{{ balance.amount }}</td>
+                    <td>
+                        <span class="source-badge" :class="{ fallback: !balance.network_key }">
+                            {{ balance.network_key ? 'API network_key' : 'Legacy coin fallback' }}
+                        </span>
+                    </td>
                     <td>{{ formatDate(balance.updated_at) }}</td>
                 </tr>
                 </tbody>
@@ -42,6 +54,12 @@
 <script setup>
 import { onMounted, ref } from 'vue';
 import { getMerchantBalances } from "../../api/merchant.js";
+import {
+    displayAssetKey,
+    displayAssetLabel,
+    displayNetworkKey,
+    displayNetworkLabel
+} from "../../utils/assetDisplay.js";
 
 const loading = ref(true);
 const error = ref('');
@@ -90,6 +108,22 @@ onMounted(loadBalances);
     color: #64748b;
 }
 
+.quick-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.action-link {
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 8px 10px;
+    text-decoration: none;
+    color: #0f172a;
+    background: #fff;
+    font-size: 13px;
+}
+
 .state-card,
 .table-wrap {
     background: #fff;
@@ -131,6 +165,26 @@ tbody tr:last-child td {
 
 .muted {
     color: #64748b;
+}
+
+.mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 12px;
+}
+
+.source-badge {
+    display: inline-flex;
+    border-radius: 999px;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    background: #dcfce7;
+    color: #166534;
+}
+
+.source-badge.fallback {
+    background: #ffedd5;
+    color: #9a3412;
 }
 
 .error {

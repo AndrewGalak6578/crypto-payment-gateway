@@ -75,6 +75,7 @@ const navigationItems = computed(() => ([
     { label: 'Balances', to: '/merchant/balances', canView: authStore.hasCapability('balances.read') },
     { label: 'Wallets', to: '/merchant/wallets', canView: authStore.hasCapability('wallets.read') },
     { label: 'Invoices', to: '/merchant/invoices', canView: authStore.hasCapability('invoices.read') },
+    { label: 'Test Invoice', to: '/merchant/test-invoice', canView: authStore.hasCapability('invoices.read') && authStore.hasCapability('api_keys.write') },
     { label: 'Webhook Deliveries', to: '/merchant/webhook-deliveries', canView: authStore.hasCapability('webhooks.read') },
     { label: 'Webhook Settings', to: '/merchant/webhook-settings', canView: authStore.hasCapability('webhooks.read') },
     { label: 'API Keys', to: '/merchant/api-keys', canView: authStore.hasCapability('api_keys.read') },

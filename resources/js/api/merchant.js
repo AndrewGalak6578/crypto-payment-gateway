@@ -21,3 +21,9 @@ export const getMerchantApiKeys = () => api.get('/api/merchant/api-keys');
 export const createMerchantApiKey = (payload) => api.post('/api/merchant/api-keys', payload);
 
 export const deleteMerchantApiKey = (id) => api.delete(`/api/merchant/api-keys/${id}`);
+
+export const createMerchantInvoiceWithToken = (token, payload) => api.post('/api/v1/invoices', payload, {
+    headers: {
+        Authorization: `Bearer ${token}`,
+    },
+});

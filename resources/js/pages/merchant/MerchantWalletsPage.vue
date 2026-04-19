@@ -18,8 +18,8 @@
                     <p class="muted">
                         {{
                             isEditing
-                                ? 'Coin is fixed for existing wallets. Update the address or fee rate below.'
-                                : 'One wallet per coin is supported. Saving an existing coin will overwrite its current configuration.'
+                                ? 'Asset is fixed for existing wallets. Update the address or fee rate below.'
+                                : 'One wallet per asset is supported. Saving an existing asset updates its current configuration.'
                         }}
                     </p>
                 </div>
@@ -27,9 +27,9 @@
 
             <form class="wallet-form" @submit.prevent="submitForm">
                 <label class="field">
-                    <span>Coin</span>
-                    <select v-model="form.coin" required :disabled="isEditing || submitting">
-                        <option v-for="option in coinOptions" :key="option.value" :value="option.value">
+                    <span>Asset</span>
+                    <select v-model="form.asset_key" required :disabled="isEditing || submitting">
+                        <option v-for="option in assetOptions" :key="option.value" :value="option.value">
                             {{ option.label }}
                         </option>
                     </select>
@@ -95,7 +95,8 @@
             <table>
                 <thead>
                 <tr>
-                    <th>Coin</th>
+                    <th>Asset</th>
+                    <th>Network</th>
                     <th>Wallet</th>
                     <th>Fee rate</th>
                     <th>Updated</th>
@@ -104,7 +105,8 @@
                 </thead>
                 <tbody>
                 <tr v-for="wallet in wallets" :key="wallet.id">
-                    <td>{{ wallet.coin }}</td>
+                    <td>{{ displayAssetLabel(wallet) }} <span class="muted mono">({{ displayAssetKey(wallet) }})</span></td>
+                    <td>{{ displayNetworkLabel(wallet) }} <span class="muted mono">({{ displayNetworkKey(wallet) }})</span></td>
                     <td class="wallet-cell">{{ wallet.wallet }}</td>
                     <td>{{ wallet.fee_rate ?? '—' }}</td>
                     <td>{{ formatDate(wallet.updated_at) }}</td>
@@ -138,14 +140,18 @@ import {
     deleteMerchantWallet
 } from "../../api/merchant.js";
 import { useAuthStore } from "../../stores/auth.js";
+import {
+    displayAssetKey,
+    displayAssetLabel,
+    displayNetworkKey,
+    displayNetworkLabel,
+    normalizeAssetKey
+} from "../../utils/assetDisplay.js";
+import { MERCHANT_ASSET_CATALOG, assetOptionLabel, findCatalogAsset } from "../../utils/merchantAssetCatalog.js";
 
 const authStore = useAuthStore();
 
-const coinOptions = [
-    { label: 'BTC', value: 'btc' },
-    { label: 'LTC', value: 'ltc' },
-    { label: 'DASH', value: 'dash' },
-];
+const defaultAssetKey = MERCHANT_ASSET_CATALOG[0]?.assetKey || 'btc';
 
 const loading = ref(true);
 const submitting = ref(false);
@@ -157,7 +163,7 @@ const wallets = ref([]);
 const editingWalletId = ref(null);
 
 const form = reactive({
-    coin: 'btc',
+    asset_key: defaultAssetKey,
     wallet: '',
     fee_rate: '',
 });
@@ -165,11 +171,28 @@ const form = reactive({
 const isEditing = computed(() => editingWalletId.value !== null);
 const canWriteWallets = computed(() => authStore.hasCapability('wallets.write'));
 const isReadOnly = computed(() => authStore.hasCapability('wallets.read') && !canWriteWallets.value);
+const assetOptions = computed(() => {
+    const fromWallets = wallets.value
+        .map((wallet) => normalizeAssetKey(wallet))
+        .filter(Boolean);
+
+    return [...new Set([...MERCHANT_ASSET_CATALOG.map((item) => item.assetKey), ...fromWallets])]
+        .sort()
+        .map((assetKey) => {
+            const catalog = findCatalogAsset(assetKey);
+            return {
+                value: assetKey,
+                label: catalog
+                    ? `${catalog.assetLabel} (${catalog.symbol}) • ${catalog.assetKey} • ${catalog.networkLabel}`
+                    : assetOptionLabel(assetKey),
+            };
+        });
+});
 
 
 const resetForm = () => {
     editingWalletId.value = null;
-    form.coin = coinOptions[0].value;
+    form.asset_key = assetOptions.value[0]?.value || defaultAssetKey;
     form.wallet = '';
     form.fee_rate = '';
     formError.value = '';
@@ -188,7 +211,9 @@ const formatDate = (dateString) => {
 };
 
 const normalizeWallets = (items) => {
-    wallets.value = [...items].sort((left, right) => left.coin.localeCompare(right.coin));
+    wallets.value = [...items].sort((left, right) => {
+        return normalizeAssetKey(left).localeCompare(normalizeAssetKey(right));
+    });
 };
 
 const loadWallets = async () => {
@@ -239,7 +264,7 @@ const submitForm = async () => {
             await updateMerchantWallet(editingWalletId.value, buildPayload());
         } else {
             await createMerchantWallet({
-                coin: form.coin,
+                coin: normalizeAssetKey({ asset_key: form.asset_key }),
                 ...buildPayload(),
             });
         }
@@ -260,7 +285,7 @@ const startEdit = (wallet) => {
     }
 
     editingWalletId.value = wallet.id;
-    form.coin = wallet.coin.toLowerCase();
+    form.asset_key = normalizeAssetKey(wallet);
     form.wallet = wallet.wallet;
     form.fee_rate = wallet.fee_rate ?? '';
     formError.value = '';
@@ -271,7 +296,7 @@ const removeWallet = async (wallet) => {
     if (!canWriteWallets.value) {
         return;
     }
-    if (!window.confirm(`Delete ${wallet.coin} wallet?`)) {
+    if (!window.confirm(`Delete ${displayAssetKey(wallet)} wallet?`)) {
         return;
     }
 
@@ -389,8 +414,8 @@ onMounted(loadWallets);
     color: #fff;
 }
 
-.secondary-btn
-.link-btn{
+.secondary-btn,
+.link-btn {
     border: 1px solid #cbd5e1;
     background: #fff;
     color: #0f172a;
@@ -450,6 +475,11 @@ tbody tr:last-child td {
 
 .muted {
     color: #64748b;
+}
+
+.mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 12px;
 }
 
 .error {

@@ -259,10 +259,15 @@ const formatDate = (dateString) => {
         return '—';
     }
 
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) {
+        return '—';
+    }
+
     return new Intl.DateTimeFormat(undefined, {
         dateStyle: 'medium',
         timeStyle: 'short',
-    }).format(new Date(dateString));
+    }).format(date);
 };
 
 const statusBadgeClass = (status) => {

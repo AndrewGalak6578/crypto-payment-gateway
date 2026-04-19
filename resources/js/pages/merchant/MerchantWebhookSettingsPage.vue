@@ -5,6 +5,7 @@
                 <h2 class="page-title">Webhook Settings</h2>
                 <p class="page-subtitle">Configure the webhook endpoint used for invoice event delivery.</p>
             </div>
+            <RouterLink class="secondary-btn" to="/merchant/webhook-deliveries">Open deliveries</RouterLink>
         </header>
 
         <div v-if="isReadOnly" class="message message-info">
@@ -67,6 +68,10 @@
                     </button>
                 </div>
             </form>
+
+            <div class="message message-info compact">
+                Debug tip: after saving URL and secret, create and pay a test invoice, then inspect delivery attempts in Webhook Deliveries.
+            </div>
         </div>
     </section>
 </template>
@@ -271,6 +276,10 @@ onMounted(loadSettings);
 .message-info {
     background: #f8fafc;
     color: #475569;
+}
+
+.message.compact {
+    margin: 12px 0 0;
 }
 
 .actions {

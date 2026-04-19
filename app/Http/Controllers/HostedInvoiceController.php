@@ -4,9 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Invoice;
 use App\Services\InvoiceStatusRefresher;
+use App\Support\Assets\AssetRegistry;
+use App\Support\Chains\ChainRegistry;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use RuntimeException;
 
 /**
  * Public hosted invoice page and status polling endpoint.
@@ -58,6 +61,9 @@ class HostedInvoiceController extends Controller
                 'public_id' => $invoice->public_id,
                 'status' => $invoice->status,
                 'coin' => strtoupper($invoice->coin),
+                'asset_key' => $invoice->asset_key,
+                'network_key' => $invoice->network_key,
+                'payment_mode' => $this->paymentMode($invoice),
                 'pay_address' => $invoice->pay_address,
                 'amount_coin' => (string) $invoice->amount_coin,
                 'expected_usd' => (string) $invoice->expected_usd,
@@ -93,5 +99,28 @@ class HostedInvoiceController extends Controller
         ]);
 
         return "{$scheme}:{$invoice->pay_address}?{$query}";
+    }
+
+    private function paymentMode(Invoice $invoice): ?string
+    {
+        $assetKey = $invoice->asset_key ?: $invoice->coin;
+        $networkKey = $invoice->network_key;
+
+        if (!$assetKey || !$networkKey) {
+            return null;
+        }
+
+        try {
+            $asset = app(AssetRegistry::class)->get($assetKey);
+            $family = app(ChainRegistry::class)->family($networkKey);
+        } catch (RuntimeException) {
+            return null;
+        }
+
+        if ($family !== 'evm') {
+            return 'utxo';
+        }
+
+        return (($asset['type'] ?? null) === 'token') ? 'evm_token' : 'evm_native';
     }
 }

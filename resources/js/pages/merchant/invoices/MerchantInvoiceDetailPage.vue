@@ -106,6 +106,7 @@
 import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import api from '../../../api/axios';
+import { refreshMerchantInvoice } from '../../../api/merchant.js';
 import {
   displayAssetKey,
   displayAssetLabel,
@@ -233,9 +234,19 @@ const loadInvoice = async () => {
 };
 
 const reloadInvoice = async () => {
+  error.value = '';
+  notice.value = '';
   refreshing.value = true;
-  await loadInvoice();
-  refreshing.value = false;
+
+  try {
+    const response = await refreshMerchantInvoice(route.params.id);
+    invoice.value = response.data?.data || {};
+    notice.value = 'Invoice data refreshed.';
+  } catch {
+    error.value = 'Failed to refresh invoice.';
+  } finally {
+    refreshing.value = false;
+  }
 };
 
 watch(

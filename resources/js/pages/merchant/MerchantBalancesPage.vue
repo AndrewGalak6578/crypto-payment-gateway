@@ -3,7 +3,7 @@
         <header class="page-header">
             <div>
                 <h2 class="page-title">Balances</h2>
-                <p class="page-subtitle">Internal merchant balances (asset/network view with legacy fallback).</p>
+                <p class="page-subtitle">Internal merchant balances by asset and network.</p>
             </div>
             <div class="quick-actions">
                 <RouterLink class="action-link" to="/merchant/wallets">Manage wallets</RouterLink>
@@ -29,7 +29,6 @@
                     <th>Asset</th>
                     <th>Network</th>
                     <th>Amount</th>
-                    <th>Source</th>
                     <th>Updated</th>
                 </tr>
                 </thead>
@@ -38,11 +37,6 @@
                     <td>{{ displayAssetLabel(balance) }} <span class="muted mono">({{ displayAssetKey(balance) }})</span></td>
                     <td>{{ displayNetworkLabel(balance) }} <span class="muted mono">({{ displayNetworkKey(balance) }})</span></td>
                     <td>{{ balance.amount }}</td>
-                    <td>
-                        <span class="source-badge" :class="{ fallback: !balance.network_key }">
-                            {{ balance.network_key ? 'API network_key' : 'Legacy coin fallback' }}
-                        </span>
-                    </td>
                     <td>{{ formatDate(balance.updated_at) }}</td>
                 </tr>
                 </tbody>
@@ -170,21 +164,6 @@ tbody tr:last-child td {
 .mono {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     font-size: 12px;
-}
-
-.source-badge {
-    display: inline-flex;
-    border-radius: 999px;
-    padding: 3px 8px;
-    font-size: 11px;
-    font-weight: 700;
-    background: #dcfce7;
-    color: #166534;
-}
-
-.source-badge.fallback {
-    background: #ffedd5;
-    color: #9a3412;
 }
 
 .error {

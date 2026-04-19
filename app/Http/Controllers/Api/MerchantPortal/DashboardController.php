@@ -9,8 +9,10 @@ use App\Models\MerchantBalance;
 use App\Models\MerchantUser;
 use App\Models\SuperWallet;
 use App\Models\WebhookDelivery;
+use App\Support\Assets\AssetRegistry;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use RuntimeException;
 
 class DashboardController extends Controller
 {
@@ -19,15 +21,29 @@ class DashboardController extends Controller
         /** @var MerchantUser $merchantUser */
         $merchantUser = $request->attributes->get('merchant_user');
         $merchantId = $merchantUser->merchant_id;
+        $assets = app(AssetRegistry::class);
 
         $balances = MerchantBalance::query()
             ->where('merchant_id', $merchantId)
             ->orderBy('coin')
             ->get(['coin', 'amount'])
-            ->map(fn(MerchantBalance $balance) => [
-                'coin' => strtoupper($balance->coin),
-                'amount' => (string)$balance->amount,
-            ]);
+            ->map(function (MerchantBalance $balance) use ($assets): array {
+                $assetKey = strtolower((string) $balance->coin);
+                $networkKey = null;
+
+                try {
+                    $networkKey = $assets->network($assetKey);
+                } catch (RuntimeException) {
+                    // Keep legacy balance rows even if asset is not present in registry.
+                }
+
+                return [
+                    'coin' => strtoupper($balance->coin),
+                    'asset_key' => $assetKey,
+                    'network_key' => $networkKey,
+                    'amount' => (string) $balance->amount,
+                ];
+            });
 
         $recentInvoices = Invoice::query()
             ->where('merchant_id', $merchantId)
@@ -38,6 +54,8 @@ class DashboardController extends Controller
                 'external_id',
                 'status',
                 'coin',
+                'asset_key',
+                'network_key',
                 'amount_coin',
                 'expected_usd',
                 'received_conf_coin',
@@ -49,6 +67,8 @@ class DashboardController extends Controller
                 'external_id' => $invoice->external_id,
                 'status' => $invoice->status,
                 'coin' => strtoupper($invoice->coin),
+                'asset_key' => $invoice->asset_key,
+                'network_key' => $invoice->network_key,
                 'amount_coin' => (string)$invoice->amount_coin,
                 'expected_usd' => (string)$invoice->expected_usd,
                 'received_conf_coin' => (string)$invoice->received_conf_coin,
@@ -63,6 +83,8 @@ class DashboardController extends Controller
             ->map(fn (SuperWallet $wallet) => [
                 'id' => $wallet->id,
                 'coin' => strtoupper($wallet->coin),
+                'asset_key' => $wallet->asset_key ?: strtolower((string) $wallet->coin),
+                'network_key' => $wallet->network_key,
                 'wallet' => $wallet->wallet,
                 'fee_rate' => $wallet->fee_rate !== null ? (string)$wallet->fee_rate : null,
             ]);

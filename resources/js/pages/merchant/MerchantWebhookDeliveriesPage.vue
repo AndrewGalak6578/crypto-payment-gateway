@@ -91,58 +91,71 @@
                         </tr>
                         <tr v-if="expandedIds.has(delivery.id)">
                             <td colspan="7" class="expanded-cell">
+                                <p v-if="loadingDetailIds.has(delivery.id)" class="muted">Loading details...</p>
                                 <div class="expanded-grid">
                                     <div class="detail-item">
                                         <div class="detail-label">Event</div>
-                                        <div class="detail-value">{{ delivery.event || '—' }}</div>
+                                        <div class="detail-value">{{ detailValue(delivery.id, 'event', delivery.event) }}</div>
                                     </div>
                                     <div class="detail-item">
                                         <div class="detail-label">Status</div>
-                                        <div class="detail-value">{{ delivery.status || '—' }}</div>
+                                        <div class="detail-value">{{ detailValue(delivery.id, 'status', delivery.status) }}</div>
                                     </div>
                                     <div class="detail-item">
                                         <div class="detail-label">Invoice ID</div>
-                                        <div class="detail-value">{{ delivery.invoice_id ?? '—' }}</div>
+                                        <div class="detail-value">{{ detailValue(delivery.id, 'invoice_id', delivery.invoice_id) }}</div>
                                     </div>
                                     <div class="detail-item">
                                         <div class="detail-label">Attempts</div>
-                                        <div class="detail-value">{{ delivery.attempts ?? '—' }}</div>
+                                        <div class="detail-value">{{ detailValue(delivery.id, 'attempts', delivery.attempts) }}</div>
                                     </div>
                                     <div class="detail-item">
                                         <div class="detail-label">Delivered at</div>
-                                        <div class="detail-value">{{ formatDate(delivery.delivered_at) }}</div>
+                                        <div class="detail-value">{{ formatDate(detailValue(delivery.id, 'delivered_at', delivery.delivered_at)) }}</div>
                                     </div>
                                     <div class="detail-item">
                                         <div class="detail-label">Created at</div>
-                                        <div class="detail-value">{{ formatDate(delivery.created_at) }}</div>
+                                        <div class="detail-value">{{ formatDate(detailValue(delivery.id, 'created_at', delivery.created_at)) }}</div>
+                                    </div>
+                                    <div class="detail-item">
+                                        <div class="detail-label">Updated at</div>
+                                        <div class="detail-value">{{ formatDate(detailValue(delivery.id, 'updated_at', null)) }}</div>
+                                    </div>
+                                    <div class="detail-item">
+                                        <div class="detail-label">Next retry at</div>
+                                        <div class="detail-value">{{ formatDate(detailValue(delivery.id, 'next_retry_at', null)) }}</div>
                                     </div>
                                     <div class="detail-item wide">
                                         <div class="detail-label">URL</div>
-                                        <div class="detail-value mono break">{{ delivery.url || '—' }}</div>
+                                        <div class="detail-value mono break">{{ detailValue(delivery.id, 'url', delivery.url) }}</div>
                                         <button
-                                            v-if="delivery.url"
+                                            v-if="detailValue(delivery.id, 'url', delivery.url) !== '—'"
                                             type="button"
                                             class="secondary-btn mini"
-                                            @click="copyValue(delivery.url, 'URL copied')"
+                                            @click="copyValue(detailValue(delivery.id, 'url', delivery.url), 'URL copied')"
                                         >
                                             Copy URL
                                         </button>
                                     </div>
                                     <div class="detail-item wide">
                                         <div class="detail-label">Last error</div>
-                                        <div class="detail-value break">{{ delivery.last_error || '—' }}</div>
+                                        <div class="detail-value break">{{ detailValue(delivery.id, 'last_error', delivery.last_error) }}</div>
                                         <button
-                                            v-if="delivery.last_error"
+                                            v-if="detailValue(delivery.id, 'last_error', delivery.last_error) !== '—'"
                                             type="button"
                                             class="secondary-btn mini"
-                                            @click="copyValue(delivery.last_error, 'Error copied')"
+                                            @click="copyValue(detailValue(delivery.id, 'last_error', delivery.last_error), 'Error copied')"
                                         >
                                             Copy error
                                         </button>
                                     </div>
                                     <div class="detail-item wide">
+                                        <div class="detail-label">Payload</div>
+                                        <pre class="detail-pre">{{ payloadText(delivery.id) }}</pre>
+                                    </div>
+                                    <div class="detail-item wide">
                                         <div class="detail-label">Payload preview</div>
-                                        <div class="detail-value muted">Not available in current merchant deliveries API response.</div>
+                                        <pre class="detail-pre">{{ payloadPreviewText(delivery.id) }}</pre>
                                     </div>
                                 </div>
                             </td>
@@ -180,7 +193,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue';
-import { getMerchantWebhookDeliveries } from '../../api/merchant.js';
+import { getMerchantWebhookDeliveries, getMerchantWebhookDeliveryDetail } from '../../api/merchant.js';
 
 const PER_PAGE = 15;
 
@@ -189,6 +202,8 @@ const error = ref('');
 const notice = ref('');
 const deliveries = ref([]);
 const expandedIds = ref(new Set());
+const loadingDetailIds = ref(new Set());
+const deliveryDetails = ref({});
 const filters = ref({
     search: '',
     status: '',
@@ -244,10 +259,15 @@ const formatDate = (dateString) => {
         return '—';
     }
 
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) {
+        return '—';
+    }
+
     return new Intl.DateTimeFormat(undefined, {
         dateStyle: 'medium',
         timeStyle: 'short',
-    }).format(new Date(dateString));
+    }).format(date);
 };
 
 const statusBadgeClass = (status) => {
@@ -275,6 +295,38 @@ const copyValue = async (value, okMessage) => {
     }
 };
 
+const detailValue = (id, key, fallback = '—') => {
+    const value = deliveryDetails.value[id]?.[key];
+
+    if (value === null || value === undefined || value === '') {
+        return fallback ?? '—';
+    }
+
+    return value;
+};
+
+const payloadText = (id) => {
+    const payload = detailValue(id, 'payload', null);
+    if (!payload) {
+        return '—';
+    }
+
+    if (typeof payload === 'string') {
+        return payload;
+    }
+
+    try {
+        return JSON.stringify(payload, null, 2);
+    } catch {
+        return '—';
+    }
+};
+
+const payloadPreviewText = (id) => {
+    const preview = detailValue(id, 'payload_preview', null);
+    return preview || '—';
+};
+
 const loadDeliveries = async (page = 1) => {
     loading.value = true;
     error.value = '';
@@ -293,6 +345,8 @@ const loadDeliveries = async (page = 1) => {
             total: response.data?.meta?.total ?? 0,
         };
         expandedIds.value = new Set();
+        loadingDetailIds.value = new Set();
+        deliveryDetails.value = {};
     } catch {
         error.value = 'Failed to load webhook deliveries.';
     } finally {
@@ -300,13 +354,33 @@ const loadDeliveries = async (page = 1) => {
     }
 };
 
-const toggleExpanded = (id) => {
+const toggleExpanded = async (id) => {
     const next = new Set(expandedIds.value);
 
     if (next.has(id)) {
         next.delete(id);
     } else {
         next.add(id);
+
+        if (!deliveryDetails.value[id]) {
+            const nextLoading = new Set(loadingDetailIds.value);
+            nextLoading.add(id);
+            loadingDetailIds.value = nextLoading;
+
+            try {
+                const response = await getMerchantWebhookDeliveryDetail(id);
+                deliveryDetails.value = {
+                    ...deliveryDetails.value,
+                    [id]: response.data?.data || {},
+                };
+            } catch {
+                notice.value = `Failed to load delivery #${id} details.`;
+            } finally {
+                const doneLoading = new Set(loadingDetailIds.value);
+                doneLoading.delete(id);
+                loadingDetailIds.value = doneLoading;
+            }
+        }
     }
 
     expandedIds.value = next;
@@ -455,6 +529,15 @@ tbody tr:last-child td {
 .detail-value {
     color: #0f172a;
     font-size: 13px;
+}
+
+.detail-pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 12px;
+    color: #0f172a;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 .break {

@@ -10,7 +10,6 @@ use App\Support\Assets\AssetRegistry;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
-use function Termwind\renderUsing;
 
 class WalletController extends Controller
 {
@@ -26,6 +25,8 @@ class WalletController extends Controller
             ->map(fn(SuperWallet $wallet) => [
                 'id' => $wallet->id,
                 'coin' => strtoupper($wallet->coin),
+                'asset_key' => $wallet->asset_key ?: strtolower((string) $wallet->coin),
+                'network_key' => $wallet->network_key,
                 'wallet' => $wallet->wallet,
                 'fee_rate' => $wallet->fee_rate !== null ? (string)$wallet->fee_rate : null,
                 'created_at' => optional($wallet->created_at)->toIso8601String(),
@@ -66,7 +67,6 @@ class WalletController extends Controller
                 'fee_rate' => $data['fee_rate'] ?? null,
             ]
         );
-        $assets = app(AssetRegistry::class);
 
         return response()->json([
             'success' => true,
@@ -108,6 +108,8 @@ class WalletController extends Controller
                 'id' => $wallet->id,
                 'coin' => strtoupper($wallet->coin),
                 'coin_symbol' => $assets->symbol($wallet->coin),
+                'asset_key' => $wallet->asset_key ?: strtolower((string) $wallet->coin),
+                'network_key' => $wallet->network_key,
                 'wallet' => $wallet->wallet,
                 'fee_rate' => $wallet->fee_rate !== null ? (string)$wallet->fee_rate : null,
             ]

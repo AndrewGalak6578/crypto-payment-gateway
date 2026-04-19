@@ -3,7 +3,7 @@
     <header class="page-header">
       <div>
         <h2 class="page-title">Invoices</h2>
-        <p class="page-subtitle">Track status, filters and hosted invoice links.</p>
+        <p class="page-subtitle">Track status, asset/network and hosted invoice links.</p>
       </div>
       <RouterLink class="action-link" to="/merchant/test-invoice">Create test invoice</RouterLink>
     </header>
@@ -34,7 +34,7 @@
               <th>status</th>
               <th>asset</th>
               <th>network</th>
-              <th>coin (legacy)</th>
+              <th>coin (secondary)</th>
               <th>amount_coin</th>
               <th>expected_usd</th>
               <th>received_conf_coin</th>

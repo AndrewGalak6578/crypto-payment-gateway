@@ -12,7 +12,7 @@ use RuntimeException;
 /**
  * Temporary dev-only address origin for local/testing EVM networks
  *
- * It's not production custody-model.
+ * It's a finite account pool, not production custody-model.
  * Product deriver must be replaced with HD/custody implementation,
  * which will be able to work through key_ref without linear dependency from eth_accounts.
  */
@@ -49,7 +49,8 @@ class DevRpcAccountAddressDeriver implements EvmAddressDeriverInterface
         if (!array_key_exists($index, $accounts)) {
             throw new RuntimeException(
                 "Dev RPC account source for [{$networkKey}] is exhausted at index [{$index}]. " .
-                'This adapter is temporary. Switch to a real custody/HD deriver.'
+                'The rpc_accounts_dev strategy is a finite pool and does not recycle addresses. ' .
+                'Switch to a real custody/HD deriver.'
             );
         }
 

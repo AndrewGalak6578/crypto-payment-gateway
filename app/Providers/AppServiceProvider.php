@@ -55,13 +55,19 @@ class AppServiceProvider extends ServiceProvider
         );
 
         $this->app->bind(EvmAddressDeriverInterface::class, function ($app) {
+            $configuredDeriver = config('payment_addresses.evm.deriver');
+
+            if (is_string($configuredDeriver) && $configuredDeriver !== '') {
+                return $app->make($configuredDeriver);
+            }
+
             if ((bool)config('payment_addresses.evm.allow_dev_rpc_accounts', false) === true) {
                 return $app->make(DevRpcAccountAddressDeriver::class);
             }
 
             throw new RuntimeException(
                 'No EVM address deriver is configured. ' .
-                'Bind EvmAddressDeriverInterface to a real custody/HD implementation.'
+                'Configure payment_addresses.evm.deriver or bind EvmAddressDeriverInterface to a real custody/HD implementation.'
             );
         });
     }

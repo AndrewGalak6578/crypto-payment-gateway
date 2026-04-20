@@ -48,6 +48,7 @@ use RuntimeException;
  * @property Carbon|null $forwarding_started_at
  * @property float|null $forwarded_coin
  * @property float|null $forwarding_coin
+ * @property-read HasMany<EvmGasFunding> $evmGasFundings
  * @property-read Merchant $merchant
  * @property-read PaymentAddress $paymentAddress
  * @property-read HasMany<WebhookDelivery> $webhookDeliveries
@@ -100,6 +101,11 @@ class Invoice extends Model
     public function webhookDeliveries(): HasMany
     {
         return $this->hasMany(WebhookDelivery::class);
+    }
+
+    public function evmGasFundings(): HasMany
+    {
+        return $this->hasMany(EvmGasFunding::class);
     }
 
     public function resolvedAssetKey(): string

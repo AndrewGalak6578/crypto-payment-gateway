@@ -55,12 +55,27 @@ return [
          |------------------------------------------------------------------
          |
          | Dedicated key_ref used only for native gas top-ups before ERC-20
-         | sweeps from deposit addresses.
+         | sweeps from deposit addresses. Keep this separate from deposit
+         | allocation key refs to avoid namespace collisions.
          |
          */
         'gas_station_key_refs' => [
-            'evm_local' => env('PAYMENT_EVM_LOCAL_GAS_STATION_KEY_REF', 'anvil:default'),
+            'evm_local' => env('PAYMENT_EVM_LOCAL_GAS_STATION_KEY_REF'),
         ],
+
+        /*
+         |------------------------------------------------------------------
+         | Gas sponsor derivation namespace
+         |------------------------------------------------------------------
+         |
+         | Separate HD path namespace for gas sponsor addresses.
+         | Must not overlap with payment_addresses.evm.derivation_path_template.
+         |
+         */
+        'gas_station_derivation_path_template' => env(
+            'PAYMENT_EVM_GAS_STATION_DERIVATION_PATH_TEMPLATE',
+            "m/44'/60'/100'/0/%d"
+        ),
 
         /*
          |------------------------------------------------------------------

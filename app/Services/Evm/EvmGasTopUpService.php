@@ -153,6 +153,13 @@ final class EvmGasTopUpService
         }
 
         $gasStationSource = $this->resolveGasStationSource($networkKey);
+        $this->assertGasStationIsolation(
+            networkKey: $networkKey,
+            depositSource: $source,
+            depositAddress: $sourceAddress,
+            gasStationSource: $gasStationSource,
+        );
+
         $gasStationAddress = strtolower($gasStationSource->address);
         $fundingGasPriceWei = $client->gasPriceWei();
         $fundingNonce = $client->getTransactionCount($gasStationAddress, 'pending');
@@ -241,9 +248,20 @@ final class EvmGasTopUpService
             );
         }
 
+        $depositDefaultKeyRef = (string)config("payment_addresses.evm.default_key_refs.{$networkKey}", '');
+        if (
+            $depositDefaultKeyRef !== ''
+            && $this->normalizeConfigToken($depositDefaultKeyRef) === $this->normalizeConfigToken($keyRef)
+        ) {
+            throw new RuntimeException(
+                "Invalid configuration for [{$networkKey}]: payment_addresses.evm.gas_station_key_refs[{$networkKey}] " .
+                "must not match payment_addresses.evm.default_key_refs[{$networkKey}]."
+            );
+        }
+
         $pathTemplate = (string)config(
-            'payment_addresses.evm.derivation_path_template',
-            "m/44'/60'/0'/0/%d"
+            'payment_addresses.evm.gas_station_derivation_path_template',
+            "m/44'/60'/100'/0/%d"
         );
 
         $derived = $this->addressDeriver->derive(
@@ -269,6 +287,41 @@ final class EvmGasTopUpService
                 'role' => 'erc20_gas_station',
             ],
         );
+    }
+
+    private function assertGasStationIsolation(
+        string $networkKey,
+        EvmSweepSource $depositSource,
+        string $depositAddress,
+        EvmSweepSource $gasStationSource,
+    ): void {
+        $normalizedDepositAddress = strtolower(trim($depositAddress));
+        $normalizedGasStationAddress = strtolower(trim($gasStationSource->address));
+
+        if ($normalizedGasStationAddress === $normalizedDepositAddress) {
+            throw new RuntimeException(
+                "Invalid configuration for [{$networkKey}]: gas station address [{$normalizedGasStationAddress}] " .
+                "matches deposit source address [{$normalizedDepositAddress}]."
+            );
+        }
+
+        $depositKeyRef = $this->normalizeConfigToken($depositSource->keyRef);
+        $gasStationKeyRef = $this->normalizeConfigToken($gasStationSource->keyRef);
+        if ($depositKeyRef !== '' && $gasStationKeyRef !== '' && $depositKeyRef === $gasStationKeyRef) {
+            throw new RuntimeException(
+                "Invalid configuration for [{$networkKey}]: gas station key_ref [{$gasStationSource->keyRef}] " .
+                "matches deposit source key_ref [{$depositSource->keyRef}]. Use a dedicated gas station key_ref."
+            );
+        }
+
+        $depositPath = $this->normalizeConfigToken((string)$depositSource->derivationPath);
+        $gasStationPath = $this->normalizeConfigToken((string)$gasStationSource->derivationPath);
+        if ($depositPath !== '' && $gasStationPath !== '' && $depositPath === $gasStationPath) {
+            throw new RuntimeException(
+                "Invalid configuration for [{$networkKey}]: gas station derivation path [{$gasStationSource->derivationPath}] " .
+                "matches deposit source derivation path [{$depositSource->derivationPath}]."
+            );
+        }
     }
 
     private function findPendingFunding(string $networkKey, string $targetAddress): ?EvmGasFunding
@@ -369,6 +422,11 @@ final class EvmGasTopUpService
     private function isUnsignedInteger(string $value): bool
     {
         return preg_match('/^\d+$/', $value) === 1;
+    }
+
+    private function normalizeConfigToken(string $value): string
+    {
+        return strtolower(trim($value));
     }
 
     private function retryDelaySeconds(): int

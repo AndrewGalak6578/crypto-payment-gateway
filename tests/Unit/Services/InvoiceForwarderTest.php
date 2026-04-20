@@ -4,12 +4,19 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Services;
 
+use App\Contracts\EvmPayoutSenderInterface;
+use App\Contracts\EvmTokenPayoutSenderInterface;
+use App\Data\EvmGasTopUpOutcome;
+use App\Jobs\ForwardInvoiceJob;
+use App\Models\PaymentAddress;
 use App\Models\MerchantBalance;
 use App\Models\SuperWallet;
 use App\Models\WebhookDelivery;
+use App\Services\Evm\EvmGasTopUpService;
 use App\Services\CoinBasedLogic\MockRpc;
 use App\Services\InvoiceForwarder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Tests\Support\BuildsDomainData;
 use Tests\Support\FakeCoinRpc;
 use Tests\TestCase;
@@ -131,5 +138,87 @@ final class InvoiceForwarderTest extends TestCase
 
         $forwardedWebhook = WebhookDelivery::query()->where('invoice_id', $invoice->id)->where('event', 'invoice.forwarded')->first();
         self::assertNull($forwardedWebhook);
+    }
+
+    public function test_erc20_forward_is_deferred_after_gas_topup_submission(): void
+    {
+        Queue::fake();
+
+        config()->set('webhooks.enabled', false);
+        config()->set('queue.default', 'database');
+
+        $merchant = $this->createMerchant(['fee_percent' => 0.0]);
+
+        SuperWallet::query()->create([
+            'merchant_id' => null,
+            'coin' => 'eth_usdt_local',
+            'asset_key' => 'eth_usdt_local',
+            'network_key' => 'evm_local',
+            'wallet' => '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266',
+            'fee_rate' => null,
+        ]);
+
+        $invoice = $this->createInvoice($merchant, [
+            'status' => 'paid',
+            'coin' => 'eth_usdt_local',
+            'asset_key' => 'eth_usdt_local',
+            'network_key' => 'evm_local',
+            'pay_address' => '0x15d34aaf54267db7d7c367839aaf71a00a2c6a65',
+            'received_conf_coin' => 25.000000,
+            'forwarded_coin' => 0,
+            'forward_status' => 'none',
+        ]);
+
+        PaymentAddress::query()->create([
+            'merchant_id' => $merchant->id,
+            'invoice_id' => $invoice->id,
+            'network_key' => 'evm_local',
+            'asset_key' => 'eth_usdt_local',
+            'address' => '0x15d34aaf54267db7d7c367839aaf71a00a2c6a65',
+            'family' => 'evm',
+            'address_type' => 'deposit',
+            'strategy' => 'hd_derived',
+            'status' => 'assigned',
+            'derivation_path' => "m/44'/60'/0'/0/0",
+            'derivation_index' => 0,
+            'key_ref' => 'anvil:default',
+            'issued_at' => now('UTC'),
+            'assigned_at' => now('UTC'),
+            'meta' => [],
+        ]);
+
+        $this->mock(EvmGasTopUpService::class, function ($mock): void {
+            $mock->shouldReceive('ensureTopUpForErc20Transfer')
+                ->once()
+                ->andReturn(new EvmGasTopUpOutcome(
+                    status: 'funded',
+                    requiresDeferredPayout: true,
+                    txHash: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                    fundedAmountWei: '150000000000000',
+                    gasStationAddress: '0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc',
+                    retryAfterSeconds: 10,
+                ));
+        });
+
+        $this->mock(EvmTokenPayoutSenderInterface::class, function ($mock): void {
+            $mock->shouldNotReceive('sendToken');
+        });
+
+        $this->mock(EvmPayoutSenderInterface::class, function ($mock): void {
+            $mock->shouldNotReceive('sendNative');
+        });
+
+        app(InvoiceForwarder::class)->forward($invoice->id);
+
+        $fresh = $invoice->fresh();
+
+        self::assertSame('none', $fresh->forward_status);
+        self::assertNull($fresh->forward_attempt_uuid);
+        self::assertNull($fresh->forwarding_coin);
+        self::assertNull($fresh->forwarding_started_at);
+
+        Queue::assertPushed(ForwardInvoiceJob::class, function ($job) use ($invoice): bool {
+            return $job->invoiceId === $invoice->id;
+        });
     }
 }

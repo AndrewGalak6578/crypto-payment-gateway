@@ -51,6 +51,55 @@ return [
 
         /*
          |------------------------------------------------------------------
+         | Gas sponsor source by EVM network
+         |------------------------------------------------------------------
+         |
+         | Dedicated key_ref used only for native gas top-ups before ERC-20
+         | sweeps from deposit addresses. Keep this separate from deposit
+         | allocation key refs to avoid namespace collisions.
+         |
+         */
+        'gas_station_key_refs' => [
+            'evm_local' => env('PAYMENT_EVM_LOCAL_GAS_STATION_KEY_REF'),
+        ],
+
+        /*
+         |------------------------------------------------------------------
+         | Gas sponsor derivation namespace
+         |------------------------------------------------------------------
+         |
+         | Separate HD path namespace for gas sponsor addresses.
+         | Must not overlap with payment_addresses.evm.derivation_path_template.
+         |
+         */
+        'gas_station_derivation_path_template' => env(
+            'PAYMENT_EVM_GAS_STATION_DERIVATION_PATH_TEMPLATE',
+            "m/44'/60'/100'/0/%d"
+        ),
+
+        /*
+         |------------------------------------------------------------------
+         | ERC-20 gas top-up controls
+         |------------------------------------------------------------------
+         |
+         | target_min_native_*: minimum native balance to keep on source.
+         | safety_buffer_*: extra wei above estimated transfer gas cost.
+         | retry_delay_seconds: when payout retry job should be re-run.
+         | pending_cooldown_seconds: dedupe window for already submitted top-up.
+         |
+         */
+        'gas_topup' => [
+            'enabled' => env('PAYMENT_EVM_GAS_TOPUP_ENABLED', true),
+            'target_min_native_wei' => env('PAYMENT_EVM_GAS_TOPUP_TARGET_MIN_NATIVE_WEI'),
+            'target_min_native_decimal' => env('PAYMENT_EVM_GAS_TOPUP_TARGET_MIN_NATIVE_DECIMAL', '0.0002'),
+            'safety_buffer_wei' => env('PAYMENT_EVM_GAS_TOPUP_SAFETY_BUFFER_WEI'),
+            'safety_buffer_decimal' => env('PAYMENT_EVM_GAS_TOPUP_SAFETY_BUFFER_DECIMAL', '0.00005'),
+            'retry_delay_seconds' => (int) env('PAYMENT_EVM_GAS_TOPUP_RETRY_DELAY_SECONDS', 30),
+            'pending_cooldown_seconds' => (int) env('PAYMENT_EVM_GAS_TOPUP_PENDING_COOLDOWN_SECONDS', 45),
+        ],
+
+        /*
+         |------------------------------------------------------------------
          | Temporary dev-only mode
          |------------------------------------------------------------------
          |

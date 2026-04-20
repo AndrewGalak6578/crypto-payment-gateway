@@ -6,8 +6,11 @@ namespace App\Services;
 use App\Contracts\EvmPayoutSenderInterface;
 use App\Contracts\EvmSweepSourceResolverInterface;
 use App\Contracts\EvmTokenPayoutSenderInterface;
+use App\Exceptions\EvmGasTopUpDeferredException;
+use App\Jobs\ForwardInvoiceJob;
 use App\Models\Invoice;
 use App\Models\SuperWallet;
+use App\Services\Evm\EvmGasTopUpService;
 use App\Services\Settlement\MerchantBalanceCreditor;
 use App\Services\Settlement\SuperWalletResolver;
 use App\Services\Webhooks\EnqueueInvoiceWebhook;
@@ -107,6 +110,13 @@ final class InvoiceForwarder
 
             if ($fresh) {
                 $this->enqueueWebhook->enqueue('invoice.forwarded', $fresh);
+            }
+        } catch (EvmGasTopUpDeferredException $e) {
+            $this->markDeferred($invoiceId, $plan['attempt_uuid']);
+
+            if ((string)config('queue.default', 'database') !== 'sync') {
+                ForwardInvoiceJob::dispatch($invoiceId)
+                    ->delay(now('UTC')->addSeconds($e->outcome->retryAfterSeconds));
             }
         } catch (Throwable $e) {
             $this->markFailed($invoiceId, $plan['attempt_uuid']);
@@ -269,6 +279,31 @@ final class InvoiceForwarder
         });
     }
 
+    private function markDeferred(int $invoiceId, string $attemptUuid): void
+    {
+        DB::transaction(function () use ($invoiceId, $attemptUuid): void {
+            /** @var Invoice $invoice */
+            $invoice = Invoice::query()
+                ->lockForUpdate()
+                ->findOrFail($invoiceId);
+
+            if ($invoice->forward_attempt_uuid !== $attemptUuid) {
+                return;
+            }
+
+            $assetKey = $invoice->resolvedAssetKey();
+            $scale = $this->assets->settlementScale($assetKey);
+            $epsilon = $this->assets->epsilon($assetKey);
+            $forwarded = $this->norm((float)($invoice->forwarded_coin ?? 0), $scale);
+
+            $invoice->forward_status = $forwarded > $epsilon ? 'partial' : 'none';
+            $invoice->forward_attempt_uuid = null;
+            $invoice->forwarding_coin = null;
+            $invoice->forwarding_started_at = null;
+            $invoice->save();
+        });
+    }
+
 
     /**
      * Rounds coin values to chain-specific precision.
@@ -343,12 +378,24 @@ final class InvoiceForwarder
             ->findOrFail($invoice->id);
 
         $source = $this->evmSweepSourceResolver->resolveForInvoice($freshInvoice);
+        $amountDecimal = $this->formatAmountForEvm($plan['amount'], $plan['asset_key']);
+
+        $topUpOutcome = app(EvmGasTopUpService::class)->ensureTopUpForErc20Transfer(
+            invoice: $freshInvoice,
+            source: $source,
+            destination: $wallet,
+            amountDecimal: $amountDecimal,
+        );
+
+        if ($topUpOutcome->requiresDeferredPayout) {
+            throw new EvmGasTopUpDeferredException($topUpOutcome);
+        }
 
         $result = $this->evmTokenPayoutSender->sendToken(
             invoice: $freshInvoice,
             source: $source,
             destination: $wallet,
-            amountDecimal: $this->formatAmountForEvm($plan['amount'], $plan['asset_key']),
+            amountDecimal: $amountDecimal,
         );
 
         return [

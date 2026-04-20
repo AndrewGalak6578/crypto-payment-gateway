@@ -21,15 +21,19 @@
             <article class="panel">
                 <h3 class="panel-title">Delivery state</h3>
                 <div class="kv-grid">
-                    <div><strong>status:</strong> {{ delivery.status || '—' }}</div>
+                    <div><strong>status:</strong> <StatusBadge :text="delivery.status || '—'" :variant="statusVariant(delivery.status)" /></div>
                     <div><strong>event:</strong> {{ delivery.event || '—' }}</div>
                     <div><strong>attempts:</strong> {{ delivery.attempts ?? '—' }}</div>
-                    <div><strong>url:</strong> {{ delivery.url || '—' }}</div>
+                    <div><strong>url:</strong> <span class="mono">{{ delivery.url || '—' }}</span></div>
                     <div><strong>error:</strong> {{ delivery.last_error || '—' }}</div>
                     <div><strong>next_retry_at:</strong> {{ formatDate(delivery.next_retry_at) }}</div>
                     <div><strong>delivered_at:</strong> {{ formatDate(delivery.delivered_at) }}</div>
                     <div><strong>created_at:</strong> {{ formatDate(delivery.created_at) }}</div>
                     <div><strong>updated_at:</strong> {{ formatDate(delivery.updated_at) }}</div>
+                </div>
+                <div class="actions-row">
+                    <button type="button" class="secondary-btn" :disabled="!delivery.url" @click="copyText(delivery.url)">Copy URL</button>
+                    <button type="button" class="secondary-btn" :disabled="!delivery.last_error" @click="copyText(delivery.last_error)">Copy error</button>
                 </div>
             </article>
 
@@ -41,16 +45,38 @@
                     <div><strong>merchant_id:</strong> {{ delivery.invoice?.merchant_id ?? '—' }}</div>
                     <div><strong>merchant_name:</strong> {{ delivery.invoice?.merchant_name || '—' }}</div>
                 </div>
+                <div class="actions-row">
+                    <RouterLink
+                        v-if="delivery.invoice?.id"
+                        class="secondary-btn link-btn"
+                        :to="{ name: 'admin.invoices.detail', params: { id: delivery.invoice.id } }"
+                    >
+                        Open invoice
+                    </RouterLink>
+                    <RouterLink
+                        v-if="delivery.invoice?.merchant_id"
+                        class="secondary-btn link-btn"
+                        :to="{ name: 'admin.merchants.detail', params: { id: delivery.invoice.merchant_id } }"
+                    >
+                        Open merchant
+                    </RouterLink>
+                </div>
             </article>
 
             <article class="panel">
                 <h3 class="panel-title">Signature</h3>
                 <pre class="json-box">{{ delivery.signature || '—' }}</pre>
+                <div class="actions-row">
+                    <button type="button" class="secondary-btn" :disabled="!delivery.signature" @click="copyText(delivery.signature)">Copy signature</button>
+                </div>
             </article>
 
             <article class="panel">
                 <h3 class="panel-title">Payload</h3>
                 <pre class="json-box">{{ formatJson(delivery.payload) }}</pre>
+                <div class="actions-row">
+                    <button type="button" class="secondary-btn" :disabled="!delivery.payload" @click="copyText(formatJson(delivery.payload))">Copy payload JSON</button>
+                </div>
             </article>
         </template>
 
@@ -78,6 +104,7 @@ import {
 import ConfirmModal from '../../../components/admin/ConfirmModal.vue';
 import LoadingState from '../../../components/admin/LoadingState.vue';
 import PageHeader from '../../../components/admin/PageHeader.vue';
+import StatusBadge from '../../../components/admin/StatusBadge.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -91,6 +118,31 @@ const confirmOpen = ref(false);
 
 const formatDate = (value) => (value ? new Date(value).toLocaleString() : '—');
 const formatJson = (value) => JSON.stringify(value ?? {}, null, 2);
+const statusVariant = (status) => {
+    const normalized = String(status || '').toLowerCase();
+    if (normalized === 'delivered') {
+        return 'success';
+    }
+    if (normalized === 'failed') {
+        return 'danger';
+    }
+    if (normalized === 'delivering') {
+        return 'info';
+    }
+    return 'warning';
+};
+
+const copyText = async (text) => {
+    if (!text) {
+        return;
+    }
+
+    try {
+        await navigator.clipboard.writeText(String(text));
+    } catch {
+        // Keep retry/debug flow uninterrupted.
+    }
+};
 
 const loadDelivery = async () => {
     loading.value = true;
@@ -160,6 +212,13 @@ loadDelivery();
     font-size: 12px;
 }
 
+.actions-row {
+    margin-top: 10px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
 .primary-btn,
 .secondary-btn {
     border-radius: 8px;
@@ -169,6 +228,12 @@ loadDelivery();
     color: #0f172a;
     cursor: pointer;
     font: inherit;
+}
+
+.link-btn {
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
 }
 
 .primary-btn {
@@ -193,5 +258,10 @@ loadDelivery();
 .error {
     color: #b91c1c;
     margin: 0 0 10px;
+}
+
+.mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    word-break: break-all;
 }
 </style>

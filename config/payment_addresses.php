@@ -9,6 +9,17 @@ return [
 
         /*
          |------------------------------------------------------------------
+         | Primary EVM deriver implementation
+         |------------------------------------------------------------------
+         |
+         | Set to a class name that implements EvmAddressDeriverInterface
+         | to use real custody/HD derivation in runtime.
+         |
+         */
+        'deriver' => env('PAYMENT_EVM_DERIVER'),
+
+        /*
+         |------------------------------------------------------------------
          | Product anchor point custody/HD key source
          |------------------------------------------------------------------
          |
@@ -44,8 +55,8 @@ return [
          |------------------------------------------------------------------
          |
          | In local/testing you can use DevRpcAccountAddressDeriver,
-         | which takes addresses from eth_accounts from anvil.
-         | This is a temporary local stopgap, not a sales strategy.
+         | which is a finite pool backed by eth_accounts.
+         | When accounts are exhausted allocation fails with runtime error.
          |
          */
         'allow_dev_rpc_accounts' => env('PAYMENT_EVM_ALLOW_DEV_RPC_ACCOUNTS', true),

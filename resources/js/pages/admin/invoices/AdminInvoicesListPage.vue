@@ -5,8 +5,12 @@
         <form class="filters-card" @submit.prevent="applyFilters">
             <input v-model.trim="filters.search" type="text" placeholder="Search by ID/public_id/external_id" />
             <input v-model.number="filters.merchant_id" type="number" min="1" placeholder="Merchant ID" />
-            <input v-model.trim="filters.status" type="text" placeholder="Status" />
-            <input v-model.trim="filters.coin" type="text" placeholder="Coin" />
+            <select v-model="filters.status">
+                <option value="">Any status</option>
+                <option v-for="status in statusOptions" :key="status" :value="status">{{ status }}</option>
+            </select>
+            <input v-model.trim="filters.asset_or_coin" type="text" placeholder="Asset key / coin" />
+            <input v-model.trim="filters.network" type="text" placeholder="Network key (if available)" />
             <input v-model="filters.date_from" type="date" />
             <input v-model="filters.date_to" type="date" />
             <button type="submit" class="primary-btn" :disabled="loading">Apply</button>
@@ -20,7 +24,7 @@
             <button type="button" class="secondary-btn" @click="loadInvoices">Retry</button>
         </div>
 
-        <EmptyState v-else-if="!invoices.length" title="No invoices found" description="No rows match current filters." />
+        <EmptyState v-else-if="!filteredInvoices.length" title="No invoices found" description="No rows match current filters." />
 
         <div v-else>
             <TableCard>
@@ -31,16 +35,19 @@
                         <th>Public ID</th>
                         <th>Merchant</th>
                         <th>Status</th>
-                        <th>Coin</th>
+                        <th>Asset</th>
+                        <th>Network</th>
+                        <th>Coin (legacy)</th>
                         <th>Amount coin</th>
                         <th>Expected USD</th>
                         <th>Received conf</th>
                         <th>Forward status</th>
                         <th>Created</th>
+                        <th>Actions</th>
                     </tr>
                     </thead>
                     <tbody>
-                    <tr v-for="invoice in invoices" :key="invoice.id">
+                    <tr v-for="invoice in filteredInvoices" :key="invoice.id">
                         <td>
                             <RouterLink :to="{ name: 'admin.invoices.detail', params: { id: invoice.id } }">
                                 {{ invoice.id }}
@@ -51,13 +58,25 @@
                             <div>#{{ invoice.merchant_id }}</div>
                             <div class="muted small">{{ invoice.merchant_name || '—' }}</div>
                         </td>
-                        <td><StatusBadge :text="invoice.status" variant="info" /></td>
+                        <td><StatusBadge :text="invoice.status" :variant="statusVariant(invoice.status)" /></td>
+                        <td>
+                            {{ primaryAssetKey(invoice) }}
+                        </td>
+                        <td>
+                            {{ primaryNetworkKey(invoice) }}
+                        </td>
                         <td>{{ invoice.coin || '—' }}</td>
                         <td>{{ invoice.amount_coin ?? '—' }}</td>
                         <td>{{ invoice.expected_usd ?? '—' }}</td>
                         <td>{{ invoice.received_conf_coin ?? '—' }}</td>
-                        <td>{{ invoice.forward_status || '—' }}</td>
+                        <td><StatusBadge :text="invoice.forward_status || '—'" :variant="forwardVariant(invoice.forward_status)" /></td>
                         <td>{{ formatDate(invoice.created_at) }}</td>
+                        <td>
+                            <div class="actions">
+                                <RouterLink :to="{ name: 'admin.invoices.detail', params: { id: invoice.id } }">Detail</RouterLink>
+                                <RouterLink :to="{ name: 'admin.merchants.detail', params: { id: invoice.merchant_id } }">Merchant</RouterLink>
+                            </div>
+                        </td>
                     </tr>
                     </tbody>
                 </table>
@@ -87,7 +106,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, watch } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { extractApiErrorMessage, getAdminInvoices } from '../../../api/admin';
 import EmptyState from '../../../components/admin/EmptyState.vue';
@@ -113,17 +132,74 @@ const filters = reactive({
     search: '',
     merchant_id: null,
     status: '',
-    coin: '',
+    asset_or_coin: '',
+    network: '',
     date_from: '',
     date_to: '',
 });
 
+const statusOptions = ['pending', 'fixated', 'paid', 'expired'];
+
 const formatDate = (value) => (value ? new Date(value).toLocaleString() : '—');
+
+const statusVariant = (status) => {
+    const normalized = String(status || '').toLowerCase();
+    if (normalized === 'paid') {
+        return 'success';
+    }
+    if (normalized === 'expired') {
+        return 'danger';
+    }
+    if (normalized === 'fixated') {
+        return 'info';
+    }
+    return 'warning';
+};
+
+const forwardVariant = (status) => {
+    const normalized = String(status || '').toLowerCase();
+    if (normalized === 'done') {
+        return 'success';
+    }
+    if (normalized === 'failed') {
+        return 'danger';
+    }
+    if (normalized === 'processing') {
+        return 'info';
+    }
+    if (normalized === 'partial') {
+        return 'warning';
+    }
+    return 'muted';
+};
+
+const primaryAssetKey = (invoice) => {
+    return (invoice.asset_key || invoice.coin || '—').toString().toLowerCase();
+};
+
+const primaryNetworkKey = (invoice) => {
+    return (invoice.network_key || '—').toString().toLowerCase();
+};
+
+const hasNetworkData = computed(() => invoices.value.some((invoice) => Boolean(invoice.network_key)));
+
+const filteredInvoices = computed(() => {
+    const network = filters.network.trim().toLowerCase();
+    if (!network || !hasNetworkData.value) {
+        return invoices.value;
+    }
+
+    return invoices.value.filter((invoice) => {
+        const candidate = String(invoice.network_key || '').toLowerCase();
+        return candidate.includes(network);
+    });
+});
 
 const syncFiltersFromQuery = () => {
     filters.search = typeof route.query.search === 'string' ? route.query.search : '';
     filters.status = typeof route.query.status === 'string' ? route.query.status : '';
-    filters.coin = typeof route.query.coin === 'string' ? route.query.coin : '';
+    filters.asset_or_coin = typeof route.query.coin === 'string' ? route.query.coin : '';
+    filters.network = typeof route.query.network === 'string' ? route.query.network : '';
     filters.date_from = typeof route.query.date_from === 'string' ? route.query.date_from : '';
     filters.date_to = typeof route.query.date_to === 'string' ? route.query.date_to : '';
     filters.merchant_id = route.query.merchant_id ? Number(route.query.merchant_id) : null;
@@ -132,8 +208,9 @@ const syncFiltersFromQuery = () => {
 const buildQuery = (page = 1) => ({
     search: filters.search || undefined,
     status: filters.status || undefined,
-    coin: filters.coin || undefined,
+    coin: filters.asset_or_coin || undefined,
     merchant_id: filters.merchant_id || undefined,
+    network: filters.network || undefined,
     date_from: filters.date_from || undefined,
     date_to: filters.date_to || undefined,
     page,
@@ -148,6 +225,7 @@ const loadInvoices = async () => {
             search: route.query.search || undefined,
             status: route.query.status || undefined,
             coin: route.query.coin || undefined,
+            network: route.query.network || undefined,
             merchant_id: route.query.merchant_id || undefined,
             date_from: route.query.date_from || undefined,
             date_to: route.query.date_to || undefined,
@@ -175,7 +253,8 @@ const applyFilters = async () => {
 const resetFilters = async () => {
     filters.search = '';
     filters.status = '';
-    filters.coin = '';
+    filters.asset_or_coin = '';
+    filters.network = '';
     filters.date_from = '';
     filters.date_to = '';
     filters.merchant_id = null;
@@ -209,6 +288,7 @@ watch(
 }
 
 input,
+select,
 .primary-btn,
 .secondary-btn {
     border-radius: 8px;
@@ -243,6 +323,11 @@ td {
     white-space: nowrap;
     font-size: 13px;
     vertical-align: top;
+}
+
+.actions {
+    display: inline-flex;
+    gap: 8px;
 }
 
 .pagination {

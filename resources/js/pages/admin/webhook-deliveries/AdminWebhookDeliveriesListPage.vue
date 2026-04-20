@@ -7,7 +7,10 @@
             <input v-model.number="filters.merchant_id" type="number" min="1" placeholder="Merchant ID" />
             <input v-model.number="filters.invoice_id" type="number" min="1" placeholder="Invoice ID" />
             <input v-model.trim="filters.event" type="text" placeholder="Event" />
-            <input v-model.trim="filters.status" type="text" placeholder="Status" />
+            <select v-model="filters.status">
+                <option value="">Any status</option>
+                <option v-for="status in statusOptions" :key="status" :value="status">{{ status }}</option>
+            </select>
             <button type="submit" class="primary-btn" :disabled="loading">Apply</button>
             <button type="button" class="secondary-btn" :disabled="loading" @click="resetFilters">Reset</button>
         </form>
@@ -36,6 +39,7 @@
                         <th>Last error</th>
                         <th>Delivered</th>
                         <th>Created</th>
+                        <th>Actions</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -45,20 +49,36 @@
                                 {{ delivery.id }}
                             </RouterLink>
                         </td>
-                        <td>{{ delivery.invoice_id ?? '—' }}</td>
                         <td>
-                            <div>#{{ delivery.merchant_id ?? '—' }}</div>
+                            <RouterLink v-if="delivery.invoice_id" :to="{ name: 'admin.invoices.detail', params: { id: delivery.invoice_id } }">
+                                {{ delivery.invoice_id }}
+                            </RouterLink>
+                            <span v-else>—</span>
+                        </td>
+                        <td>
+                            <div>
+                                <RouterLink v-if="delivery.merchant_id" :to="{ name: 'admin.merchants.detail', params: { id: delivery.merchant_id } }">
+                                    #{{ delivery.merchant_id }}
+                                </RouterLink>
+                                <span v-else>—</span>
+                            </div>
                             <div class="muted small">{{ delivery.merchant_name || '—' }}</div>
                         </td>
                         <td>{{ delivery.event || '—' }}</td>
                         <td>
-                            <StatusBadge :text="delivery.status" :variant="delivery.status === 'failed' ? 'danger' : delivery.status === 'delivered' ? 'success' : 'muted'" />
+                            <StatusBadge :text="delivery.status" :variant="statusVariant(delivery.status)" />
                         </td>
                         <td>{{ delivery.attempts ?? '—' }}</td>
-                        <td class="truncate">{{ delivery.url || '—' }}</td>
+                        <td class="truncate mono">{{ delivery.url || '—' }}</td>
                         <td class="truncate">{{ delivery.last_error || '—' }}</td>
                         <td>{{ formatDate(delivery.delivered_at) }}</td>
                         <td>{{ formatDate(delivery.created_at) }}</td>
+                        <td>
+                            <div class="actions">
+                                <RouterLink :to="{ name: 'admin.webhook-deliveries.detail', params: { id: delivery.id } }">Detail</RouterLink>
+                                <button type="button" class="copy-btn" :disabled="!delivery.url" @click="copyText(delivery.url)">Copy URL</button>
+                            </div>
+                        </td>
                     </tr>
                     </tbody>
                 </table>
@@ -119,6 +139,33 @@ const filters = reactive({
 });
 
 const formatDate = (value) => (value ? new Date(value).toLocaleString() : '—');
+const statusOptions = ['pending', 'delivering', 'delivered', 'failed'];
+
+const statusVariant = (status) => {
+    const normalized = String(status || '').toLowerCase();
+    if (normalized === 'delivered') {
+        return 'success';
+    }
+    if (normalized === 'failed') {
+        return 'danger';
+    }
+    if (normalized === 'delivering') {
+        return 'info';
+    }
+    return 'warning';
+};
+
+const copyText = async (value) => {
+    if (!value) {
+        return;
+    }
+
+    try {
+        await navigator.clipboard.writeText(String(value));
+    } catch {
+        // Keep table flow lightweight.
+    }
+};
 
 const syncFiltersFromQuery = () => {
     filters.search = typeof route.query.search === 'string' ? route.query.search : '';
@@ -205,6 +252,7 @@ watch(
 }
 
 input,
+select,
 .primary-btn,
 .secondary-btn {
     border-radius: 8px;
@@ -241,6 +289,20 @@ td {
     vertical-align: top;
 }
 
+.actions {
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.copy-btn {
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #fff;
+    padding: 4px 7px;
+    cursor: pointer;
+}
+
 .truncate {
     max-width: 220px;
     overflow: hidden;
@@ -275,6 +337,10 @@ td {
 
 .small {
     font-size: 12px;
+}
+
+.mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 @media (max-width: 1100px) {

@@ -39,11 +39,25 @@
 
                 <div class="kv-grid">
                     <div><strong>fee_percent:</strong> {{ merchant.fee_percent ?? '—' }}</div>
-                    <div><strong>webhook_url:</strong> {{ merchant.webhook_url || '—' }}</div>
+                    <div><strong>webhook_url:</strong> <span class="mono">{{ merchant.webhook_url || '—' }}</span></div>
                     <div><strong>has_webhook_secret:</strong> {{ merchant.has_webhook_secret ? 'yes' : 'no' }}</div>
                     <div><strong>created_at:</strong> {{ formatDate(merchant.created_at) }}</div>
                     <div><strong>updated_at:</strong> {{ formatDate(merchant.updated_at) }}</div>
                     <div><strong>wallets summary:</strong> {{ merchant.wallet_summary?.count ?? 0 }}</div>
+                </div>
+                <div class="ops-grid">
+                    <div class="ops-tile">
+                        <div class="ops-label">Recent invoices</div>
+                        <strong>{{ merchant.recent_invoices?.length ?? 0 }}</strong>
+                    </div>
+                    <div class="ops-tile">
+                        <div class="ops-label">Paid (recent)</div>
+                        <strong>{{ paidRecentInvoices }}</strong>
+                    </div>
+                    <div class="ops-tile">
+                        <div class="ops-label">Pending/Fixated (recent)</div>
+                        <strong>{{ pendingRecentInvoices }}</strong>
+                    </div>
                 </div>
             </article>
 
@@ -89,7 +103,9 @@
                             <th>ID</th>
                             <th>Public ID</th>
                             <th>Status</th>
-                            <th>Coin</th>
+                            <th>Asset (primary)</th>
+                            <th>Network</th>
+                            <th>Coin (legacy)</th>
                             <th>Amount</th>
                             <th>Expected USD</th>
                             <th>Created</th>
@@ -104,8 +120,10 @@
                             </td>
                             <td>{{ invoice.public_id }}</td>
                             <td>
-                                <StatusBadge :text="invoice.status" variant="info" />
+                                <StatusBadge :text="invoice.status" :variant="statusVariant(invoice.status)" />
                             </td>
+                            <td>{{ invoiceAssetKey(invoice) }}</td>
+                            <td>{{ invoiceNetworkKey(invoice) }}</td>
                             <td>{{ invoice.coin }}</td>
                             <td>{{ invoice.amount_coin }}</td>
                             <td>{{ invoice.expected_usd }}</td>
@@ -163,6 +181,28 @@ const confirmLabel = ref('Confirm');
 const confirmDanger = ref(false);
 
 const formatDate = (value) => (value ? new Date(value).toLocaleString() : '—');
+const invoiceAssetKey = (invoice) => String(invoice?.asset_key || invoice?.coin || '—').toLowerCase();
+const invoiceNetworkKey = (invoice) => String(invoice?.network_key || '—').toLowerCase();
+const paidRecentInvoices = computed(() => {
+    return (merchant.value?.recent_invoices || []).filter((item) => item.status === 'paid').length;
+});
+const pendingRecentInvoices = computed(() => {
+    return (merchant.value?.recent_invoices || []).filter((item) => ['pending', 'fixated'].includes(item.status)).length;
+});
+
+const statusVariant = (status) => {
+    const normalized = String(status || '').toLowerCase();
+    if (normalized === 'paid') {
+        return 'success';
+    }
+    if (normalized === 'expired') {
+        return 'danger';
+    }
+    if (normalized === 'fixated') {
+        return 'info';
+    }
+    return 'warning';
+};
 
 const loadMerchant = async () => {
     loading.value = true;
@@ -244,6 +284,25 @@ loadMerchant();
     font-size: 14px;
 }
 
+.ops-grid {
+    margin-top: 12px;
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.ops-tile {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 10px;
+    background: #f8fafc;
+}
+
+.ops-label {
+    color: #64748b;
+    font-size: 12px;
+}
+
 .status-actions {
     display: inline-flex;
     gap: 8px;
@@ -294,5 +353,10 @@ td {
 .muted {
     color: #64748b;
     margin: 6px 0 0;
+}
+
+.mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    word-break: break-all;
 }
 </style>

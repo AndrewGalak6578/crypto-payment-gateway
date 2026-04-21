@@ -16,6 +16,7 @@ use App\Services\Evm\EvmSweepSourceResolver;
 use App\Services\Evm\Signers\DevRpcAccountEvmTransactionSigner;
 use App\Services\PaymentAddresses\Evm\DatabaseDerivationIndexStore;
 use App\Services\PaymentAddresses\Evm\DevRpcAccountAddressDeriver;
+use App\Services\PaymentAddresses\Evm\LocalHdMnemonicEvmDeriver;
 use Illuminate\Support\ServiceProvider;
 use RuntimeException;
 
@@ -59,6 +60,19 @@ class AppServiceProvider extends ServiceProvider
 
             if (is_string($configuredDeriver) && $configuredDeriver !== '') {
                 return $app->make($configuredDeriver);
+            }
+
+            $isLocalOrTesting = $app->environment(['local', 'testing']);
+            $localHdEnabled = (bool) config('payment_addresses.evm.local_hd_enabled', false);
+
+            if ($localHdEnabled && !$isLocalOrTesting) {
+                throw new RuntimeException(
+                    'payment_addresses.evm.local_hd_enabled may only be used in local/testing environments.'
+                );
+            }
+
+            if ($isLocalOrTesting && $localHdEnabled) {
+                return $app->make(LocalHdMnemonicEvmDeriver::class);
             }
 
             if ((bool)config('payment_addresses.evm.allow_dev_rpc_accounts', false) === true) {

@@ -8,8 +8,9 @@ use App\Data\EvmSweepSource;
 use App\Services\Evm\EvmRpcClient;
 use App\Support\Chains\ChainRegistry;
 use RuntimeException;
+use Throwable;
 
-final readonly class DevRpcAccountEvmTransactionSigner implements EvmTransactionSignerInterface
+readonly class DevRpcAccountEvmTransactionSigner implements EvmTransactionSignerInterface
 {
 
     public function __construct(
@@ -29,14 +30,7 @@ final readonly class DevRpcAccountEvmTransactionSigner implements EvmTransaction
             );
         }
 
-        $chain = $this->chains->get($networkKey);
-        $rpcUrl = (string) ($chain['rpc_url'] ?? '');
-
-        if ($rpcUrl === '') {
-            throw new RuntimeException("Missing rpc_url for EVM network [{$networkKey}]");
-        }
-
-        $client = new EvmRpcClient($rpcUrl);
+        $client = $this->makeRpcClient($networkKey);
 
         $payload = [
             'from' => strtolower($source->address),
@@ -60,7 +54,29 @@ final readonly class DevRpcAccountEvmTransactionSigner implements EvmTransaction
             $payload['nonce'] = (string) $transaction['nonce'];
         }
 
-        $txHash = (string)$client->call('eth_sendTransaction', [$payload]);
+        $submitMethod = 'eth_sendTransaction';
+        $impersonated = false;
+
+        try {
+            $txHash = (string)$client->call('eth_sendTransaction', [$payload]);
+        } catch (Throwable $firstError) {
+            if (!$this->shouldUseImpersonationFallback($source)) {
+                throw $firstError;
+            }
+
+            $client->call('anvil_impersonateAccount', [$payload['from']]);
+            $impersonated = true;
+            $submitMethod = 'anvil_impersonateAccount+eth_sendTransaction';
+            $txHash = (string)$client->call('eth_sendTransaction', [$payload]);
+        } finally {
+            if ($impersonated) {
+                try {
+                    $client->call('anvil_stopImpersonatingAccount', [$payload['from']]);
+                } catch (Throwable) {
+                    // no-op: tx has been submitted already
+                }
+            }
+        }
 
         return [
             'raw_tx' => '',
@@ -68,8 +84,26 @@ final readonly class DevRpcAccountEvmTransactionSigner implements EvmTransaction
             'meta' => [
                 'signer' => 'dev_rpc_account',
                 'temporary' => true,
-                'submitted_via' =>'eth_sendTransaction',
+                'submitted_via' => $submitMethod,
             ]
         ];
+    }
+
+    protected function makeRpcClient(string $networkKey): object
+    {
+        $chain = $this->chains->get($networkKey);
+        $rpcUrl = (string) ($chain['rpc_url'] ?? '');
+
+        if ($rpcUrl === '') {
+            throw new RuntimeException("Missing rpc_url for EVM network [{$networkKey}]");
+        }
+
+        return new EvmRpcClient($rpcUrl);
+    }
+
+    private function shouldUseImpersonationFallback(EvmSweepSource $source): bool
+    {
+        return (bool) config('payment_addresses.evm.local_hd_enabled', false)
+            && $source->strategy === 'hd_derived';
     }
 }

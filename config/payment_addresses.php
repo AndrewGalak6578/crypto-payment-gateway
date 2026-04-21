@@ -20,6 +20,28 @@ return [
 
         /*
          |------------------------------------------------------------------
+         | Local/testing HD mnemonic mode
+         |------------------------------------------------------------------
+         |
+         | Optional local/testing-only deterministic derivation path that
+         | does not depend on eth_accounts finite pre-funded pool.
+         | When enabled, mnemonic must be configured explicitly.
+         |
+         */
+        'local_hd_enabled' => env('PAYMENT_EVM_LOCAL_HD_ENABLED', false),
+        'local_hd_mnemonic' => env('PAYMENT_EVM_LOCAL_HD_MNEMONIC'),
+        'local_hd_passphrase' => env('PAYMENT_EVM_LOCAL_HD_PASSPHRASE', ''),
+        'local_hd_path_template' => env('PAYMENT_EVM_LOCAL_HD_PATH_TEMPLATE'),
+        'local_hd_key_refs' => [
+            // 'anvil:default' => [
+            //     'mnemonic' => env('PAYMENT_EVM_LOCAL_HD_KEYREF_ANVIL_DEFAULT_MNEMONIC'),
+            //     'passphrase' => env('PAYMENT_EVM_LOCAL_HD_KEYREF_ANVIL_DEFAULT_PASSPHRASE', ''),
+            //     'path_template' => "m/44'/60'/1234'/0/%d",
+            // ],
+        ],
+
+        /*
+         |------------------------------------------------------------------
          | Product anchor point custody/HD key source
          |------------------------------------------------------------------
          |
@@ -106,6 +128,7 @@ return [
          | In local/testing you can use DevRpcAccountAddressDeriver,
          | which is a finite pool backed by eth_accounts.
          | When accounts are exhausted allocation fails with runtime error.
+         | Used only as fallback when local_hd mode is not selected.
          |
          */
         'allow_dev_rpc_accounts' => env('PAYMENT_EVM_ALLOW_DEV_RPC_ACCOUNTS', true),

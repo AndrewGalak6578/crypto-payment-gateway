@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Contracts\EvmGasTopUpServiceInterface;
 use App\Contracts\EvmPayoutSenderInterface;
 use App\Contracts\EvmSweepSourceResolverInterface;
 use App\Contracts\EvmTokenPayoutSenderInterface;
@@ -10,7 +11,6 @@ use App\Exceptions\EvmGasTopUpDeferredException;
 use App\Jobs\ForwardInvoiceJob;
 use App\Models\Invoice;
 use App\Models\SuperWallet;
-use App\Services\Evm\EvmGasTopUpService;
 use App\Services\Settlement\MerchantBalanceCreditor;
 use App\Services\Settlement\SuperWalletResolver;
 use App\Services\Webhooks\EnqueueInvoiceWebhook;
@@ -40,6 +40,7 @@ final class InvoiceForwarder
         private readonly EvmSweepSourceResolverInterface $evmSweepSourceResolver,
         private readonly EvmPayoutSenderInterface        $evmPayoutSender,
         private readonly EvmTokenPayoutSenderInterface   $evmTokenPayoutSender,
+        private readonly EvmGasTopUpServiceInterface   $evmGasTopUpService,
     )
     {
     }
@@ -380,7 +381,7 @@ final class InvoiceForwarder
         $source = $this->evmSweepSourceResolver->resolveForInvoice($freshInvoice);
         $amountDecimal = $this->formatAmountForEvm($plan['amount'], $plan['asset_key']);
 
-        $topUpOutcome = app(EvmGasTopUpService::class)->ensureTopUpForErc20Transfer(
+        $topUpOutcome = $this->evmGasTopUpService->ensureTopUpForErc20Transfer(
             invoice: $freshInvoice,
             source: $source,
             destination: $wallet,

@@ -11,6 +11,7 @@ use RuntimeException;
 class LocalHdMnemonicEvmDeriver implements EvmAddressDeriverInterface
 {
     private const SECP256K1_ORDER_HEX = 'fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141';
+    private const SECP256K1_ORDER_COMPLEMENT_HEX = '14551231950b75fc4402da1732fc9bebf';
 
     public function __construct(
         private readonly ChainRegistry $chains,
@@ -238,11 +239,56 @@ class LocalHdMnemonicEvmDeriver implements EvmAddressDeriverInterface
     private function addModuloCurveOrder(string $key, string $addend, string $curveOrder): string
     {
         [$sum, $carry] = $this->add32($key, $addend);
-        if ($carry > 0 || $this->compare32($sum, $curveOrder) >= 0) {
-            $sum = $this->sub32($sum, $curveOrder);
+
+        if ($carry === 0) {
+            if ($this->compare32($sum, $curveOrder) >= 0) {
+                return $this->sub32($sum, $curveOrder);
+            }
+
+            return $sum;
         }
 
-        return $sum;
+        if ($carry !== 1) {
+            throw new RuntimeException('add32 returned unsupported carry value.');
+        }
+
+        // For overflow, (key + addend) = sum + 2^256. Reduce by secp256k1 order as:
+        // sum + (2^256 - n), where n is the curve order.
+        [$reduced, $extraCarry] = $this->add32($sum, $this->curveOrderComplement32());
+        if ($extraCarry !== 0) {
+            throw new RuntimeException('Complement-based modulo reduction overflowed unexpectedly.');
+        }
+
+        return $reduced;
+    }
+
+    private function curveOrderComplement32(): string
+    {
+        return $this->leftPadHexTo32Bytes(self::SECP256K1_ORDER_COMPLEMENT_HEX);
+    }
+
+    private function leftPadHexTo32Bytes(string $hex): string
+    {
+        $normalized = strtolower(trim($hex));
+        if ($normalized === '' || preg_match('/[^0-9a-f]/', $normalized) === 1) {
+            throw new RuntimeException('Invalid hexadecimal input.');
+        }
+
+        if ((strlen($normalized) % 2) === 1) {
+            $normalized = '0' . $normalized;
+        }
+
+        if (strlen($normalized) > 64) {
+            throw new RuntimeException('Hexadecimal input exceeds 32 bytes.');
+        }
+
+        $normalized = str_pad($normalized, 64, '0', STR_PAD_LEFT);
+        $bytes = hex2bin($normalized);
+        if ($bytes === false) {
+            throw new RuntimeException('Unable to decode hexadecimal input.');
+        }
+
+        return $bytes;
     }
 
     /**

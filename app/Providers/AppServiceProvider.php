@@ -4,12 +4,14 @@ namespace App\Providers;
 
 use App\Contracts\DerivationIndexStoreInterface;
 use App\Contracts\EvmAddressDeriverInterface;
+use App\Contracts\EvmGasTopUpServiceInterface;
 use App\Contracts\EvmInvoiceMonitorInterface;
 use App\Contracts\EvmPayoutSenderInterface;
 use App\Contracts\EvmSweepSourceResolverInterface;
 use App\Contracts\EvmTokenPayoutSenderInterface;
 use App\Contracts\EvmTransactionSignerInterface;
 use App\Services\Evm\EvmErc20PayoutSender;
+use App\Services\Evm\EvmGasTopUpService;
 use App\Services\Evm\EvmInvoiceMonitor;
 use App\Services\Evm\EvmNativePayoutSender;
 use App\Services\Evm\EvmSweepSourceResolver;
@@ -53,6 +55,11 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(
             EvmTokenPayoutSenderInterface::class,
             EvmErc20PayoutSender::class
+        );
+
+        $this->app->bind(
+            EvmGasTopUpServiceInterface::class,
+            EvmGasTopUpService::class
         );
 
         $this->app->bind(EvmAddressDeriverInterface::class, function ($app) {

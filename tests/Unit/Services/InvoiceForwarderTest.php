@@ -12,7 +12,7 @@ use App\Models\PaymentAddress;
 use App\Models\MerchantBalance;
 use App\Models\SuperWallet;
 use App\Models\WebhookDelivery;
-use App\Services\Evm\EvmGasTopUpService;
+use App\Contracts\EvmGasTopUpServiceInterface;
 use App\Services\CoinBasedLogic\MockRpc;
 use App\Services\InvoiceForwarder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -29,7 +29,7 @@ final class InvoiceForwarderTest extends TestCase
     public function test_forward_sends_to_wallet_with_fee_deduction_and_emits_webhook(): void
     {
         config()->set('coins.mode', 'mock');
-        config()->set('forwarding.min_coin.btc', 0.00001);
+        config()->set('forwarding.assets.btc.min', 0.00001);
         config()->set('webhooks.enabled', true);
 
         $fakeRpc = new FakeCoinRpc();
@@ -105,7 +105,7 @@ final class InvoiceForwarderTest extends TestCase
     public function test_forward_keeps_none_when_amount_below_minimum(): void
     {
         config()->set('coins.mode', 'mock');
-        config()->set('forwarding.min_coin.btc', 0.1);
+        config()->set('forwarding.assets.btc.min', 0.1);
         config()->set('webhooks.enabled', true);
 
         $fakeRpc = new FakeCoinRpc();
@@ -187,7 +187,7 @@ final class InvoiceForwarderTest extends TestCase
             'meta' => [],
         ]);
 
-        $this->mock(EvmGasTopUpService::class, function ($mock): void {
+        $this->mock(EvmGasTopUpServiceInterface::class, function ($mock): void {
             $mock->shouldReceive('ensureTopUpForErc20Transfer')
                 ->once()
                 ->andReturn(new EvmGasTopUpOutcome(

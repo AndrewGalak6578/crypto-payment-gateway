@@ -10,7 +10,7 @@ use App\Support\Chains\ChainRegistry;
 use RuntimeException;
 use Throwable;
 
-readonly class DevRpcAccountEvmTransactionSigner implements EvmTransactionSignerInterface
+class DevRpcAccountEvmTransactionSigner implements EvmTransactionSignerInterface
 {
 
     public function __construct(

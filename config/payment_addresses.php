@@ -33,11 +33,16 @@ return [
         'local_hd_passphrase' => env('PAYMENT_EVM_LOCAL_HD_PASSPHRASE', ''),
         'local_hd_path_template' => env('PAYMENT_EVM_LOCAL_HD_PATH_TEMPLATE'),
         'local_hd_key_refs' => [
-            // 'anvil:default' => [
-            //     'mnemonic' => env('PAYMENT_EVM_LOCAL_HD_KEYREF_ANVIL_DEFAULT_MNEMONIC'),
-            //     'passphrase' => env('PAYMENT_EVM_LOCAL_HD_KEYREF_ANVIL_DEFAULT_PASSPHRASE', ''),
-            //     'path_template' => "m/44'/60'/1234'/0/%d",
-            // ],
+            'anvil:default' => [
+                'mnemonic' => env('PAYMENT_EVM_LOCAL_HD_KEYREF_ANVIL_DEFAULT_MNEMONIC'),
+                'passphrase' => env('PAYMENT_EVM_LOCAL_HD_KEYREF_ANVIL_DEFAULT_PASSPHRASE', ''),
+                'path_template' => env('PAYMENT_EVM_LOCAL_HD_PATH_TEMPLATE', "m/44'/60'/1234'/0/%d"),
+            ],
+            'anvil:gas-station' => [
+                'mnemonic' => env('PAYMENT_EVM_LOCAL_HD_KEYREF_ANVIL_GAS_STATION_MNEMONIC'),
+                'passphrase' => env('PAYMENT_EVM_LOCAL_HD_KEYREF_ANVIL_GAS_STATION_PASSPHRASE', ''),
+                'path_template' => env('PAYMENT_EVM_GAS_STATION_DERIVATION_PATH_TEMPLATE', "m/44'/60'/100'/0/%d"),
+            ],
         ],
 
         /*

@@ -10,6 +10,37 @@ use Tests\TestCase;
 
 final class LocalHdMnemonicEvmDeriverTest extends TestCase
 {
+    public function test_add_modulo_curve_order_handles_carry_without_subtracting_curve_order_from_wrapped_sum(): void
+    {
+        $deriver = new class(new ChainRegistry()) extends LocalHdMnemonicEvmDeriver {
+            protected function makeRpcClient(string $networkKey): object
+            {
+                throw new RuntimeException('RPC should not be called in this test.');
+            }
+        };
+
+        $method = new \ReflectionMethod($deriver, 'addModuloCurveOrder');
+        $method->setAccessible(true);
+
+        $curveOrder = hex2bin('fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141');
+        if ($curveOrder === false) {
+            self::fail('Unable to decode curve order.');
+        }
+
+        $key = str_repeat("\xff", 32);
+        $addend = str_repeat("\x00", 31) . "\x01";
+
+        $result = $method->invoke($deriver, $key, $addend, $curveOrder);
+        self::assertIsString($result);
+        self::assertSame(32, strlen($result));
+
+        // 2^256 mod n = 2^256 - n (short 17-byte value, left-padded to 32 bytes).
+        self::assertSame(
+            '000000000000000000000000000000014551231950b75fc4402da1732fc9bebf',
+            bin2hex($result)
+        );
+    }
+
     public function test_different_key_ref_with_separate_config_produces_different_address_for_same_index_slot(): void
     {
         config()->set('payment_addresses.evm.local_hd_enabled', true);

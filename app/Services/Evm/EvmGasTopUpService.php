@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Services\Evm;
 
 use App\Contracts\EvmAddressDeriverInterface;
+use App\Contracts\EvmGasTopUpServiceInterface;
 use App\Contracts\EvmTransactionSignerInterface;
 use App\Data\EvmGasTopUpOutcome;
 use App\Data\EvmSweepSource;
@@ -14,7 +15,7 @@ use App\Support\Assets\AssetRegistry;
 use App\Support\Chains\ChainRegistry;
 use RuntimeException;
 
-final class EvmGasTopUpService
+final class EvmGasTopUpService implements EvmGasTopUpServiceInterface
 {
     public function __construct(
         private readonly ChainRegistry $chains,

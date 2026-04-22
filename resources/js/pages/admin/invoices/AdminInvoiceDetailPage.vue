@@ -2,8 +2,8 @@
     <section>
         <PageHeader :title="`Invoice #${invoiceId}`" subtitle="Invoice lifecycle, forwarding and delivery context.">
             <template #actions>
-                <button type="button" class="secondary-btn" :disabled="loading" @click="loadInvoice">Refresh data</button>
-                <button type="button" class="primary-btn" :disabled="actionLoading" @click="refreshInvoice">
+                <button type="button" class="secondary-btn" :disabled="loading || actionLoading" @click="loadInvoice">Refresh data</button>
+                <button type="button" class="primary-btn" :disabled="actionLoading || loading" @click="refreshInvoice">
                     {{ actionLoading ? 'Rechecking...' : 'Refresh/Recheck invoice' }}
                 </button>
                 <button type="button" class="secondary-btn" @click="router.push({ name: 'admin.invoices' })">Back</button>
@@ -11,6 +11,7 @@
         </PageHeader>
 
         <LoadingState v-if="loading" text="Loading invoice details..." />
+        <p v-if="!loading && !error && notice" class="copy-notice" :class="{ 'copy-notice-error': noticeType === 'error' }">{{ notice }}</p>
 
         <div v-else-if="error" class="state-card">
             <p class="error">{{ error }}</p>
@@ -153,6 +154,7 @@ import LoadingState from '../../../components/admin/LoadingState.vue';
 import PageHeader from '../../../components/admin/PageHeader.vue';
 import StatusBadge from '../../../components/admin/StatusBadge.vue';
 import TableCard from '../../../components/admin/TableCard.vue';
+import { copyTextToClipboard } from '../../../utils/clipboard';
 
 const route = useRoute();
 const router = useRouter();
@@ -161,6 +163,8 @@ const invoiceId = computed(() => route.params.id);
 const loading = ref(true);
 const actionLoading = ref(false);
 const error = ref('');
+const notice = ref('');
+const noticeType = ref('success');
 const invoice = ref(null);
 
 const formatDate = (value) => (value ? new Date(value).toLocaleString() : '—');
@@ -221,16 +225,21 @@ const deliveryVariant = (status) => {
 };
 
 const copyText = async (value, okText) => {
-    try {
-        await navigator.clipboard.writeText(String(value));
-    } catch {
-        error.value = okText ? 'Copy failed.' : error.value;
+    const result = await copyTextToClipboard(value);
+    if (result.ok) {
+        noticeType.value = 'success';
+        notice.value = okText || 'Copied.';
+        return;
     }
+
+    noticeType.value = 'error';
+    notice.value = result.message || 'Copy failed.';
 };
 
 const loadInvoice = async () => {
     loading.value = true;
     error.value = '';
+    notice.value = '';
 
     try {
         const response = await getAdminInvoice(invoiceId.value);
@@ -280,6 +289,11 @@ loadInvoice();
     font-size: 14px;
 }
 
+.kv-grid > div {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
 .actions-row {
     margin-top: 10px;
     display: flex;
@@ -308,7 +322,7 @@ loadInvoice();
 
 .tx-list li {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 8px;
     border: 1px solid #e2e8f0;
     border-radius: 8px;
@@ -318,6 +332,16 @@ loadInvoice();
 .mono {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     word-break: break-all;
+}
+
+.copy-notice {
+    margin: 0 0 10px;
+    font-size: 13px;
+    color: #0369a1;
+}
+
+.copy-notice-error {
+    color: #b91c1c;
 }
 
 .link-btn {

@@ -313,10 +313,17 @@ onMounted(loadDashboard);
   gap: 10px;
   padding: 8px 0;
   border-bottom: 1px solid #f1f5f9;
+  align-items: flex-start;
 }
 
 .list li:last-child {
   border-bottom: 0;
+}
+
+.list li strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
 }
 
 .inline-state {
@@ -423,5 +430,17 @@ onMounted(loadDashboard);
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 12px;
+}
+
+@media (max-width: 768px) {
+  .checklist-item {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+  }
+
+  .checklist-action {
+    width: 100%;
+    text-align: center;
+  }
 }
 </style>

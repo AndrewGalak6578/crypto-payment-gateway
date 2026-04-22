@@ -34,8 +34,8 @@
                 </thead>
                 <tbody>
                 <tr v-for="balance in balances" :key="balance.id">
-                    <td>{{ displayAssetLabel(balance) }} <span class="muted mono">({{ displayAssetKey(balance) }})</span></td>
-                    <td>{{ displayNetworkLabel(balance) }} <span class="muted mono">({{ displayNetworkKey(balance) }})</span></td>
+                    <td class="wrap-cell">{{ displayAssetLabel(balance) }} <span class="muted mono">({{ displayAssetKey(balance) }})</span></td>
+                    <td class="wrap-cell">{{ displayNetworkLabel(balance) }} <span class="muted mono">({{ displayNetworkKey(balance) }})</span></td>
                     <td>{{ balance.amount }}</td>
                     <td>{{ formatDate(balance.updated_at) }}</td>
                 </tr>
@@ -90,6 +90,11 @@ onMounted(loadBalances);
 <style scoped>
 .page-header {
     margin-bottom: 16px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
 }
 
 .page-title {
@@ -164,6 +169,11 @@ tbody tr:last-child td {
 .mono {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     font-size: 12px;
+}
+
+.wrap-cell {
+    white-space: normal;
+    word-break: break-word;
 }
 
 .error {

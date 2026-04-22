@@ -55,7 +55,7 @@
                             />
                         </td>
                         <td>{{ merchant.fee_percent ?? '—' }}</td>
-                        <td class="truncate">{{ merchant.webhook_url || '—' }}</td>
+                        <td class="truncate" :title="merchant.webhook_url || ''">{{ merchant.webhook_url || '—' }}</td>
                         <td>{{ formatDate(merchant.created_at) }}</td>
                         <td>
                             <div class="row-actions">

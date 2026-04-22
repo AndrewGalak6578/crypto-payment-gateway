@@ -278,6 +278,17 @@
             padding: 8px 10px;
         }
 
+        .copy-feedback {
+            min-height: 18px;
+            margin: 2px 0 0;
+            font-size: 12px;
+            color: #bae6fd;
+        }
+
+        .copy-feedback.error {
+            color: #fecaca;
+        }
+
         .warning {
             color: #fde68a;
             background: rgba(245, 158, 11, 0.12);
@@ -442,6 +453,7 @@
                                 Use this as a manual payment reference. URI deep-links are not reliable for this asset type.
                             @endif
                         </p>
+                        <p class="copy-feedback" id="copy-feedback" role="status" aria-live="polite"></p>
                     </div>
 
                     <div>
@@ -526,6 +538,7 @@
         openWalletLink: document.getElementById('open-wallet-link'),
         copyAddressBtn: document.getElementById('copy-address-btn'),
         copyUriBtn: document.getElementById('copy-uri-btn'),
+        copyFeedback: document.getElementById('copy-feedback'),
     };
 
     function formatNumber(num, decimals = 8) {
@@ -614,12 +627,21 @@
     }
 
     async function copyText(text, button, originalText) {
+        const safeText = typeof text === 'string' ? text.trim() : '';
+        if (!safeText || safeText === '—') {
+            if (els.copyFeedback) {
+                els.copyFeedback.textContent = 'Nothing to copy.';
+                els.copyFeedback.className = 'copy-feedback error';
+            }
+            return;
+        }
+
         try {
             if (navigator.clipboard && navigator.clipboard.writeText) {
-                await navigator.clipboard.writeText(text);
+                await navigator.clipboard.writeText(safeText);
             } else {
                 const textArea = document.createElement('textarea');
-                textArea.value = text;
+                textArea.value = safeText;
                 textArea.style.position = 'fixed';
                 textArea.style.top = '0';
                 textArea.style.left = '0';
@@ -632,11 +654,19 @@
             }
 
             button.textContent = 'Copied';
+            if (els.copyFeedback) {
+                els.copyFeedback.textContent = `${originalText} successful.`;
+                els.copyFeedback.className = 'copy-feedback';
+            }
             setTimeout(() => {
                 button.textContent = originalText;
             }, 1600);
         } catch (e) {
             button.textContent = 'Copy failed';
+            if (els.copyFeedback) {
+                els.copyFeedback.textContent = 'Failed to copy.';
+                els.copyFeedback.className = 'copy-feedback error';
+            }
             setTimeout(() => {
                 button.textContent = originalText;
             }, 1600);

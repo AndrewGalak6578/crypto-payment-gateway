@@ -23,6 +23,7 @@
         </div>
 
         <EmptyState v-else-if="!deliveries.length" title="No deliveries found" description="No rows match current filters." />
+        <p v-if="!loading && !error && notice" class="copy-notice" :class="{ 'copy-notice-error': noticeType === 'error' }">{{ notice }}</p>
 
         <div v-else>
             <TableCard>
@@ -69,8 +70,8 @@
                             <StatusBadge :text="delivery.status" :variant="statusVariant(delivery.status)" />
                         </td>
                         <td>{{ delivery.attempts ?? '—' }}</td>
-                        <td class="truncate mono">{{ delivery.url || '—' }}</td>
-                        <td class="truncate">{{ delivery.last_error || '—' }}</td>
+                        <td class="mono wrap-cell">{{ delivery.url || '—' }}</td>
+                        <td class="wrap-cell">{{ delivery.last_error || '—' }}</td>
                         <td>{{ formatDate(delivery.delivered_at) }}</td>
                         <td>{{ formatDate(delivery.created_at) }}</td>
                         <td>
@@ -116,12 +117,15 @@ import LoadingState from '../../../components/admin/LoadingState.vue';
 import PageHeader from '../../../components/admin/PageHeader.vue';
 import StatusBadge from '../../../components/admin/StatusBadge.vue';
 import TableCard from '../../../components/admin/TableCard.vue';
+import { copyTextToClipboard } from '../../../utils/clipboard';
 
 const route = useRoute();
 const router = useRouter();
 
 const loading = ref(false);
 const error = ref('');
+const notice = ref('');
+const noticeType = ref('success');
 const deliveries = ref([]);
 const meta = ref({
     current_page: 1,
@@ -156,15 +160,15 @@ const statusVariant = (status) => {
 };
 
 const copyText = async (value) => {
-    if (!value) {
+    const result = await copyTextToClipboard(value);
+    if (result.ok) {
+        noticeType.value = 'success';
+        notice.value = 'URL copied.';
         return;
     }
 
-    try {
-        await navigator.clipboard.writeText(String(value));
-    } catch {
-        // Keep table flow lightweight.
-    }
+    noticeType.value = 'error';
+    notice.value = result.message || 'Copy failed.';
 };
 
 const syncFiltersFromQuery = () => {
@@ -187,6 +191,7 @@ const buildQuery = (page = 1) => ({
 const loadDeliveries = async () => {
     loading.value = true;
     error.value = '';
+    notice.value = '';
 
     try {
         const response = await getAdminWebhookDeliveries({
@@ -303,12 +308,6 @@ td {
     cursor: pointer;
 }
 
-.truncate {
-    max-width: 220px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
 .pagination {
     margin-top: 12px;
     display: flex;
@@ -341,6 +340,21 @@ td {
 
 .mono {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.wrap-cell {
+    white-space: normal;
+    word-break: break-word;
+}
+
+.copy-notice {
+    margin: 0 0 10px;
+    font-size: 13px;
+    color: #0369a1;
+}
+
+.copy-notice-error {
+    color: #b91c1c;
 }
 
 @media (max-width: 1100px) {

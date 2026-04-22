@@ -111,6 +111,7 @@ import {
     createMerchantInvoice
 } from '../../api/merchant.js';
 import { MERCHANT_ASSET_CATALOG } from '../../utils/merchantAssetCatalog.js';
+import { copyTextToClipboard } from '../../utils/clipboard.js';
 
 const authStore = useAuthStore();
 const submitting = ref(false);
@@ -189,12 +190,15 @@ const extractErrorMessage = (requestError, fallbackMessage) => {
 };
 
 const copyToClipboard = async (value, successMessage) => {
-    try {
-        await navigator.clipboard.writeText(value);
+    const result = await copyTextToClipboard(value);
+    if (result.ok) {
         formSuccess.value = successMessage;
-    } catch {
-        formError.value = 'Failed to copy to clipboard.';
+        formError.value = '';
+        return;
     }
+
+    formSuccess.value = '';
+    formError.value = result.message || 'Failed to copy to clipboard.';
 };
 
 const submitForm = async () => {

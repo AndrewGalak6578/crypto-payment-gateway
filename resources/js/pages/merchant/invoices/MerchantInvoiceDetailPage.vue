@@ -113,6 +113,7 @@ import {
   displayNetworkKey,
   displayNetworkLabel,
 } from '../../../utils/assetDisplay';
+import { copyTextToClipboard } from '../../../utils/clipboard';
 
 const route = useRoute();
 
@@ -205,17 +206,15 @@ const timelineClass = (item) => ({
 });
 
 const copyValue = async (value, successMessage) => {
-  if (!value) {
+  const result = await copyTextToClipboard(value);
+  if (result.ok) {
+    error.value = '';
+    notice.value = successMessage;
     return;
   }
 
-  try {
-    await navigator.clipboard.writeText(String(value));
-    error.value = '';
-    notice.value = successMessage;
-  } catch {
-    error.value = 'Failed to copy to clipboard.';
-  }
+  notice.value = '';
+  error.value = result.message || 'Failed to copy to clipboard.';
 };
 
 const loadInvoice = async () => {
@@ -299,6 +298,11 @@ watch(
   display: grid;
   grid-template-columns: minmax(160px, 240px) 1fr;
   gap: 10px;
+}
+
+.detail-grid dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 dt {
@@ -391,6 +395,7 @@ dd {
   padding: 8px 10px;
   font-size: 12px;
   overflow: auto;
+  overflow-wrap: anywhere;
 }
 
 .secondary-btn,

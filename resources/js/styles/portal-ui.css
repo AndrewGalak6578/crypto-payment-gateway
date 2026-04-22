@@ -266,6 +266,8 @@
     border: 1px solid #e2e8f0;
     border-radius: var(--portal-radius-lg);;
     box-shadow: var(--portal-shadow-sm);
+    min-width: 0;
+    max-width: 100%;
 }
 
 .table-wrap {

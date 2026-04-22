@@ -48,7 +48,10 @@
                     <h3 class="token-title">New API key created</h3>
                     <p class="token-subtitle">Copy this token now. It will not be shown again.</p>
                 </div>
-                <button type="button" class="secondary-btn" @click="dismissToken">Dismiss</button>
+                <div class="token-actions">
+                    <button type="button" class="secondary-btn" @click="copyCreatedToken">Copy token</button>
+                    <button type="button" class="secondary-btn" @click="dismissToken">Dismiss</button>
+                </div>
             </div>
 
             <pre class="token-value">{{ createdToken }}</pre>
@@ -109,6 +112,7 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { createMerchantApiKey, deleteMerchantApiKey, getMerchantApiKeys } from '../../api/merchant.js';
 import { useAuthStore } from "../../stores/auth.js";
+import { copyTextToClipboard } from '../../utils/clipboard.js';
 
 const authStore = useAuthStore();
 
@@ -231,6 +235,18 @@ const dismissToken = () => {
     createdToken.value = '';
 };
 
+const copyCreatedToken = async () => {
+    const result = await copyTextToClipboard(createdToken.value);
+    if (result.ok) {
+        formError.value = '';
+        formSuccess.value = 'API token copied.';
+        return;
+    }
+
+    formSuccess.value = '';
+    formError.value = result.message || 'Failed to copy token.';
+};
+
 const statusBadgeClass = (apiKey) => (apiKey.revoked_at ? 'status-badge-danger' : 'status-badge-success');
 
 onMounted(loadApiKeys);
@@ -318,6 +334,12 @@ onMounted(loadApiKeys);
     gap: 8px;
     align-items: flex-start;
     justify-content: space-between;
+}
+
+.token-actions {
+    display: inline-flex;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
 .primary-btn,

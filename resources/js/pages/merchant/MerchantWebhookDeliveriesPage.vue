@@ -30,7 +30,7 @@
             <button type="button" class="secondary-btn" @click="resetFilters">Reset</button>
         </div>
 
-        <p v-if="notice" class="notice">{{ notice }}</p>
+        <p v-if="notice" class="notice" :class="{ 'notice-error': noticeType === 'error' }">{{ notice }}</p>
 
         <p v-if="loading" class="muted">Loading webhook deliveries...</p>
 
@@ -194,12 +194,14 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { getMerchantWebhookDeliveries, getMerchantWebhookDeliveryDetail } from '../../api/merchant.js';
+import { copyTextToClipboard } from '../../utils/clipboard.js';
 
 const PER_PAGE = 15;
 
 const loading = ref(true);
 const error = ref('');
 const notice = ref('');
+const noticeType = ref('success');
 const deliveries = ref([]);
 const expandedIds = ref(new Set());
 const loadingDetailIds = ref(new Set());
@@ -287,12 +289,15 @@ const statusBadgeClass = (status) => {
 };
 
 const copyValue = async (value, okMessage) => {
-    try {
-        await navigator.clipboard.writeText(String(value));
+    const result = await copyTextToClipboard(value);
+    if (result.ok) {
+        noticeType.value = 'success';
         notice.value = okMessage;
-    } catch {
-        notice.value = 'Copy failed.';
+        return;
     }
+
+    noticeType.value = 'error';
+    notice.value = result.message || 'Copy failed.';
 };
 
 const detailValue = (id, key, fallback = '—') => {
@@ -330,6 +335,7 @@ const payloadPreviewText = (id) => {
 const loadDeliveries = async (page = 1) => {
     loading.value = true;
     error.value = '';
+    notice.value = '';
 
     try {
         const response = await getMerchantWebhookDeliveries({
@@ -374,6 +380,7 @@ const toggleExpanded = async (id) => {
                     [id]: response.data?.data || {},
                 };
             } catch {
+                noticeType.value = 'error';
                 notice.value = `Failed to load delivery #${id} details.`;
             } finally {
                 const doneLoading = new Set(loadingDetailIds.value);
@@ -641,5 +648,9 @@ tbody tr:last-child td {
 .notice {
     color: #0369a1;
     margin: 0 0 12px;
+}
+
+.notice-error {
+    color: #b91c1c;
 }
 </style>

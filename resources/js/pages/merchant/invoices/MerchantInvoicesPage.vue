@@ -23,6 +23,7 @@
 
     <p v-if="loading" class="loading-state">Loading invoices...</p>
     <p v-else-if="error" class="empty-state error">{{ error }}</p>
+    <p v-if="!loading && !error && notice" class="empty-state notice">{{ notice }}</p>
 
     <div v-else class="table-shell">
       <div class="table-wrap">
@@ -111,12 +112,14 @@ import {
   displayNetworkKey,
   displayNetworkLabel,
 } from '../../../utils/assetDisplay';
+import { copyTextToClipboard } from '../../../utils/clipboard';
 
 const route = useRoute();
 const router = useRouter();
 
 const loading = ref(false);
 const error = ref('');
+const notice = ref('');
 const invoices = ref([]);
 const meta = reactive({
   current_page: 1,
@@ -148,6 +151,7 @@ const syncFiltersFromQuery = () => {
 const loadInvoices = async () => {
   loading.value = true;
   error.value = '';
+  notice.value = '';
 
   try {
     const params = {
@@ -227,11 +231,15 @@ const statusClass = (status) => {
 };
 
 const copyHostedLink = async (value) => {
-  try {
-    await navigator.clipboard.writeText(value);
-  } catch {
-    // keep this view lightweight; detail page has richer actions
+  const result = await copyTextToClipboard(value);
+  if (result.ok) {
+    error.value = '';
+    notice.value = 'Hosted link copied.';
+    return;
   }
+
+  notice.value = '';
+  error.value = result.message || 'Failed to copy to clipboard.';
 };
 
 const goToDetail = (id) => {
@@ -332,5 +340,9 @@ watch(
 
 .error {
   color: #b91c1c;
+}
+
+.notice {
+  color: #0369a1;
 }
 </style>

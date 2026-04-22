@@ -3,7 +3,7 @@
         <PageHeader :title="`Webhook Delivery #${deliveryId}`" subtitle="Delivery payload, signature and retry state.">
             <template #actions>
                 <button type="button" class="secondary-btn" :disabled="loading" @click="loadDelivery">Refresh data</button>
-                <button type="button" class="primary-btn" :disabled="retryLoading" @click="openRetryConfirm">
+                <button type="button" class="primary-btn" :disabled="retryLoading || loading || !delivery" @click="openRetryConfirm">
                     {{ retryLoading ? 'Queueing...' : 'Retry / Redeliver' }}
                 </button>
                 <button type="button" class="secondary-btn" @click="router.push({ name: 'admin.webhook-deliveries' })">Back</button>
@@ -11,6 +11,7 @@
         </PageHeader>
 
         <LoadingState v-if="loading" text="Loading delivery details..." />
+        <p v-if="!loading && !error && notice" class="copy-notice" :class="{ 'copy-notice-error': noticeType === 'error' }">{{ notice }}</p>
 
         <div v-else-if="error" class="state-card">
             <p class="error">{{ error }}</p>
@@ -105,6 +106,7 @@ import ConfirmModal from '../../../components/admin/ConfirmModal.vue';
 import LoadingState from '../../../components/admin/LoadingState.vue';
 import PageHeader from '../../../components/admin/PageHeader.vue';
 import StatusBadge from '../../../components/admin/StatusBadge.vue';
+import { copyTextToClipboard } from '../../../utils/clipboard';
 
 const route = useRoute();
 const router = useRouter();
@@ -113,6 +115,8 @@ const deliveryId = computed(() => route.params.id);
 const loading = ref(true);
 const retryLoading = ref(false);
 const error = ref('');
+const notice = ref('');
+const noticeType = ref('success');
 const delivery = ref(null);
 const confirmOpen = ref(false);
 
@@ -133,20 +137,21 @@ const statusVariant = (status) => {
 };
 
 const copyText = async (text) => {
-    if (!text) {
+    const result = await copyTextToClipboard(text);
+    if (result.ok) {
+        noticeType.value = 'success';
+        notice.value = 'Copied.';
         return;
     }
 
-    try {
-        await navigator.clipboard.writeText(String(text));
-    } catch {
-        // Keep retry/debug flow uninterrupted.
-    }
+    noticeType.value = 'error';
+    notice.value = result.message || 'Copy failed.';
 };
 
 const loadDelivery = async () => {
     loading.value = true;
     error.value = '';
+    notice.value = '';
 
     try {
         const response = await getAdminWebhookDelivery(deliveryId.value);
@@ -199,6 +204,11 @@ loadDelivery();
     gap: 8px;
     color: #334155;
     font-size: 14px;
+}
+
+.kv-grid > div {
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .json-box {
@@ -263,5 +273,15 @@ loadDelivery();
 .mono {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     word-break: break-all;
+}
+
+.copy-notice {
+    margin: 0 0 10px;
+    font-size: 13px;
+    color: #0369a1;
+}
+
+.copy-notice-error {
+    color: #b91c1c;
 }
 </style>

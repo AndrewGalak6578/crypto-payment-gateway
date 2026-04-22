@@ -39,7 +39,7 @@
 
                 <div class="kv-grid">
                     <div><strong>fee_percent:</strong> {{ merchant.fee_percent ?? '—' }}</div>
-                    <div><strong>webhook_url:</strong> <span class="mono">{{ merchant.webhook_url || '—' }}</span></div>
+                    <div><strong>webhook_url:</strong> <span class="mono break">{{ merchant.webhook_url || '—' }}</span></div>
                     <div><strong>has_webhook_secret:</strong> {{ merchant.has_webhook_secret ? 'yes' : 'no' }}</div>
                     <div><strong>created_at:</strong> {{ formatDate(merchant.created_at) }}</div>
                     <div><strong>updated_at:</strong> {{ formatDate(merchant.updated_at) }}</div>
@@ -284,6 +284,11 @@ loadMerchant();
     font-size: 14px;
 }
 
+.kv-grid > div {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
 .ops-grid {
     margin-top: 12px;
     display: grid;
@@ -358,5 +363,9 @@ td {
 .mono {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     word-break: break-all;
+}
+
+.break {
+    overflow-wrap: anywhere;
 }
 </style>

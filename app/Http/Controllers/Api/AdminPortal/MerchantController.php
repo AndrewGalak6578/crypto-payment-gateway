@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\AdminPortal;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Admin\StoreMerchantRequest;
 use App\Http\Requests\Admin\UpdateMerchantStatusRequest;
 use App\Models\Invoice;
 use App\Models\Merchant;
@@ -14,7 +15,6 @@ use Illuminate\Http\Request;
 
 class MerchantController extends Controller
 {
-    //
     public function index(Request $request): JsonResponse
     {
         $query = Merchant::query()->latest('id');
@@ -52,6 +52,33 @@ class MerchantController extends Controller
                 'total' => $merchants->total(),
             ]
         ]);
+    }
+
+    public function store(StoreMerchantRequest $request): JsonResponse
+    {
+        $data = $request->validated();
+
+        $merchant = Merchant::query()->create([
+            'name' => $data['name'],
+            'status' => $data['status'] ?? 'active',
+            'fee_percent' => $data['fee_percent'] ?? 0,
+            'webhook_url' => $data['webhook_url'] ?? null,
+            'webhook_secret' => $data['webhook_secret'] ?? null,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id' => $merchant->id,
+                'name' => $merchant->name,
+                'status' => $merchant->status,
+                'fee_percent' => $merchant->fee_percent !== null ? (string) $merchant->fee_percent : null,
+                'webhook_url' => $merchant->webhook_url,
+                'has_webhook_secret' => !empty($merchant->webhook_secret),
+                'created_at' => optional($merchant->created_at)->toIso8601String(),
+                'updated_at' => optional($merchant->updated_at)->toIso8601String(),
+            ],
+        ], 201);
     }
 
     public function show(Merchant $merchant): JsonResponse

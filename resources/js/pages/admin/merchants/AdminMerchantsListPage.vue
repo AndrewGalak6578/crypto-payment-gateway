@@ -1,6 +1,32 @@
 <template>
     <section>
-        <PageHeader title="Merchants" subtitle="Global merchant registry and operational status control." />
+        <PageHeader title="Merchants" subtitle="Global merchant registry and operational status control.">
+            <template #actions>
+                <button type="button" class="secondary-btn" :disabled="creating" @click="toggleCreateForm">
+                    {{ showCreateForm ? 'Cancel create' : 'Create merchant' }}
+                </button>
+            </template>
+        </PageHeader>
+
+        <article v-if="showCreateForm" class="create-card">
+            <h3 class="create-title">Create merchant</h3>
+            <form class="create-grid" @submit.prevent="createMerchant">
+                <input v-model.trim="createForm.name" type="text" maxlength="255" placeholder="Name" required />
+                <input v-model.trim="createForm.fee_percent" type="number" min="0" step="any" placeholder="Fee % (optional)" />
+                <input v-model.trim="createForm.webhook_url" type="url" maxlength="255" placeholder="Webhook URL (optional)" />
+                <input v-model.trim="createForm.webhook_secret" type="text" maxlength="255" placeholder="Webhook secret (optional)" />
+                <select v-model="createForm.status">
+                    <option value="">active (default)</option>
+                    <option value="active">active</option>
+                    <option value="disabled">disabled</option>
+                </select>
+                <button type="submit" class="primary-btn" :disabled="creating">
+                    {{ creating ? 'Creating...' : 'Create merchant' }}
+                </button>
+            </form>
+            <p v-if="createError" class="error create-message">{{ createError }}</p>
+        </article>
+        <p v-if="createSuccess" class="success create-feedback">{{ createSuccess }}</p>
 
         <form class="filters-card" @submit.prevent="applyFilters">
             <input v-model.trim="filters.search" type="text" placeholder="Search by ID or name" />
@@ -47,7 +73,7 @@
                                 {{ merchant.id }}
                             </RouterLink>
                         </td>
-                        <td>{{ merchant.name }}</td>
+                        <td class="wrap-cell">{{ merchant.name }}</td>
                         <td>
                             <StatusBadge
                                 :text="merchant.status === 'disabled' ? 'suspended' : merchant.status"
@@ -112,6 +138,7 @@
 import { reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
+    createAdminMerchant,
     extractApiErrorMessage,
     getAdminMerchants,
     updateAdminMerchantStatus,
@@ -130,6 +157,10 @@ const loading = ref(false);
 const error = ref('');
 const merchants = ref([]);
 const actionLoadingById = ref({});
+const creating = ref(false);
+const createError = ref('');
+const createSuccess = ref('');
+const showCreateForm = ref(false);
 const meta = ref({
     current_page: 1,
     last_page: 1,
@@ -139,6 +170,13 @@ const meta = ref({
 
 const filters = reactive({
     search: '',
+    status: '',
+});
+const createForm = reactive({
+    name: '',
+    fee_percent: '',
+    webhook_url: '',
+    webhook_secret: '',
     status: '',
 });
 
@@ -153,6 +191,26 @@ const confirm = reactive({
 });
 
 const formatDate = (value) => (value ? new Date(value).toLocaleString() : '—');
+
+const resetCreateForm = () => {
+    createForm.name = '';
+    createForm.fee_percent = '';
+    createForm.webhook_url = '';
+    createForm.webhook_secret = '';
+    createForm.status = '';
+    createError.value = '';
+};
+
+const toggleCreateForm = () => {
+    if (showCreateForm.value) {
+        showCreateForm.value = false;
+        resetCreateForm();
+        return;
+    }
+
+    showCreateForm.value = true;
+    createError.value = '';
+};
 
 const syncFiltersFromQuery = () => {
     filters.search = typeof route.query.search === 'string' ? route.query.search : '';
@@ -213,6 +271,61 @@ const changePage = async (page) => {
     });
 };
 
+const createMerchant = async () => {
+    createError.value = '';
+    createSuccess.value = '';
+
+    const name = String(createForm.name || '').trim();
+    const feePercentRaw = String(createForm.fee_percent || '').trim();
+    const webhookUrl = String(createForm.webhook_url || '').trim();
+    const webhookSecret = String(createForm.webhook_secret || '').trim();
+    const status = String(createForm.status || '').trim();
+
+    if (!name) {
+        createError.value = 'Name is required.';
+        return;
+    }
+
+    const payload = {
+        name,
+        fee_percent: feePercentRaw === '' ? undefined : Number(feePercentRaw),
+        webhook_url: webhookUrl || undefined,
+        webhook_secret: webhookSecret || undefined,
+        status: status || undefined,
+    };
+
+    if (payload.fee_percent !== undefined && Number.isNaN(payload.fee_percent)) {
+        createError.value = 'Fee percent must be a valid number.';
+        return;
+    }
+
+    if (payload.fee_percent !== undefined && payload.fee_percent < 0) {
+        createError.value = 'Fee percent cannot be negative.';
+        return;
+    }
+
+    creating.value = true;
+
+    try {
+        await createAdminMerchant(payload);
+        createSuccess.value = 'Merchant created.';
+        showCreateForm.value = false;
+        resetCreateForm();
+
+        const nextQuery = {
+            search: filters.search || undefined,
+            status: filters.status || undefined,
+            page: 1,
+        };
+        await router.push({ name: 'admin.merchants', query: nextQuery });
+        await loadMerchants();
+    } catch (requestError) {
+        createError.value = extractApiErrorMessage(requestError, 'Failed to create merchant.');
+    } finally {
+        creating.value = false;
+    }
+};
+
 const closeConfirm = () => {
     confirm.open = false;
     confirm.loading = false;
@@ -268,6 +381,35 @@ watch(
 </script>
 
 <style scoped>
+.create-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 14px;
+}
+
+.create-title {
+    margin: 0 0 10px;
+    color: #0f172a;
+    font-size: 16px;
+}
+
+.create-grid {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.create-message {
+    margin: 8px 0 0;
+    font-size: 13px;
+}
+
+.create-feedback {
+    margin: 0 0 10px;
+}
+
 .filters-card {
     display: grid;
     gap: 8px;
@@ -335,6 +477,11 @@ td {
     text-overflow: ellipsis;
 }
 
+.wrap-cell {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
 .pagination {
     margin-top: 12px;
     display: flex;
@@ -357,13 +504,25 @@ td {
     margin: 0 0 10px;
 }
 
+.success {
+    color: #166534;
+}
+
 @media (max-width: 1024px) {
+    .create-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .filters-card {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
 
 @media (max-width: 640px) {
+    .create-grid {
+        grid-template-columns: 1fr;
+    }
+
     .filters-card {
         grid-template-columns: 1fr;
     }

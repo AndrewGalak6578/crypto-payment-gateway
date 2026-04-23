@@ -124,17 +124,7 @@
                     {{ walletNotice }}
                 </p>
 
-                <div v-if="walletApiGap" class="state-card">
-                    <p class="muted wallet-gap">
-                        Wallet list is not exposed by current admin API.
-                        <span v-if="merchant.wallet_summary?.count !== undefined">
-                            Summary count: {{ merchant.wallet_summary?.count ?? 0 }}.
-                        </span>
-                        Create/Edit/Delete actions stay unavailable until admin wallet endpoints are added.
-                    </p>
-                </div>
-
-                <form v-else-if="showCreateWalletForm" class="wallet-form-card" @submit.prevent="submitCreateWallet">
+                <form v-if="showCreateWalletForm" class="wallet-form-card" @submit.prevent="submitCreateWallet">
                     <div class="wallet-form-grid">
                         <label>
                             <span class="wallet-field-label">Asset / coin</span>
@@ -177,11 +167,11 @@
                     </div>
                 </form>
 
-                <div v-if="walletLoadError && !walletApiGap" class="state-card">
+                <div v-if="walletLoadError" class="state-card">
                     <p class="error">{{ walletLoadError }}</p>
                 </div>
 
-                <TableCard v-if="!walletApiGap && merchantWallets.length">
+                <TableCard v-if="merchantWallets.length">
                     <table class="wallets-table">
                         <thead>
                         <tr>
@@ -287,7 +277,7 @@
                     </table>
                 </TableCard>
                 <EmptyState
-                    v-else-if="!walletApiGap"
+                    v-else
                     title="No wallets found"
                     description="This merchant has no configured wallets in the admin payload."
                 />
@@ -423,7 +413,6 @@ const pendingRecentInvoices = computed(() => {
     return (merchant.value?.recent_invoices || []).filter((item) => ['pending', 'fixated'].includes(item.status)).length;
 });
 const merchantWallets = computed(() => [...wallets.value].sort((left, right) => Number(left?.id || 0) - Number(right?.id || 0)));
-const walletApiGap = computed(() => false);
 const walletAssetOptions = computed(() => {
     return MERCHANT_ASSET_CATALOG.map((item) => ({
         assetKey: item.assetKey,
@@ -899,11 +888,6 @@ loadMerchant();
 
 .wallet-notice-error {
     color: #b91c1c;
-}
-
-.wallet-gap {
-    margin: 0;
-    line-height: 1.4;
 }
 
 .secondary-btn {

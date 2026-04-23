@@ -26,6 +26,7 @@ Route::prefix('admin')->middleware(['web', 'auth.admin'])->group(function () {
     Route::get('/dashboard', DashboardController::class);
 
     Route::get('/merchants', [MerchantController::class, 'index']);
+    Route::post('/merchants', [MerchantController::class, 'store']);
     Route::get('/merchants/{merchant}', [MerchantController::class, 'show']);
     Route::patch('/merchants/{merchant}/status', [MerchantController::class, 'updateStatus']);
     Route::get('/merchants/{merchant}/wallets', [MerchantWalletController::class, 'index']);

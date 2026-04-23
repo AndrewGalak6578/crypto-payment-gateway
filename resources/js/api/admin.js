@@ -3,6 +3,7 @@ import api from './axios';
 export const getAdminDashboard = () => api.get('/api/admin/dashboard');
 
 export const getAdminMerchants = (params = {}) => api.get('/api/admin/merchants', { params });
+export const createAdminMerchant = (payload) => api.post('/api/admin/merchants', payload);
 export const getAdminMerchant = (merchantId) => api.get(`/api/admin/merchants/${merchantId}`);
 export const updateAdminMerchantStatus = (merchantId, payload) => api.patch(`/api/admin/merchants/${merchantId}/status`, payload);
 export const getAdminMerchantWallets = (merchantId) => api.get(`/api/admin/merchants/${merchantId}/wallets`);

@@ -23,72 +23,74 @@
 
     <p v-if="loading" class="loading-state">Loading invoices...</p>
     <p v-else-if="error" class="empty-state error">{{ error }}</p>
-    <p v-if="!loading && !error && notice" class="empty-state notice">{{ notice }}</p>
+    <template v-else>
+      <p v-if="notice" class="empty-state notice">{{ notice }}</p>
 
-    <div v-else class="table-shell">
-      <div class="table-wrap">
-        <table class="table-base">
-          <thead>
-            <tr>
-              <th>public_id</th>
-              <th>external_id</th>
-              <th>status</th>
-              <th>asset</th>
-              <th>network</th>
-              <th>coin (secondary)</th>
-              <th>amount_coin</th>
-              <th>expected_usd</th>
-              <th>received_conf_coin</th>
-              <th>forward_status</th>
-              <th>created_at</th>
-              <th>actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="invoice in invoices" :key="invoice.id" class="click-row" @click="goToDetail(invoice.id)">
-              <td>{{ invoice.public_id }}</td>
-              <td>{{ invoice.external_id || '—' }}</td>
-              <td>
-                <span class="status-badge" :class="statusClass(invoice.status)">{{ invoice.status }}</span>
-              </td>
-              <td>{{ displayAssetLabel(invoice) }} <span class="muted mono">({{ displayAssetKey(invoice) }})</span></td>
-              <td>{{ displayNetworkLabel(invoice) }} <span class="muted mono">({{ displayNetworkKey(invoice) }})</span></td>
-              <td>{{ invoice.coin || '—' }}</td>
-              <td>{{ invoice.amount_coin }}</td>
-              <td>{{ invoice.expected_usd }}</td>
-              <td>{{ invoice.received_conf_coin }}</td>
-              <td><span class="status-badge status-badge-muted">{{ invoice.forward_status || '—' }}</span></td>
-              <td>{{ formatDate(invoice.created_at) }}</td>
-              <td>
-                <div class="action-row">
-                  <a
-                    v-if="invoice.hosted_url"
-                    :href="invoice.hosted_url"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    @click.stop
-                  >
-                    hosted
-                  </a>
-                  <button
-                    v-if="invoice.hosted_url"
-                    type="button"
-                    class="copy-btn"
-                    @click.stop="copyHostedLink(invoice.hosted_url)"
-                  >
-                    copy
-                  </button>
-                  <RouterLink :to="`/merchant/invoices/${invoice.id}`" @click.stop>detail</RouterLink>
-                </div>
-              </td>
-            </tr>
-            <tr v-if="!invoices.length">
-              <td colspan="12" class="empty-row">No invoices found.</td>
-            </tr>
-          </tbody>
-        </table>
+      <div class="table-shell">
+        <div class="table-wrap">
+          <table class="table-base">
+            <thead>
+              <tr>
+                <th>public_id</th>
+                <th>external_id</th>
+                <th>status</th>
+                <th>asset</th>
+                <th>network</th>
+                <th>coin (secondary)</th>
+                <th>amount_coin</th>
+                <th>expected_usd</th>
+                <th>received_conf_coin</th>
+                <th>forward_status</th>
+                <th>created_at</th>
+                <th>actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="invoice in invoices" :key="invoice.id" class="click-row" @click="goToDetail(invoice.id)">
+                <td>{{ invoice.public_id }}</td>
+                <td>{{ invoice.external_id || '—' }}</td>
+                <td>
+                  <span class="status-badge" :class="statusClass(invoice.status)">{{ invoice.status }}</span>
+                </td>
+                <td>{{ displayAssetLabel(invoice) }} <span class="muted mono">({{ displayAssetKey(invoice) }})</span></td>
+                <td>{{ displayNetworkLabel(invoice) }} <span class="muted mono">({{ displayNetworkKey(invoice) }})</span></td>
+                <td>{{ invoice.coin || '—' }}</td>
+                <td>{{ invoice.amount_coin }}</td>
+                <td>{{ invoice.expected_usd }}</td>
+                <td>{{ invoice.received_conf_coin }}</td>
+                <td><span class="status-badge status-badge-muted">{{ invoice.forward_status || '—' }}</span></td>
+                <td>{{ formatDate(invoice.created_at) }}</td>
+                <td>
+                  <div class="action-row">
+                    <a
+                      v-if="invoice.hosted_url"
+                      :href="invoice.hosted_url"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      @click.stop
+                    >
+                      Open hosted
+                    </a>
+                    <button
+                      v-if="invoice.hosted_url"
+                      type="button"
+                      class="copy-btn"
+                      @click.stop="copyHostedLink(invoice.hosted_url)"
+                    >
+                      Copy link
+                    </button>
+                    <RouterLink :to="`/merchant/invoices/${invoice.id}`" @click.stop>Details</RouterLink>
+                  </div>
+                </td>
+              </tr>
+              <tr v-if="!invoices.length">
+                <td colspan="12" class="empty-row">No invoices found.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+    </template>
 
     <div class="pagination">
       <button type="button" :disabled="meta.current_page <= 1 || loading" @click="changePage(meta.current_page - 1)">
@@ -270,6 +272,13 @@ watch(
 .filters-row button,
 .pagination button {
   cursor: pointer;
+}
+
+.filters-row button:disabled,
+.pagination button:disabled,
+.copy-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 .click-row {

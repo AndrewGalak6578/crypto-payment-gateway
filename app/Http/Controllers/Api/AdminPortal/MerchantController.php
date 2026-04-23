@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\UpdateMerchantStatusRequest;
 use App\Models\Invoice;
 use App\Models\Merchant;
+use App\Models\SuperWallet;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -73,6 +74,11 @@ class MerchantController extends Controller
                 'created_at' => $invoice->created_at->toIso8601String(),
             ]);
 
+        $wallets = $merchant->superWallets()
+            ->orderBy('coin')
+            ->get()
+            ->map(fn (SuperWallet $wallet) => $this->walletPayload($wallet));
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -99,6 +105,7 @@ class MerchantController extends Controller
                 'wallet_summary' => [
                     'count' => $merchant->superWallets()->count(),
                 ],
+                'wallets' => $wallets,
                 'recent_invoices' => $recent_invoices,
             ]
         ]);
@@ -116,5 +123,19 @@ class MerchantController extends Controller
                 'updated_at' => $merchant->updated_at->toIso8601String(),
             ],
         ]);
+    }
+
+    private function walletPayload(SuperWallet $wallet): array
+    {
+        return [
+            'id' => $wallet->id,
+            'coin' => strtoupper($wallet->coin),
+            'asset_key' => $wallet->asset_key ?: strtolower((string) $wallet->coin),
+            'network_key' => $wallet->network_key,
+            'wallet' => $wallet->wallet,
+            'fee_rate' => $wallet->fee_rate !== null ? (string) $wallet->fee_rate : null,
+            'created_at' => optional($wallet->created_at)->toIso8601String(),
+            'updated_at' => optional($wallet->updated_at)->toIso8601String(),
+        ];
     }
 }

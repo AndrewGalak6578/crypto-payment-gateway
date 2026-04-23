@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AdminPortal\InvoiceController;
 use App\Http\Controllers\Api\AdminPortal\MerchantApiKeyController;
 use App\Http\Controllers\Api\AdminPortal\MerchantController;
 use App\Http\Controllers\Api\AdminPortal\MerchantUserController;
+use App\Http\Controllers\Api\AdminPortal\MerchantWalletController;
 use App\Http\Controllers\Api\AdminPortal\WebhookDeliveryController;
 use App\Http\Controllers\Api\AdminPortal\DashboardController;
 use Illuminate\Http\Request;
@@ -27,6 +28,10 @@ Route::prefix('admin')->middleware(['web', 'auth.admin'])->group(function () {
     Route::get('/merchants', [MerchantController::class, 'index']);
     Route::get('/merchants/{merchant}', [MerchantController::class, 'show']);
     Route::patch('/merchants/{merchant}/status', [MerchantController::class, 'updateStatus']);
+    Route::get('/merchants/{merchant}/wallets', [MerchantWalletController::class, 'index']);
+    Route::post('/merchants/{merchant}/wallets', [MerchantWalletController::class, 'store']);
+    Route::put('/merchants/{merchant}/wallets/{wallet}', [MerchantWalletController::class, 'update']);
+    Route::delete('/merchants/{merchant}/wallets/{wallet}', [MerchantWalletController::class, 'destroy']);
 
     Route::get('/merchant-users', [MerchantUserController::class, 'index']);
     Route::post('/merchant-users', [MerchantUserController::class, 'store']);

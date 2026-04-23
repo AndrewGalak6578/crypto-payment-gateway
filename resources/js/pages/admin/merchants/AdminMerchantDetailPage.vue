@@ -59,6 +59,9 @@
                         <strong>{{ pendingRecentInvoices }}</strong>
                     </div>
                 </div>
+                <div class="quick-actions">
+                    <a href="#merchant-wallets" class="secondary-btn quick-link">Go to wallets</a>
+                </div>
             </article>
 
             <article class="panel">
@@ -92,6 +95,114 @@
                     </table>
                 </TableCard>
                 <EmptyState v-else title="No merchant users" />
+            </article>
+
+            <article id="merchant-wallets" class="panel">
+                <div class="panel-row">
+                    <div>
+                        <h3 class="panel-subtitle">Wallets</h3>
+                        <p class="muted">
+                            Manage merchant forwarding wallets. Asset/network keys are primary; legacy coin is secondary.
+                        </p>
+                    </div>
+                    <div class="wallet-toolbar">
+                        <button type="button" class="secondary-btn" :disabled="loading || statusUpdating" @click="loadMerchant">
+                            Refresh wallets
+                        </button>
+                        <button
+                            type="button"
+                            class="secondary-btn"
+                            disabled
+                            title="Admin wallet create API is not available in current backend."
+                        >
+                            Create wallet
+                        </button>
+                    </div>
+                </div>
+
+                <p v-if="walletNotice" class="wallet-notice" :class="{ 'wallet-notice-error': walletNoticeType === 'error' }">
+                    {{ walletNotice }}
+                </p>
+
+                <div v-if="walletApiGap" class="state-card">
+                    <p class="muted wallet-gap">
+                        Wallet list is not exposed by current admin API.
+                        <span v-if="merchant.wallet_summary?.count !== undefined">
+                            Summary count: {{ merchant.wallet_summary?.count ?? 0 }}.
+                        </span>
+                        Create/Edit/Delete actions stay unavailable until admin wallet endpoints are added.
+                    </p>
+                </div>
+
+                <TableCard v-else-if="merchantWallets.length">
+                    <table class="wallets-table">
+                        <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Asset</th>
+                            <th>Network</th>
+                            <th>Wallet</th>
+                            <th>Fee rate</th>
+                            <th>Created</th>
+                            <th>Updated</th>
+                            <th>Actions</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr v-for="wallet in merchantWallets" :key="wallet.id">
+                            <td>{{ wallet.id ?? '—' }}</td>
+                            <td>
+                                {{ displayAssetLabel(wallet) }}
+                                <span class="muted mono">({{ displayAssetKey(wallet) }})</span>
+                                <span v-if="wallet.coin" class="muted mono"> · coin: {{ String(wallet.coin).toUpperCase() }}</span>
+                            </td>
+                            <td>
+                                {{ displayNetworkLabel(wallet) }}
+                                <span class="muted mono">({{ displayNetworkKey(wallet) }})</span>
+                            </td>
+                            <td class="wallet-cell">
+                                <span class="mono">{{ wallet.wallet || '—' }}</span>
+                            </td>
+                            <td>{{ wallet.fee_rate ?? '—' }}</td>
+                            <td>{{ formatDate(wallet.created_at) }}</td>
+                            <td>{{ formatDate(wallet.updated_at) }}</td>
+                            <td>
+                                <div class="wallet-actions">
+                                    <button
+                                        type="button"
+                                        class="secondary-btn compact-btn"
+                                        :disabled="!wallet.wallet || copyingWalletId === wallet.id"
+                                        @click="copyWalletAddress(wallet)"
+                                    >
+                                        {{ copyingWalletId === wallet.id ? 'Copying...' : 'Copy' }}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="secondary-btn compact-btn"
+                                        disabled
+                                        title="Admin wallet edit API is not available in current backend."
+                                    >
+                                        Edit
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="secondary-btn compact-btn"
+                                        disabled
+                                        title="Admin wallet delete API is not available in current backend."
+                                    >
+                                        Delete
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </TableCard>
+                <EmptyState
+                    v-else
+                    title="No wallets found"
+                    description="This merchant has no configured wallets in the admin payload."
+                />
             </article>
 
             <article class="panel">
@@ -153,6 +264,13 @@
 import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
+    displayAssetKey,
+    displayAssetLabel,
+    displayNetworkKey,
+    displayNetworkLabel,
+} from '../../../utils/assetDisplay';
+import { copyTextToClipboard } from '../../../utils/clipboard';
+import {
     extractApiErrorMessage,
     getAdminMerchant,
     updateAdminMerchantStatus,
@@ -173,6 +291,9 @@ const error = ref('');
 const merchant = ref(null);
 const statusUpdating = ref(false);
 const pendingStatus = ref('');
+const walletNotice = ref('');
+const walletNoticeType = ref('success');
+const copyingWalletId = ref(null);
 
 const confirmOpen = ref(false);
 const confirmTitle = ref('');
@@ -188,6 +309,25 @@ const paidRecentInvoices = computed(() => {
 });
 const pendingRecentInvoices = computed(() => {
     return (merchant.value?.recent_invoices || []).filter((item) => ['pending', 'fixated'].includes(item.status)).length;
+});
+const walletsFieldPresent = computed(() => {
+    return Array.isArray(merchant.value?.wallets) || Array.isArray(merchant.value?.super_wallets);
+});
+const merchantWallets = computed(() => {
+    const source = Array.isArray(merchant.value?.wallets)
+        ? merchant.value.wallets
+        : Array.isArray(merchant.value?.super_wallets)
+            ? merchant.value.super_wallets
+            : [];
+
+    return [...source].sort((left, right) => Number(left?.id || 0) - Number(right?.id || 0));
+});
+const walletApiGap = computed(() => {
+    if (!merchant.value) {
+        return false;
+    }
+
+    return !walletsFieldPresent.value;
 });
 
 const statusVariant = (status) => {
@@ -207,6 +347,7 @@ const statusVariant = (status) => {
 const loadMerchant = async () => {
     loading.value = true;
     error.value = '';
+    walletNotice.value = '';
 
     try {
         const response = await getAdminMerchant(merchantId.value);
@@ -216,6 +357,28 @@ const loadMerchant = async () => {
     } finally {
         loading.value = false;
     }
+};
+
+const copyWalletAddress = async (wallet) => {
+    if (!wallet?.wallet) {
+        walletNoticeType.value = 'error';
+        walletNotice.value = 'Nothing to copy.';
+        return;
+    }
+
+    copyingWalletId.value = wallet.id ?? 'copying';
+    const result = await copyTextToClipboard(wallet.wallet);
+
+    if (result.ok) {
+        walletNoticeType.value = 'success';
+        walletNotice.value = `Wallet #${wallet.id ?? '—'} address copied.`;
+        copyingWalletId.value = null;
+        return;
+    }
+
+    walletNoticeType.value = 'error';
+    walletNotice.value = result.message || 'Copy failed.';
+    copyingWalletId.value = null;
 };
 
 const handleStatusAction = (nextStatus) => {
@@ -296,6 +459,15 @@ loadMerchant();
     grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
 }
 
+.quick-actions {
+    margin-top: 12px;
+}
+
+.quick-link {
+    text-decoration: none;
+    display: inline-block;
+}
+
 .ops-tile {
     border: 1px solid #e2e8f0;
     border-radius: 10px;
@@ -314,6 +486,45 @@ loadMerchant();
     align-items: center;
 }
 
+.wallet-toolbar {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.wallet-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.wallet-cell {
+    white-space: normal;
+    min-width: 240px;
+}
+
+.wallet-cell .mono {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.wallet-notice {
+    margin: 0 0 10px;
+    color: #0369a1;
+    font-size: 13px;
+}
+
+.wallet-notice-error {
+    color: #b91c1c;
+}
+
+.wallet-gap {
+    margin: 0;
+    line-height: 1.4;
+}
+
 .secondary-btn {
     border-radius: 8px;
     border: 1px solid #cbd5e1;
@@ -329,6 +540,11 @@ loadMerchant();
     cursor: not-allowed;
 }
 
+.compact-btn {
+    padding: 6px 8px;
+    font-size: 12px;
+}
+
 table {
     width: 100%;
     border-collapse: collapse;
@@ -341,6 +557,11 @@ td {
     text-align: left;
     font-size: 13px;
     white-space: nowrap;
+}
+
+.wallets-table th:nth-child(4),
+.wallets-table td:nth-child(4) {
+    min-width: 260px;
 }
 
 .state-card {

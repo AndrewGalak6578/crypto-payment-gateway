@@ -5,6 +5,10 @@ export const getAdminDashboard = () => api.get('/api/admin/dashboard');
 export const getAdminMerchants = (params = {}) => api.get('/api/admin/merchants', { params });
 export const getAdminMerchant = (merchantId) => api.get(`/api/admin/merchants/${merchantId}`);
 export const updateAdminMerchantStatus = (merchantId, payload) => api.patch(`/api/admin/merchants/${merchantId}/status`, payload);
+export const getAdminMerchantWallets = (merchantId) => api.get(`/api/admin/merchants/${merchantId}/wallets`);
+export const createAdminMerchantWallet = (merchantId, payload) => api.post(`/api/admin/merchants/${merchantId}/wallets`, payload);
+export const updateAdminMerchantWallet = (merchantId, walletId, payload) => api.put(`/api/admin/merchants/${merchantId}/wallets/${walletId}`, payload);
+export const deleteAdminMerchantWallet = (merchantId, walletId) => api.delete(`/api/admin/merchants/${merchantId}/wallets/${walletId}`);
 
 export const getAdminMerchantUsers = (params = {}) => api.get('/api/admin/merchant-users', { params });
 export const createAdminMerchantUser = (payload) => api.post('/api/admin/merchant-users', payload);

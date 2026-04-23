@@ -106,16 +106,16 @@
                         </p>
                     </div>
                     <div class="wallet-toolbar">
-                        <button type="button" class="secondary-btn" :disabled="loading || statusUpdating" @click="loadMerchant">
+                        <button type="button" class="secondary-btn" :disabled="loading || statusUpdating || walletsLoading" @click="loadWallets">
                             Refresh wallets
                         </button>
                         <button
                             type="button"
                             class="secondary-btn"
-                            disabled
-                            title="Admin wallet create API is not available in current backend."
+                            :disabled="walletMutationActive || walletsLoading || editingWalletId !== null"
+                            @click="toggleCreateWalletForm"
                         >
-                            Create wallet
+                            {{ showCreateWalletForm ? 'Cancel create' : 'Create wallet' }}
                         </button>
                     </div>
                 </div>
@@ -134,7 +134,54 @@
                     </p>
                 </div>
 
-                <TableCard v-else-if="merchantWallets.length">
+                <form v-else-if="showCreateWalletForm" class="wallet-form-card" @submit.prevent="submitCreateWallet">
+                    <div class="wallet-form-grid">
+                        <label>
+                            <span class="wallet-field-label">Asset / coin</span>
+                            <select v-model="createWalletForm.coin" class="wallet-input" :disabled="creatingWallet || walletMutationActive">
+                                <option value="" disabled>Select asset</option>
+                                <option v-for="item in walletAssetOptions" :key="item.assetKey" :value="item.assetKey">
+                                    {{ item.label }}
+                                </option>
+                            </select>
+                        </label>
+                        <label>
+                            <span class="wallet-field-label">Wallet</span>
+                            <input
+                                v-model.trim="createWalletForm.wallet"
+                                class="wallet-input mono"
+                                type="text"
+                                maxlength="255"
+                                placeholder="Destination wallet/address"
+                                :disabled="creatingWallet || walletMutationActive"
+                            >
+                        </label>
+                        <label>
+                            <span class="wallet-field-label">Fee rate (optional)</span>
+                            <input
+                                v-model.trim="createWalletForm.fee_rate"
+                                class="wallet-input"
+                                type="number"
+                                min="0"
+                                step="any"
+                                placeholder="0"
+                                :disabled="creatingWallet || walletMutationActive"
+                            >
+                        </label>
+                    </div>
+                    <p v-if="selectedCreateAssetHint" class="muted wallet-form-hint">{{ selectedCreateAssetHint }}</p>
+                    <div class="wallet-form-actions">
+                        <button type="submit" class="secondary-btn" :disabled="creatingWallet || walletMutationActive">
+                            {{ creatingWallet ? 'Creating...' : 'Save wallet' }}
+                        </button>
+                    </div>
+                </form>
+
+                <div v-if="walletLoadError && !walletApiGap" class="state-card">
+                    <p class="error">{{ walletLoadError }}</p>
+                </div>
+
+                <TableCard v-if="!walletApiGap && merchantWallets.length">
                     <table class="wallets-table">
                         <thead>
                         <tr>
@@ -161,9 +208,30 @@
                                 <span class="muted mono">({{ displayNetworkKey(wallet) }})</span>
                             </td>
                             <td class="wallet-cell">
-                                <span class="mono">{{ wallet.wallet || '—' }}</span>
+                                <template v-if="editingWalletId === wallet.id">
+                                    <input
+                                        v-model.trim="editWalletForm.wallet"
+                                        class="wallet-input mono"
+                                        type="text"
+                                        maxlength="255"
+                                        :disabled="savingEditWalletId === wallet.id || walletMutationActive"
+                                    >
+                                </template>
+                                <span v-else class="mono">{{ wallet.wallet || '—' }}</span>
                             </td>
-                            <td>{{ wallet.fee_rate ?? '—' }}</td>
+                            <td>
+                                <template v-if="editingWalletId === wallet.id">
+                                    <input
+                                        v-model.trim="editWalletForm.fee_rate"
+                                        class="wallet-input"
+                                        type="number"
+                                        min="0"
+                                        step="any"
+                                        :disabled="savingEditWalletId === wallet.id || walletMutationActive"
+                                    >
+                                </template>
+                                <span v-else>{{ wallet.fee_rate ?? '—' }}</span>
+                            </td>
                             <td>{{ formatDate(wallet.created_at) }}</td>
                             <td>{{ formatDate(wallet.updated_at) }}</td>
                             <td>
@@ -176,22 +244,42 @@
                                     >
                                         {{ copyingWalletId === wallet.id ? 'Copying...' : 'Copy' }}
                                     </button>
-                                    <button
-                                        type="button"
-                                        class="secondary-btn compact-btn"
-                                        disabled
-                                        title="Admin wallet edit API is not available in current backend."
-                                    >
-                                        Edit
-                                    </button>
-                                    <button
-                                        type="button"
-                                        class="secondary-btn compact-btn"
-                                        disabled
-                                        title="Admin wallet delete API is not available in current backend."
-                                    >
-                                        Delete
-                                    </button>
+                                    <template v-if="editingWalletId === wallet.id">
+                                        <button
+                                            type="button"
+                                            class="secondary-btn compact-btn"
+                                            :disabled="savingEditWalletId === wallet.id || walletMutationActive"
+                                            @click="submitEditWallet(wallet)"
+                                        >
+                                            {{ savingEditWalletId === wallet.id ? 'Saving...' : 'Save' }}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="secondary-btn compact-btn"
+                                            :disabled="savingEditWalletId === wallet.id || walletMutationActive"
+                                            @click="cancelEditWallet"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </template>
+                                    <template v-else>
+                                        <button
+                                            type="button"
+                                            class="secondary-btn compact-btn"
+                                            :disabled="walletMutationActive"
+                                            @click="startEditWallet(wallet)"
+                                        >
+                                            Edit
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="secondary-btn compact-btn"
+                                            :disabled="walletMutationActive"
+                                            @click="promptDeleteWallet(wallet)"
+                                        >
+                                            Delete
+                                        </button>
+                                    </template>
                                 </div>
                             </td>
                         </tr>
@@ -199,7 +287,7 @@
                     </table>
                 </TableCard>
                 <EmptyState
-                    v-else
+                    v-else-if="!walletApiGap"
                     title="No wallets found"
                     description="This merchant has no configured wallets in the admin payload."
                 />
@@ -253,9 +341,9 @@
             :message="confirmMessage"
             :confirm-label="confirmLabel"
             :danger="confirmDanger"
-            :loading="statusUpdating"
+            :loading="confirmSubmitting"
             @close="confirmOpen = false"
-            @confirm="confirmStatusChange"
+            @confirm="confirmAction"
         />
     </section>
 </template>
@@ -269,10 +357,15 @@ import {
     displayNetworkKey,
     displayNetworkLabel,
 } from '../../../utils/assetDisplay';
+import { assetOptionLabel, MERCHANT_ASSET_CATALOG } from '../../../utils/merchantAssetCatalog';
 import { copyTextToClipboard } from '../../../utils/clipboard';
 import {
+    createAdminMerchantWallet,
+    deleteAdminMerchantWallet,
     extractApiErrorMessage,
     getAdminMerchant,
+    getAdminMerchantWallets,
+    updateAdminMerchantWallet,
     updateAdminMerchantStatus,
 } from '../../../api/admin';
 import ConfirmModal from '../../../components/admin/ConfirmModal.vue';
@@ -294,12 +387,31 @@ const pendingStatus = ref('');
 const walletNotice = ref('');
 const walletNoticeType = ref('success');
 const copyingWalletId = ref(null);
+const walletsLoading = ref(false);
+const walletLoadError = ref('');
+const wallets = ref([]);
+const creatingWallet = ref(false);
+const showCreateWalletForm = ref(false);
+const createWalletForm = ref({
+    coin: '',
+    wallet: '',
+    fee_rate: '',
+});
+const editingWalletId = ref(null);
+const savingEditWalletId = ref(null);
+const editWalletForm = ref({
+    wallet: '',
+    fee_rate: '',
+});
+const deletingWalletId = ref(null);
+const walletToDelete = ref(null);
 
 const confirmOpen = ref(false);
 const confirmTitle = ref('');
 const confirmMessage = ref('');
 const confirmLabel = ref('Confirm');
 const confirmDanger = ref(false);
+const confirmActionType = ref('');
 
 const formatDate = (value) => (value ? new Date(value).toLocaleString() : '—');
 const invoiceAssetKey = (invoice) => String(invoice?.asset_key || invoice?.coin || '—').toLowerCase();
@@ -310,24 +422,30 @@ const paidRecentInvoices = computed(() => {
 const pendingRecentInvoices = computed(() => {
     return (merchant.value?.recent_invoices || []).filter((item) => ['pending', 'fixated'].includes(item.status)).length;
 });
-const walletsFieldPresent = computed(() => {
-    return Array.isArray(merchant.value?.wallets) || Array.isArray(merchant.value?.super_wallets);
+const merchantWallets = computed(() => [...wallets.value].sort((left, right) => Number(left?.id || 0) - Number(right?.id || 0)));
+const walletApiGap = computed(() => false);
+const walletAssetOptions = computed(() => {
+    return MERCHANT_ASSET_CATALOG.map((item) => ({
+        assetKey: item.assetKey,
+        label: assetOptionLabel(item.assetKey),
+        networkLabel: item.networkLabel,
+    }));
 });
-const merchantWallets = computed(() => {
-    const source = Array.isArray(merchant.value?.wallets)
-        ? merchant.value.wallets
-        : Array.isArray(merchant.value?.super_wallets)
-            ? merchant.value.super_wallets
-            : [];
-
-    return [...source].sort((left, right) => Number(left?.id || 0) - Number(right?.id || 0));
+const selectedCreateAsset = computed(() => {
+    return walletAssetOptions.value.find((item) => item.assetKey === String(createWalletForm.value.coin || '').toLowerCase()) || null;
 });
-const walletApiGap = computed(() => {
-    if (!merchant.value) {
-        return false;
+const selectedCreateAssetHint = computed(() => {
+    if (!selectedCreateAsset.value) {
+        return '';
     }
 
-    return !walletsFieldPresent.value;
+    return `Network: ${selectedCreateAsset.value.networkLabel}.`;
+});
+const walletMutationActive = computed(() => {
+    return creatingWallet.value || savingEditWalletId.value !== null || deletingWalletId.value !== null;
+});
+const confirmSubmitting = computed(() => {
+    return statusUpdating.value || deletingWalletId.value !== null;
 });
 
 const statusVariant = (status) => {
@@ -344,14 +462,82 @@ const statusVariant = (status) => {
     return 'warning';
 };
 
+const setWalletNotice = (type, message) => {
+    walletNoticeType.value = type;
+    walletNotice.value = message;
+};
+
+const asWalletList = (payload) => {
+    if (!Array.isArray(payload)) {
+        return [];
+    }
+
+    return payload;
+};
+
+const syncWalletSummary = () => {
+    if (!merchant.value) {
+        return;
+    }
+
+    const count = wallets.value.length;
+    if (!merchant.value.wallet_summary || typeof merchant.value.wallet_summary !== 'object') {
+        merchant.value.wallet_summary = { count };
+    } else {
+        merchant.value.wallet_summary.count = count;
+    }
+    merchant.value.wallets = wallets.value;
+};
+
+const setWalletsFromMerchantPayload = () => {
+    const source = Array.isArray(merchant.value?.wallets)
+        ? merchant.value.wallets
+        : Array.isArray(merchant.value?.super_wallets)
+            ? merchant.value.super_wallets
+            : [];
+
+    wallets.value = asWalletList(source);
+    syncWalletSummary();
+};
+
+const resetCreateWalletForm = () => {
+    createWalletForm.value = {
+        coin: '',
+        wallet: '',
+        fee_rate: '',
+    };
+};
+
+const loadWallets = async () => {
+    if (!merchantId.value) {
+        return;
+    }
+
+    walletsLoading.value = true;
+    walletLoadError.value = '';
+
+    try {
+        const response = await getAdminMerchantWallets(merchantId.value);
+        wallets.value = asWalletList(response?.data?.data);
+        syncWalletSummary();
+    } catch (requestError) {
+        walletLoadError.value = extractApiErrorMessage(requestError, 'Failed to load wallets.');
+    } finally {
+        walletsLoading.value = false;
+    }
+};
+
 const loadMerchant = async () => {
     loading.value = true;
     error.value = '';
     walletNotice.value = '';
+    walletLoadError.value = '';
 
     try {
         const response = await getAdminMerchant(merchantId.value);
         merchant.value = response.data?.data || null;
+        setWalletsFromMerchantPayload();
+        await loadWallets();
     } catch (requestError) {
         error.value = extractApiErrorMessage(requestError, 'Failed to load merchant details.');
     } finally {
@@ -361,8 +547,7 @@ const loadMerchant = async () => {
 
 const copyWalletAddress = async (wallet) => {
     if (!wallet?.wallet) {
-        walletNoticeType.value = 'error';
-        walletNotice.value = 'Nothing to copy.';
+        setWalletNotice('error', 'Nothing to copy.');
         return;
     }
 
@@ -370,18 +555,18 @@ const copyWalletAddress = async (wallet) => {
     const result = await copyTextToClipboard(wallet.wallet);
 
     if (result.ok) {
-        walletNoticeType.value = 'success';
-        walletNotice.value = `Wallet #${wallet.id ?? '—'} address copied.`;
+        setWalletNotice('success', `Wallet #${wallet.id ?? '—'} address copied.`);
         copyingWalletId.value = null;
         return;
     }
 
-    walletNoticeType.value = 'error';
-    walletNotice.value = result.message || 'Copy failed.';
+    setWalletNotice('error', result.message || 'Copy failed.');
     copyingWalletId.value = null;
 };
 
 const handleStatusAction = (nextStatus) => {
+    confirmActionType.value = 'status';
+    walletToDelete.value = null;
     pendingStatus.value = nextStatus;
     confirmDanger.value = nextStatus === 'disabled';
     confirmTitle.value = nextStatus === 'disabled' ? 'Suspend merchant' : 'Activate merchant';
@@ -406,6 +591,161 @@ const confirmStatusChange = async () => {
         error.value = extractApiErrorMessage(requestError, 'Failed to update merchant status.');
     } finally {
         statusUpdating.value = false;
+    }
+};
+
+const toggleCreateWalletForm = () => {
+    if (showCreateWalletForm.value) {
+        showCreateWalletForm.value = false;
+        resetCreateWalletForm();
+        return;
+    }
+
+    showCreateWalletForm.value = true;
+    walletNotice.value = '';
+};
+
+const submitCreateWallet = async () => {
+    const coin = String(createWalletForm.value.coin || '').trim().toLowerCase();
+    const walletAddress = String(createWalletForm.value.wallet || '').trim();
+    const feeRateRaw = String(createWalletForm.value.fee_rate || '').trim();
+
+    if (!coin) {
+        setWalletNotice('error', 'Asset/coin is required.');
+        return;
+    }
+
+    if (!walletAddress) {
+        setWalletNotice('error', 'Wallet is required.');
+        return;
+    }
+
+    const payload = {
+        coin,
+        wallet: walletAddress,
+        fee_rate: feeRateRaw === '' ? null : Number(feeRateRaw),
+    };
+
+    if (payload.fee_rate !== null && Number.isNaN(payload.fee_rate)) {
+        setWalletNotice('error', 'Fee rate must be a valid number.');
+        return;
+    }
+    if (payload.fee_rate !== null && payload.fee_rate < 0) {
+        setWalletNotice('error', 'Fee rate cannot be negative.');
+        return;
+    }
+
+    creatingWallet.value = true;
+
+    try {
+        await createAdminMerchantWallet(merchantId.value, payload);
+        await loadWallets();
+        showCreateWalletForm.value = false;
+        resetCreateWalletForm();
+        setWalletNotice('success', 'Wallet created.');
+    } catch (requestError) {
+        setWalletNotice('error', extractApiErrorMessage(requestError, 'Failed to create wallet.'));
+    } finally {
+        creatingWallet.value = false;
+    }
+};
+
+const startEditWallet = (wallet) => {
+    showCreateWalletForm.value = false;
+    editingWalletId.value = wallet.id;
+    editWalletForm.value = {
+        wallet: wallet.wallet || '',
+        fee_rate: wallet.fee_rate ?? '',
+    };
+    walletNotice.value = '';
+};
+
+const cancelEditWallet = () => {
+    editingWalletId.value = null;
+    editWalletForm.value = {
+        wallet: '',
+        fee_rate: '',
+    };
+};
+
+const submitEditWallet = async (wallet) => {
+    const walletAddress = String(editWalletForm.value.wallet || '').trim();
+    const feeRateRaw = String(editWalletForm.value.fee_rate || '').trim();
+
+    if (!walletAddress) {
+        setWalletNotice('error', 'Wallet is required.');
+        return;
+    }
+
+    const payload = {
+        wallet: walletAddress,
+        fee_rate: feeRateRaw === '' ? null : Number(feeRateRaw),
+    };
+
+    if (payload.fee_rate !== null && Number.isNaN(payload.fee_rate)) {
+        setWalletNotice('error', 'Fee rate must be a valid number.');
+        return;
+    }
+    if (payload.fee_rate !== null && payload.fee_rate < 0) {
+        setWalletNotice('error', 'Fee rate cannot be negative.');
+        return;
+    }
+
+    savingEditWalletId.value = wallet.id;
+
+    try {
+        await updateAdminMerchantWallet(merchantId.value, wallet.id, payload);
+        await loadWallets();
+        cancelEditWallet();
+        setWalletNotice('success', `Wallet #${wallet.id} updated.`);
+    } catch (requestError) {
+        setWalletNotice('error', extractApiErrorMessage(requestError, 'Failed to update wallet.'));
+    } finally {
+        savingEditWalletId.value = null;
+    }
+};
+
+const promptDeleteWallet = (wallet) => {
+    walletToDelete.value = wallet;
+    confirmActionType.value = 'wallet_delete';
+    confirmDanger.value = true;
+    confirmTitle.value = `Delete wallet #${wallet.id}`;
+    confirmLabel.value = 'Delete';
+    confirmMessage.value = 'Delete this wallet for the current merchant? This action cannot be undone.';
+    confirmOpen.value = true;
+};
+
+const confirmDeleteWallet = async () => {
+    if (!walletToDelete.value?.id) {
+        return;
+    }
+
+    deletingWalletId.value = walletToDelete.value.id;
+
+    try {
+        await deleteAdminMerchantWallet(merchantId.value, walletToDelete.value.id);
+        await loadWallets();
+        if (editingWalletId.value === walletToDelete.value.id) {
+            cancelEditWallet();
+        }
+        setWalletNotice('success', `Wallet #${walletToDelete.value.id} deleted.`);
+        confirmOpen.value = false;
+        walletToDelete.value = null;
+    } catch (requestError) {
+        setWalletNotice('error', extractApiErrorMessage(requestError, 'Failed to delete wallet.'));
+    } finally {
+        deletingWalletId.value = null;
+    }
+};
+
+const confirmAction = async () => {
+    if (confirmActionType.value === 'status') {
+        await confirmStatusChange();
+        return;
+    }
+
+    if (confirmActionType.value === 'wallet_delete') {
+        await confirmDeleteWallet();
     }
 };
 
@@ -491,6 +831,47 @@ loadMerchant();
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
+}
+
+.wallet-form-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #f8fafc;
+    padding: 12px;
+    margin-bottom: 12px;
+}
+
+.wallet-form-grid {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.wallet-field-label {
+    display: block;
+    color: #334155;
+    font-size: 12px;
+    margin-bottom: 6px;
+}
+
+.wallet-input {
+    width: 100%;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 8px 10px;
+    background: #fff;
+    color: #0f172a;
+    font: inherit;
+}
+
+.wallet-form-hint {
+    margin-top: 8px;
+}
+
+.wallet-form-actions {
+    margin-top: 10px;
+    display: flex;
+    justify-content: flex-start;
 }
 
 .wallet-actions {

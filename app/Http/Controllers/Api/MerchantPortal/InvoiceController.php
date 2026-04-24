@@ -81,7 +81,7 @@ class InvoiceController extends Controller
                 'received_conf_coin' => (string) $invoice->received_conf_coin,
                 'forward_status' => $invoice->forward_status,
                 'created_at' => $invoice->created_at->toIso8601String(),
-                'hosted_url' => rtrim(config('app.url'), '/') . '/i/' . $invoice->public_id,
+                'hosted_url' => $this->hostedUrl($invoice),
             ]),
             'meta' => [
                 'current_page' => $invoices->currentPage(),
@@ -145,7 +145,7 @@ class InvoiceController extends Controller
             'expected_usd' => (string) $invoice->expected_usd,
             'rate_usd' => (string) $invoice->rate_usd,
             'expires_at' => optional($invoice->expires_at)->toIso8601String(),
-            'hosted_url' => rtrim(config('app.url'), '/') . '/i/' . $invoice->public_id,
+            'hosted_url' => $this->hostedUrl($invoice),
         ];
     }
 
@@ -181,7 +181,12 @@ class InvoiceController extends Controller
             'paid_at' => optional($invoice->paid_at)->toIso8601String(),
             'created_at' => optional($invoice->created_at)->toIso8601String(),
             'metadata' => $invoice->metadata ?? [],
-            'hosted_url' => rtrim(config('app.url'), '/') . '/i/' . $invoice->public_id,
+            'hosted_url' => $this->hostedUrl($invoice),
         ];
+    }
+
+    private function hostedUrl(Invoice $invoice): string
+    {
+        return route('hosted-invoice.show', ['publicId' => $invoice->public_id]);
     }
 }

@@ -44,7 +44,7 @@ class InvoiceController extends Controller
                 'expected_usd' => (string)$invoice->expected_usd,
                 'rate_usd' => (string)$invoice->rate_usd,
                 'expires_at' => optional($invoice->expires_at)->toIso8601String(),
-                'hosted_url' => rtrim(config('app_url'), '/') . '/i/' . $invoice->public_id,
+                'hosted_url' => route('hosted-invoice.show', ['publicId' => $invoice->public_id]),
             ],
         ], 201);
     }

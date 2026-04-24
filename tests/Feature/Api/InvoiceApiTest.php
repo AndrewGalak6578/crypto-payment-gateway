@@ -74,6 +74,43 @@ final class InvoiceApiTest extends TestCase
         );
     }
 
+    public function test_create_invoice_uses_request_host_for_hosted_url(): void
+    {
+        Queue::fake();
+
+        config()->set('coins.mode', 'mock');
+        config()->set('payments.monitor.enabled', true);
+        config()->set('app.url', 'http://192.168.110.64');
+
+        $fakeRpc = new FakeCoinRpc();
+        $this->app->instance(MockRpc::class, $fakeRpc);
+
+        $this->mock(CoinRate::class, function ($mock): void {
+            $mock->shouldReceive('usd')->andReturn(50000.0);
+        });
+
+        $merchant = $this->createMerchant();
+        [, $plainToken] = $this->createApiKey($merchant, ['plain' => 'merchant_api_token_hosted_url']);
+
+        $response = $this
+            ->withServerVariables(['HTTP_HOST' => 'settlane.test'])
+            ->postJson('/api/v1/invoices', [
+                'external_id' => 'ext-hosted-url',
+                'amount_usd' => 25.00,
+                'coin' => 'btc',
+                'expires_minutes' => 30,
+            ], [
+                'Authorization' => 'Bearer ' . $plainToken,
+            ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath(
+                'data.hosted_url',
+                'http://settlane.test/i/' . $response->json('data.public_id')
+            );
+    }
+
     public function test_show_invoice_with_refresh_flag_returns_status_payload(): void
     {
         config()->set('coins.mode', 'mock');

@@ -49,9 +49,7 @@ class EvmPaymentAddressAllocator implements PaymentAddressAllocatorInterface
                     'address' => strtolower($derived->address),
                     'family' => 'evm',
                     'address_type' => 'deposit',
-                    'strategy' => (($derived->meta['temporary'] ?? false) === true)
-                        ? 'rpc_accounts_dev'
-                        : 'hd_derived',
+                    'strategy' => $this->resolveStrategy($derived->meta),
                     'status' => 'allocated',
                     'derivation_path' => $derived->derivationPath,
                     'derivation_index' => $derived->derivationIndex,
@@ -113,5 +111,15 @@ class EvmPaymentAddressAllocator implements PaymentAddressAllocatorInterface
         $sqlState = (string)($exception->errorInfo[0] ?? '');
 
         return $sqlState === '23000' || $sqlState === '23505';
+    }
+
+    /**
+     * @param array<string, mixed> $meta
+     */
+    private function resolveStrategy(array $meta): string
+    {
+        return (($meta['source'] ?? null) === 'rpc_accounts_dev')
+            ? 'rpc_accounts_dev'
+            : 'hd_derived';
     }
 }

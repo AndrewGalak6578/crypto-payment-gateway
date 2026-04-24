@@ -559,6 +559,7 @@ tbody tr:last-child td {
     margin: 8px 0 0;
     color: #64748b;
     font-size: 13px;
+    margin-bottom: 10px;
 }
 
 .status-badge {

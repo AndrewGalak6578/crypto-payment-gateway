@@ -31,7 +31,7 @@ class MerchantBalance extends Model
     protected function casts(): array
     {
         return [
-            'amount' => 'decimal:8'
+            'amount' => 'decimal:18'
         ];
     }
 

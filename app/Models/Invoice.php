@@ -88,8 +88,8 @@ class Invoice extends Model
             'forward_txids' => 'array',
             'forwarded_coin' => 'decimal:8',
             'forwarding_coin' => 'decimal:8',
-            'fee_coin' => 'decimal:8',
-            'merchant_payout_coin' => 'decimal:8',
+            'fee_coin' => 'decimal:18',
+            'merchant_payout_coin' => 'decimal:18',
         ];
     }
 

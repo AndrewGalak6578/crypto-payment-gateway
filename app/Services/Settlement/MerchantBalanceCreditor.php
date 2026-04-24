@@ -16,6 +16,7 @@ final class MerchantBalanceCreditor
      * Idempotently books fee and merchant payout for a paid invoice.
      *
      * @param int $invoiceId Internal invoice identifier.
+     * @throws \Throwable
      */
     public function credit(int $invoiceId): void
     {

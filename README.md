@@ -1,167 +1,402 @@
-# Crypto Payment Gateway (MVP)
+# Settlane
 
-## Project overview
-Crypto Payment Gateway is a Laravel + Vue system for crypto invoice processing with operational portals.
+**Portfolio MVP for a multi-asset invoice and settlement gateway**
 
-The repository already contains a working MVP pipeline:
-- issue invoices in USD terms
-- allocate per-invoice deposit addresses
-- monitor chain payments asynchronously
-- run settlement (wallet forwarding or internal balance fallback)
-- deliver signed webhooks with retries
+Settlane is a Laravel + Vue project that models the backend workflow of a payment gateway: merchant APIs, invoice creation, deposit address allocation, asynchronous payment monitoring, settlement, internal balance fallback, signed webhooks, and admin operations.
 
-This is not positioned as "production-ready everywhere". It is a serious MVP with implemented end-to-end flow and explicit operational constraints.
+It is positioned as an employer-facing portfolio project for backend and platform roles in fintech, banking, crypto exchanges, iGaming, and payment infrastructure. It is not positioned as production-ready software for real funds.
 
-## What this system does
-At runtime, the system closes the invoice lifecycle for merchants:
-1. Merchant creates an invoice through API or merchant portal.
-2. Gateway snapshots rate, computes coin amount, allocates deposit address.
-3. Queue worker monitors on-chain payments and moves invoice state.
-4. After payment confirmation, settlement runs:
-- forward merchant net to configured destination wallet, or
-- credit internal merchant balance when wallet is absent.
-5. State transitions are published to merchant webhook endpoint via signed delivery jobs.
+## Quick Links
 
-## Supported flows and assets
-Configured in current `main` (`config/assets.php`, `config/chains.php`):
+| Link | URL |
+|---|---|
+| Live demo | [Add demo URL](https://example.com) |
+| GitHub profile | [Add GitHub profile](https://github.com/your-username) |
 
-| Asset key | Network key | Family | Type |
-|---|---|---|---|
-| `btc` | `bitcoin` | UTXO | Native coin |
-| `ltc` | `litecoin` | UTXO | Native coin |
-| `dash` | `dash` | UTXO | Native coin |
-| `eth_local` | `evm_local` | EVM | Native coin |
-| `eth_usdt_local` | `evm_local` | EVM | ERC-20 token |
+## Overview
 
-High-level support status on `main`:
-- UTXO path (BTC/LTC/DASH): invoice monitoring and forwarding path is implemented and covered by tests.
-- EVM path (`evm_local`): native + ERC-20 monitoring and settlement plumbing exists, including ERC-20 gas sponsorship flow for payout preconditions.
+This project models the operational flow of a gateway that accepts crypto-denominated payments for merchants while keeping the merchant-facing API in invoice terms:
 
-## Merchant/admin/hosted surfaces
-- Merchant API (`/api/v1/*` with bearer API key): create invoice, read invoice, refresh invoice.
-- Merchant Portal (`/merchant/*`): dashboard, invoices, balances, wallets, API keys, webhook settings, webhook deliveries.
-- Admin Portal (`/admin/*`): dashboard, merchants, merchant users, invoices, webhook deliveries, merchant API keys, merchant wallets.
-- Hosted Invoice (`/i/{publicId}` + `/i/{publicId}/status`): customer-facing invoice payment surface.
+- a merchant creates an invoice in USD terms
+- the gateway snapshots a rate and computes the payable asset amount
+- the system allocates a dedicated deposit address
+- queue workers refresh invoice state from chain data
+- paid invoices are either forwarded to a configured wallet or credited to an internal balance
+- invoice state changes are delivered to merchant webhook endpoints with persisted delivery history
 
-## Architecture overview
-Single Laravel backend provides API, portals, hosted flow, and queue workers.
+The repository includes:
 
-Main pipeline components:
-- `InvoiceCreator` - invoice creation, rate snapshot, address allocation, monitor scheduling
-- `MonitorInvoiceJob` + `InvoiceStatusRefresher` - chain polling and state transitions
-- `ForwardInvoiceJob` + `InvoiceForwarder` - settlement orchestration
-- `MerchantBalanceCreditor` - fallback payout bookkeeping
-- `EnqueueInvoiceWebhook` + `DeliverWebhookJob` + `WebhookDeliverySender` - signed webhook delivery with retries
+- merchant API endpoints for invoice operations
+- merchant and admin web portals
+- public hosted invoice pages
+- queue-driven invoice monitoring, settlement, and webhook delivery
+- UTXO support for `btc`, `ltc`, and `dash`
+- local/dev EVM support for `eth_local` and `eth_usdt_local`
 
-Visual architecture page:
-- `/architecture` (browser-friendly overview for demos)
+## What Problem It Models
 
-## Core business lifecycle
-Invoice status and settlement lifecycle:
-1. `create` -> invoice created with `pending`
-2. `pending` -> payment detected on allocated address
-3. `fixated` -> first valid payment seen before expiry
-4. `paid` -> confirmed amount reaches paid threshold
-5. settlement stage:
-- on-chain forwarding to merchant wallet (`forward_status` progresses), or
-- internal balance credit fallback
-6. webhook stage:
-- events persisted as delivery records
-- async sender attempts delivery
-- failed deliveries retried by policy
+Settlane models the backend concerns of a transactional payment system:
 
-## Current MVP scope
-Included now:
-- end-to-end invoice processing loop
-- async monitoring/settlement/webhook jobs
-- role-separated merchant and admin operational surfaces
-- hosted customer invoice flow
-- multi-asset routing via `asset_key` + `network_key`
-- UTXO + local EVM native/ERC-20 support model
+- translating merchant invoice intent into chain-specific payment instructions
+- tracking an invoice through multiple state transitions
+- isolating deposit addresses per invoice
+- separating payment detection from settlement
+- handling payout fallback when no forwarding wallet is configured
+- exposing operational visibility to merchant and admin users
+- persisting and retrying outbound webhooks
 
-Not claimed here:
-- universal production custody/signing integration for all EVM environments
-- fully hardened production operations for every deployment context out of the box
+## Implemented Features
 
-## Tech stack
-- Backend: PHP 8.2, Laravel 12, Eloquent ORM, queued jobs
-- Frontend: Vue 3, Vite, portal SPA entrypoints
-- Infra/dev: Docker Sail, PostgreSQL/Redis (compose), optional local chain nodes
-- Testing: PHPUnit (Feature/Unit/Integration)
+### Core payment flow
 
-## Local development
-Fast local bootstrap:
+- Merchant API key authentication for `/api/v1` invoice endpoints.
+- Invoice creation with:
+  - merchant-scoped idempotency by `external_id`
+  - USD rate snapshotting
+  - asset/network resolution
+  - dedicated payment address allocation
+  - hosted invoice URL generation
+  - monitor job dispatch
+- Invoice state refresh with transitions:
+  - `pending`
+  - `fixated`
+  - `paid`
+  - `expired`
+- Public hosted invoice page and polling endpoint by `public_id`.
+
+### Address allocation
+
+- UTXO address allocation via node RPC `getnewaddress`.
+- EVM address allocation persisted in `payment_addresses`.
+- EVM derivation index tracking through `payment_address_cursors`.
+- Address-to-invoice linkage with assigned status and metadata.
+
+### Settlement
+
+- Net settlement after merchant fee deduction.
+- Forwarding to merchant-specific or global destination wallet when configured.
+- Internal balance credit fallback when no forwarding wallet exists.
+- Forwarding status tracking on invoices.
+- EVM-native payout path.
+- Local ERC-20 payout path with gas pre-check and gas top-up deferral logic.
+
+### Webhooks
+
+- Signed outbound invoice webhooks using HMAC SHA-256.
+- Persisted webhook delivery records.
+- Async delivery via queued job.
+- Retry scheduling with stored attempt/error metadata.
+- Merchant and admin visibility into delivery history.
+- Admin manual retry endpoint.
+
+### Merchant operations
+
+- Merchant portal login/logout/me flow.
+- Merchant portal pages for:
+  - dashboard
+  - invoices list and detail
+  - balances
+  - wallets
+  - webhook settings
+  - webhook deliveries
+  - API keys
+  - create test invoice
+- Merchant RBAC model with roles and capabilities enforced on portal routes.
+
+### Admin operations
+
+- Admin portal login/logout/me flow.
+- Admin portal pages for:
+  - dashboard
+  - merchants
+  - merchant detail
+  - merchant users
+  - invoices
+  - webhook deliveries
+  - merchant API key metadata
+- Admin merchant creation.
+- Admin merchant wallet CRUD.
+- Admin merchant user create / role update / status update.
+- Admin invoice refresh endpoint.
+
+## Supported Assets and Networks
+
+| Asset key | Network key | Chain family | Asset type | Status in repo |
+|---|---|---|---|---|
+| `btc` | `bitcoin` | UTXO | Native | Implemented |
+| `ltc` | `litecoin` | UTXO | Native | Implemented |
+| `dash` | `dash` | UTXO | Native | Implemented |
+| `eth_local` | `evm_local` | EVM | Native | Implemented for local/dev setup |
+| `eth_usdt_local` | `evm_local` | EVM | ERC-20 token | Implemented for local/dev setup |
+
+## Architecture Overview
+
+Settlane uses a single Laravel backend for API routes, hosted invoice pages, queue workers, and both operator portals.
+
+### Main backend components
+
+| Component | Responsibility |
+|---|---|
+| `InvoiceCreator` | Creates invoices, snapshots rate, allocates payment address, schedules monitoring |
+| `MonitorInvoiceJob` | Re-dispatching monitor loop for active invoices |
+| `InvoiceStatusRefresher` | Reads chain state and applies invoice transitions |
+| `ForwardInvoiceJob` | Async settlement trigger |
+| `InvoiceForwarder` | Resolves settlement destination and executes forwarding or fallback credit |
+| `MerchantBalanceCreditor` | Credits internal merchant balances when no wallet is configured |
+| `EnqueueInvoiceWebhook` | Persists outgoing webhook deliveries |
+| `DeliverWebhookJob` | Async webhook delivery trigger |
+| `WebhookDeliverySender` | Executes webhook HTTP delivery and retry scheduling |
+| `PaymentAddressAllocatorManager` | Chooses UTXO vs EVM allocation strategy |
+| `ChainManager` / `ChainRegistry` | Resolves chain drivers and chain metadata |
+| `AssetRegistry` | Central asset catalog for asset/network metadata |
+
+### Persistence model
+
+Key tables and models:
+
+- `merchants`
+- `merchant_users`
+- `roles`
+- `capabilities`
+- `merchant_api_keys`
+- `invoices`
+- `payment_addresses`
+- `super_wallets`
+- `merchant_balances`
+- `webhook_deliveries`
+- `evm_gas_fundings`
+
+### High-level system flow
+
+```mermaid
+flowchart LR
+    A[Merchant API / Portal] --> B[InvoiceCreator]
+    B --> C[Invoice + PaymentAddress]
+    B --> D[MonitorInvoiceJob]
+    D --> E[InvoiceStatusRefresher]
+    E --> F{Invoice paid?}
+    F -- No --> D
+    F -- Yes --> G[ForwardInvoiceJob]
+    G --> H[InvoiceForwarder]
+    H --> I[Forward to wallet]
+    H --> J[Credit internal balance]
+    E --> K[EnqueueInvoiceWebhook]
+    H --> K
+    K --> L[DeliverWebhookJob]
+    L --> M[WebhookDeliverySender]
+```
+
+## Payment / Invoice Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending
+    pending --> fixated: payment detected before expiry
+    pending --> expired: no valid payment before expiry
+    pending --> paid: confirmed amount reaches threshold
+    fixated --> paid: confirmed amount reaches threshold
+    expired --> paid: payment confirmed after expiry
+```
+
+### Settlement behavior after `paid`
+
+1. The system calculates the merchant net amount after fee deduction.
+2. If a merchant-specific or global forwarding wallet exists for the asset/network, Settlane attempts on-chain forwarding.
+3. If no forwarding wallet exists, Settlane credits `merchant_balances` instead.
+4. Settlement completion triggers `invoice.forwarded` webhook enqueueing.
+
+## Backend Reliability Features
+
+- Queue-backed monitoring, settlement, and webhook delivery.
+- Invoice idempotency by `merchant_id + external_id`.
+- DB transaction boundaries around status refresh and settlement reservation/finalization.
+- Per-invoice forwarding attempt UUID tracking.
+- Persisted webhook delivery attempts, statuses, timestamps, and errors.
+- Merchant balance fallback when forwarding destination is absent.
+- Separate payment address records rather than relying only on invoice rows.
+- Real-RPC integration tests for UTXO forwarding flows.
+
+## Tech Stack
+
+| Layer | Stack |
+|---|---|
+| Backend | PHP 8.2, Laravel 12 |
+| Frontend | Vue 3, Vue Router, Pinia, Vite |
+| Database | PostgreSQL |
+| Queue/cache | Database queue, Redis |
+| Auth | Session guards for portals, hashed merchant API keys for `/api/v1` |
+| Testing | PHPUnit feature, unit, and integration tests |
+| Local infra | Laravel Sail, Docker Compose, regtest UTXO nodes, Anvil |
+
+## Local Setup
+
+### Requirements
+
+- PHP 8.2
+- Composer
+- Node.js + npm
+- PostgreSQL
+- Redis
+- Docker / Docker Compose for the included local node stack
+
+### Environment notes
+
+- `.env.example` defaults to `COIN_RPC_MODE=real`, which expects local chain nodes to be available.
+- Merchant/admin portal usage requires seeded RBAC data and an admin user.
+- Local EVM flows require additional mnemonic/key-ref configuration because the default env leaves local HD secret material blank.
+
+### Bootstrapping
+
+Install dependencies and create the app env:
 
 ```bash
 cp .env.example .env
 composer install
 npm install
+```
+
+Generate the app key and run migrations:
+
+```bash
 php artisan key:generate
 php artisan migrate --force
+```
+
+Seed merchant roles/capabilities and create the admin bootstrap user:
+
+```bash
 php artisan db:seed
 php artisan db:seed --class=AdminUserSeeder
 ```
 
-Run full local app stack (recommended for active development):
+Build frontend assets:
+
+```bash
+npm run build
+```
+
+### Running locally
+
+Full local dev process:
 
 ```bash
 composer dev
 ```
 
-Or run parts separately:
+Frontend-only:
 
 ```bash
 npm run dev
-php artisan serve
-php artisan queue:listen --tries=1 --timeout=0
 ```
 
-One-command project bootstrap is also available:
+### Docker / local node stack
 
-```bash
-composer setup
-```
+`compose.yaml` includes:
 
-## Verification/testing
-Main commands:
+- Laravel Sail app container
+- PostgreSQL
+- Redis
+- Bitcoin regtest node
+- Litecoin regtest node
+- Dash regtest node
+- Anvil local EVM node
 
-```bash
-composer test
-composer test:fast
-composer test:integration
-composer test:all
-npm run build
-```
+## Demo Flows
 
-Practical verification note:
-- Queue worker must be running to observe monitoring, forwarding, and webhook progression in real flows.
+### Flow 1: Merchant invoice lifecycle
 
-## Demo flow
-Quick demo sequence (career fair friendly):
-1. Admin creates merchant and merchant user.
-2. Merchant configures destination wallet and webhook URL/secret.
-3. Merchant creates invoice (API or portal test-invoice page).
-4. Customer opens hosted invoice page and pays.
-5. Operator observes status progression: `pending -> fixated -> paid`.
-6. Operator observes settlement outcome: forwarded on-chain or internal balance fallback.
-7. Operator verifies webhook delivery history and invoice record in admin portal.
+1. Seed roles and create the admin bootstrap user.
+2. Log in to the admin portal.
+3. Create a merchant.
+4. Create a merchant user.
+5. Log in to the merchant portal.
+6. Configure a forwarding wallet.
+7. Create an API key or use the portal test-invoice page.
+8. Create an invoice.
+9. Open the hosted invoice page.
+10. Pay the deposit address in the local demo environment.
+11. Observe status progression: `pending -> fixated -> paid`.
 
-## Known limitations
-- Test webhook receiver routes are still present in API routes and should be controlled per environment.
-- Legacy `coin` compatibility remains alongside `asset_key/network_key`; data consistency depends on migration/backfill discipline.
-- EVM flows are centered on configured local network path (`evm_local`) in this repository context.
-- No browser E2E suite is included in-repo (current coverage is API/service/integration-centric).
+### Flow 2: Settlement forwarding
 
-## Why this project is interesting technically
-- Clean state-machine-driven lifecycle for money movement events.
-- Queue-first architecture for reliability and operational decoupling.
-- Multi-chain abstraction with family-aware logic (UTXO vs EVM vs ERC-20).
-- Role-separated operational interfaces (merchant/admin) with capability checks.
-- Explicit webhook pipeline with persistence, signatures, retries, and admin visibility.
-- Practical settlement resilience: wallet forwarding plus internal balance fallback.
+1. Configure a forwarding wallet for the merchant or global scope.
+2. Pay a test invoice.
+3. Observe `forward_status` and forwarding tx IDs on the invoice detail page.
+4. Verify settlement behavior in admin and merchant views.
 
-## Related docs
-- One-pager: `docs/PROJECT_ONE_PAGER.md`
-- Architecture demo page: `/architecture`
-- Verification checklist: `docs/MVP_VERIFICATION_CHECKLIST.md`
-- Known gaps register: `docs/MVP_KNOWN_GAPS.md`
+### Flow 3: Internal balance fallback
+
+1. Remove or skip wallet configuration.
+2. Pay a test invoice.
+3. Observe merchant balance credit in `merchant_balances`.
+
+### Flow 4: Webhook delivery and retry
+
+1. Configure merchant webhook URL and secret.
+2. Trigger invoice events through payment state changes.
+3. Inspect webhook delivery records in merchant or admin portal.
+4. Retry a failed delivery from the admin portal.
+
+## Testing
+
+| Command | Purpose |
+|---|---|
+| `composer test` | Default Laravel test run |
+| `composer test:fast` | Feature/API + core service/webhook coverage |
+| `composer test:integration` | Real-RPC integration tests |
+| `composer test:all` | Fast tests plus integration tests |
+| `npm run build` | Frontend production build |
+
+## Screenshots
+
+Placeholder section:
+
+- Merchant dashboard
+- Merchant invoice detail
+- Hosted invoice page
+- Admin merchant detail
+- Admin webhook delivery detail
+
+## What This Project Demonstrates
+
+For backend team leads and hiring managers, this project demonstrates:
+
+- service-oriented Laravel application design for transactional workflows
+- separation of invoice creation, monitoring, settlement, and notification concerns
+- queue-driven reliability patterns instead of synchronous request-bound processing
+- multi-asset and multi-network abstraction using registries and family-aware services
+- operational modeling around idempotency, retries, settlement fallback, and status visibility
+- practical admin tooling for merchants, wallets, invoice inspection, and webhook debugging
+- an implementation style that is closer to payment infrastructure than to a CRUD demo
+
+## Portfolio / Demo Scope Note
+
+Settlane should be evaluated as a portfolio MVP that demonstrates backend architecture for payment and settlement systems.
+
+It is intentionally useful as a code sample for:
+
+- payment gateway orchestration
+- invoice lifecycle handling
+- wallet allocation
+- settlement bookkeeping
+- webhook delivery pipelines
+- operator-facing admin tooling
+
+It should not be evaluated as a claim of production readiness for custody or real-money operations.
+
+## What This Project Is Not
+
+- Not a production-ready gateway for real funds.
+- Not a complete custody platform or audited wallet/signing system.
+- Not a hardened compliance, treasury, or reconciliation platform.
+- Not full mainnet EVM support; current EVM support is local/dev-oriented.
+- Not a claim of complete admin authorization; admin roles exist in data but route-level role enforcement is not implemented.
+- Not a browser E2E-tested product.
+
+## Current Scope Notes
+
+- Merchant API routes are implemented under `/api/v1`.
+- Merchant and admin portals are implemented as separate Vue apps.
+- Hosted invoices are implemented at `/i/{publicId}`.
+- UTXO support is the strongest end-to-end path in the repository today.
+- EVM support is implemented but should be presented as local/demo scope rather than production custody architecture.

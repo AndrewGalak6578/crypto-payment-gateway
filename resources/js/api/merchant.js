@@ -25,3 +25,8 @@ export const deleteMerchantApiKey = (id) => api.delete(`/api/merchant/api-keys/$
 
 export const createMerchantInvoice = (payload) => api.post('/api/merchant/invoices', payload);
 export const refreshMerchantInvoice = (id) => api.post(`/api/merchant/invoices/${id}/refresh`);
+
+export const getMerchantPortalUsers = (params = {}) => api.get('/api/merchant/merchant-users', { params });
+export const createMerchantPortalUser = (payload) => api.post('/api/merchant/merchant-users', payload);
+export const updateMerchantPortalUserRole = (merchantUserId, payload) => api.patch(`/api/merchant/merchant-users/${merchantUserId}/role`, payload);
+export const updateMerchantPortalUserStatus = (merchantUserId, payload) => api.patch(`/api/merchant/merchant-users/${merchantUserId}/status`, payload);

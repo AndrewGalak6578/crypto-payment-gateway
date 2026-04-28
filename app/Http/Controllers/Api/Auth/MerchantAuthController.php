@@ -5,14 +5,68 @@ namespace App\Http\Controllers\Api\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\MerchantLoginRequest;
+use App\Http\Requests\Auth\MerchantRegisterRequest;
+use App\Models\Merchant;
 use App\Models\MerchantUser;
+use App\Models\Role;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 final class MerchantAuthController extends Controller
 {
+    public function register(MerchantRegisterRequest $request): JsonResponse
+    {
+        $data = $request->validated();
+
+        $user = DB::transaction(function () use ($data): MerchantUser {
+            $ownerRole = Role::query()
+                ->where('slug', 'merchant.owner')
+                ->first();
+
+            if (!$ownerRole) {
+                throw new HttpResponseException(response()->json([
+                    'success' => false,
+                    'message' => 'Merchant owner role is not configured.',
+                ], 500));
+            }
+
+            $merchant = Merchant::query()->create([
+                'name' => $data['merchant_name'],
+                'status' => 'active',
+                'fee_percent' => 2.00,
+            ]);
+
+            return MerchantUser::query()->create([
+                'merchant_id' => $merchant->id,
+                'name' => $data['owner_name'],
+                'email' => $data['email'],
+                'password' => $data['password'],
+                'role_id' => $ownerRole->id,
+                'status' => 'active',
+            ]);
+        });
+
+        Auth::guard('merchant')->login($user);
+        $request->session()->regenerate();
+
+        $user->forceFill([
+            'last_login_at' => now('UTC'),
+        ])->save();
+
+        $user->load('merchant');
+        $user->load('role');
+        $user->load('role.capabilities');
+
+        return response()->json([
+            'success' => true,
+            'data' => $this->payload($user),
+        ], 201);
+    }
+
     public function login(MerchantLoginRequest $request): JsonResponse
     {
         /** @var MerchantUser $user */

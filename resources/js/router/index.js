@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import AuthLayout from '../layouts/AuthLayout.vue';
 import MerchantLayout from '../layouts/MerchantLayout.vue';
 import MerchantLoginPage from '../pages/auth/MerchantLoginPage.vue';
+import MerchantRegisterPage from '../pages/auth/MerchantRegisterPage.vue';
 import MerchantDashboardPage from '../pages/merchant/MerchantDashboardPage.vue';
 import MerchantBalancesPage from "../pages/merchant/MerchantBalancesPage.vue";
 import MerchantWalletsPage from "../pages/merchant/MerchantWalletsPage.vue";
@@ -12,6 +13,7 @@ import MerchantWebhookSettingsPage from "../pages/merchant/MerchantWebhookSettin
 import MerchantWebhookDeliveriesPage from "../pages/merchant/MerchantWebhookDeliveriesPage.vue";
 import MerchantApiKeysPage from "../pages/merchant/MerchantApiKeysPage.vue";
 import MerchantCreateTestInvoicePage from "../pages/merchant/MerchantCreateTestInvoicePage.vue";
+import MerchantUsersPage from '../pages/merchant/MerchantUsersPage.vue';
 
 const routes = [
     {
@@ -27,6 +29,18 @@ const routes = [
                 path: '',
                 name: 'merchant.login',
                 component: MerchantLoginPage,
+            },
+        ],
+    },
+    {
+        path: '/merchant/register',
+        component: AuthLayout,
+        meta: { guestOnly: true },
+        children: [
+            {
+                path: '',
+                name: 'merchant.register',
+                component: MerchantRegisterPage,
             },
         ],
     },
@@ -69,6 +83,11 @@ const routes = [
                 path: 'api-keys',
                 name: 'merchant.api-keys',
                 component: MerchantApiKeysPage,
+            },
+            {
+                path: 'users',
+                name: 'merchant.users',
+                component: MerchantUsersPage,
             },
             {
                 path: 'test-invoice',

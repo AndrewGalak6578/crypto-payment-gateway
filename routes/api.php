@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 /** Auth routes for admin and merchant */
 Route::prefix('auth/merchant')->middleware('web')->group(function () {
+    Route::post('/register', [\App\Http\Controllers\Api\Auth\MerchantAuthController::class, 'register']);
     Route::post('/login', [\App\Http\Controllers\Api\Auth\MerchantAuthController::class, 'login']);
     Route::post('/logout', [\App\Http\Controllers\Api\Auth\MerchantAuthController::class, 'logout'])->middleware('auth.merchant.portal');
     Route::get('/me', [\App\Http\Controllers\Api\Auth\MerchantAuthController::class, 'me'])->middleware('auth.merchant.portal');
@@ -74,6 +75,11 @@ Route::prefix('merchant')->middleware(['auth.merchant.portal', 'web', 'merchant.
     Route::get('/api-keys', [\App\Http\Controllers\Api\MerchantPortal\ApiKeyController::class, 'index'])->middleware('merchant.capability:api_keys.read');
     Route::post('/api-keys', [\App\Http\Controllers\Api\MerchantPortal\ApiKeyController::class, 'store'])->middleware('merchant.capability:api_keys.write');
     Route::delete('/api-keys/{id}', [\App\Http\Controllers\Api\MerchantPortal\ApiKeyController::class, 'destroy'])->middleware('merchant.capability:api_keys.write');
+
+    Route::get('/merchant-users', [\App\Http\Controllers\Api\MerchantPortal\MerchantUserController::class, 'index'])->middleware('merchant.capability:merchant_users.read');
+    Route::post('/merchant-users', [\App\Http\Controllers\Api\MerchantPortal\MerchantUserController::class, 'store'])->middleware('merchant.capability:merchant_users.write');
+    Route::patch('/merchant-users/{merchantUser}/role', [\App\Http\Controllers\Api\MerchantPortal\MerchantUserController::class, 'updateRole'])->middleware('merchant.capability:merchant_users.write');
+    Route::patch('/merchant-users/{merchantUser}/status', [\App\Http\Controllers\Api\MerchantPortal\MerchantUserController::class, 'updateStatus'])->middleware('merchant.capability:merchant_users.write');
 });
 
 Route::prefix('v1')->middleware('auth.merchant')->group(function () {

@@ -79,6 +79,7 @@ const navigationItems = computed(() => ([
     { label: 'Webhook Deliveries', to: '/merchant/webhook-deliveries', canView: authStore.hasCapability('webhooks.read') },
     { label: 'Webhook Settings', to: '/merchant/webhook-settings', canView: authStore.hasCapability('webhooks.read') },
     { label: 'API Keys', to: '/merchant/api-keys', canView: authStore.hasCapability('api_keys.read') },
+    { label: 'Merchant Users', to: '/merchant/users', canView: authStore.hasCapability('merchant_users.read') },
 ]).filter((item) => item.canView));
 
 const merchantLabel = computed(() => authStore.merchant?.name || 'Merchant');

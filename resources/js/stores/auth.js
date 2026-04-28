@@ -48,6 +48,20 @@ export const useAuthStore = defineStore('auth', {
             }
         },
 
+        async registerMerchant(payload) {
+            this.loading = true;
+
+            try {
+                await api.get('/sanctum/csrf-cookie');
+                const response = await api.post('/api/auth/merchant/register', payload);
+                this.setAuthPayload(response.data?.data);
+                this.initialized = true;
+                return response.data?.data ?? null;
+            } finally {
+                this.loading = false;
+            }
+        },
+
         async fetchMe() {
             const response = await api.get('/api/auth/merchant/me');
             this.setAuthPayload(response.data?.data);

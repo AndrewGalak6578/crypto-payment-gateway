@@ -16,6 +16,10 @@
         {{ authStore.loading ? 'Signing in...' : 'Sign in' }}
       </button>
     </form>
+
+    <RouterLink class="secondary-link" :to="{ name: 'merchant.register' }">
+      Register Merchant
+    </RouterLink>
   </div>
 </template>
 
@@ -109,5 +113,12 @@ const submit = async () => {
 .submit:disabled {
   opacity: 0.75;
   cursor: not-allowed;
+}
+
+.secondary-link {
+  display: inline-block;
+  margin-top: 16px;
+  color: #334155;
+  text-decoration: none;
 }
 </style>

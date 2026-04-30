@@ -78,6 +78,15 @@ final class MerchantUserManagementApiTest extends TestCase
             'status' => 'disabled',
             'role_id' => $viewerRoleId,
         ]);
+
+        $deleteResponse = $this->deleteJson("/api/merchant/merchant-users/{$createdUserId}");
+
+        $deleteResponse->assertOk()
+            ->assertJsonPath('success', true);
+
+        $this->assertDatabaseMissing('merchant_users', [
+            'id' => $createdUserId,
+        ]);
     }
 
     public function test_admin_cannot_create_or_update_merchant_users_without_write_capability(): void
@@ -108,6 +117,10 @@ final class MerchantUserManagementApiTest extends TestCase
         ]);
 
         $statusResponse->assertForbidden();
+
+        $deleteResponse = $this->deleteJson("/api/merchant/merchant-users/{$viewer->id}");
+
+        $deleteResponse->assertForbidden();
     }
 
     public function test_owner_cannot_disable_last_active_owner(): void
@@ -125,6 +138,29 @@ final class MerchantUserManagementApiTest extends TestCase
         $response = $this->patchJson("/api/merchant/merchant-users/{$owner->id}/status", [
             'status' => 'disabled',
         ]);
+
+        $response->assertStatus(422)
+            ->assertJsonPath('message', 'At least one active owner must remain.');
+
+        $this->assertDatabaseHas('merchant_users', [
+            'id' => $owner->id,
+            'status' => 'active',
+        ]);
+    }
+
+    public function test_owner_cannot_delete_last_active_owner(): void
+    {
+        $merchant = Merchant::query()->create([
+            'name' => 'Merchant A',
+            'status' => 'active',
+            'fee_percent' => 2.00,
+        ]);
+
+        $owner = $this->createMerchantUser($merchant, 'merchant.owner', 'owner@example.test');
+
+        $this->actingAs($owner, 'merchant');
+
+        $response = $this->deleteJson("/api/merchant/merchant-users/{$owner->id}");
 
         $response->assertStatus(422)
             ->assertJsonPath('message', 'At least one active owner must remain.');

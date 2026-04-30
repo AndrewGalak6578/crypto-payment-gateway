@@ -115,15 +115,24 @@
             <td>{{ formatDate(user.last_login_at) }}</td>
             <td>{{ formatDate(user.created_at) }}</td>
             <td>
-              <button
-                v-if="canManageUsers"
-                type="button"
-                class="secondary-btn"
-                :disabled="Boolean(statusLoadingByUser[user.id])"
-                @click="changeStatus(user, user.status === 'active' ? 'disabled' : 'active')"
-              >
-                {{ statusLoadingByUser[user.id] ? 'Saving...' : user.status === 'active' ? 'Disable' : 'Enable' }}
-              </button>
+              <div v-if="canManageUsers" class="action-stack">
+                <button
+                  type="button"
+                  class="secondary-btn"
+                  :disabled="Boolean(statusLoadingByUser[user.id]) || Boolean(deleteLoadingByUser[user.id])"
+                  @click="changeStatus(user, user.status === 'active' ? 'disabled' : 'active')"
+                >
+                  {{ statusLoadingByUser[user.id] ? 'Saving...' : user.status === 'active' ? 'Disable' : 'Enable' }}
+                </button>
+                <button
+                  type="button"
+                  class="danger-btn"
+                  :disabled="Boolean(statusLoadingByUser[user.id]) || Boolean(deleteLoadingByUser[user.id])"
+                  @click="deleteUser(user)"
+                >
+                  {{ deleteLoadingByUser[user.id] ? 'Deleting...' : 'Delete' }}
+                </button>
+              </div>
               <span v-else class="muted">No actions</span>
             </td>
           </tr>
@@ -159,6 +168,7 @@ import { reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   createMerchantPortalUser,
+  deleteMerchantPortalUser,
   getMerchantPortalUsers,
   updateMerchantPortalUserRole,
   updateMerchantPortalUserStatus,
@@ -180,6 +190,7 @@ const users = ref([]);
 const roleOptions = ref([]);
 const roleLoadingByUser = ref({});
 const statusLoadingByUser = ref({});
+const deleteLoadingByUser = ref({});
 const roleDraftByUser = ref({});
 
 const meta = ref({
@@ -366,6 +377,30 @@ const changeStatus = async (user, nextStatus) => {
   }
 };
 
+const deleteUser = async (user) => {
+  const confirmed = window.confirm(`Delete merchant user ${user.email}?`);
+  if (!confirmed) {
+    return;
+  }
+
+  deleteLoadingByUser.value = {
+    ...deleteLoadingByUser.value,
+    [user.id]: true,
+  };
+
+  try {
+    await deleteMerchantPortalUser(user.id);
+    await loadUsers();
+  } catch (requestError) {
+    error.value = extractApiErrorMessage(requestError, 'Failed to delete merchant user.');
+  } finally {
+    deleteLoadingByUser.value = {
+      ...deleteLoadingByUser.value,
+      [user.id]: false,
+    };
+  }
+};
+
 watch(
   () => route.query,
   async () => {
@@ -418,7 +453,8 @@ watch(
 input,
 select,
 .primary-btn,
-.secondary-btn {
+.secondary-btn,
+.danger-btn {
   border-radius: 8px;
   border: 1px solid #cbd5e1;
   padding: 9px 11px;
@@ -434,14 +470,22 @@ select,
 }
 
 .primary-btn,
-.secondary-btn {
+.secondary-btn,
+.danger-btn {
   cursor: pointer;
 }
 
 .primary-btn:disabled,
-.secondary-btn:disabled {
+.secondary-btn:disabled,
+.danger-btn:disabled {
   opacity: 0.7;
   cursor: not-allowed;
+}
+
+.danger-btn {
+  background: #fee2e2;
+  border-color: #fecaca;
+  color: #991b1b;
 }
 
 table {
@@ -460,6 +504,12 @@ td {
 }
 
 .role-editor {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.action-stack {
   display: flex;
   gap: 8px;
   align-items: center;
@@ -520,6 +570,10 @@ td {
 
   .role-editor {
     min-width: 220px;
+  }
+
+  .action-stack {
+    min-width: 180px;
   }
 }
 </style>

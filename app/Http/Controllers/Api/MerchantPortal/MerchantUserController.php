@@ -149,6 +149,30 @@ class MerchantUserController extends Controller
         ]);
     }
 
+    public function destroy(Request $request, MerchantUser $merchantUser): JsonResponse
+    {
+        $actor = $this->currentMerchantUser($request);
+        $merchantUser = $this->scopedMerchantUser($merchantUser, $actor);
+
+        if (
+            $merchantUser->status === 'active'
+            && $merchantUser->role?->slug === 'merchant.owner'
+            && $this->activeOwnerCount($actor->merchant_id) <= 1
+        ) {
+            return response()->json([
+                'success' => false,
+                'message' => 'At least one active owner must remain.',
+            ], 422);
+        }
+
+        $merchantUser->tokens()->delete();
+        $merchantUser->delete();
+
+        return response()->json([
+            'success' => true,
+        ]);
+    }
+
     private function currentMerchantUser(Request $request): MerchantUser
     {
         /** @var MerchantUser $merchantUser */

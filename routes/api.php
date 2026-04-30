@@ -80,6 +80,7 @@ Route::prefix('merchant')->middleware(['auth.merchant.portal', 'web', 'merchant.
     Route::post('/merchant-users', [\App\Http\Controllers\Api\MerchantPortal\MerchantUserController::class, 'store'])->middleware('merchant.capability:merchant_users.write');
     Route::patch('/merchant-users/{merchantUser}/role', [\App\Http\Controllers\Api\MerchantPortal\MerchantUserController::class, 'updateRole'])->middleware('merchant.capability:merchant_users.write');
     Route::patch('/merchant-users/{merchantUser}/status', [\App\Http\Controllers\Api\MerchantPortal\MerchantUserController::class, 'updateStatus'])->middleware('merchant.capability:merchant_users.write');
+    Route::delete('/merchant-users/{merchantUser}', [\App\Http\Controllers\Api\MerchantPortal\MerchantUserController::class, 'destroy'])->middleware('merchant.capability:merchant_users.write');
 });
 
 Route::prefix('v1')->middleware('auth.merchant')->group(function () {

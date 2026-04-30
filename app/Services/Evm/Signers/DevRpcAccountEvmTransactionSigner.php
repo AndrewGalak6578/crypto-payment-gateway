@@ -104,6 +104,6 @@ class DevRpcAccountEvmTransactionSigner implements EvmTransactionSignerInterface
     private function shouldUseImpersonationFallback(EvmSweepSource $source): bool
     {
         return (bool) config('payment_addresses.evm.local_hd_enabled', false)
-            && $source->strategy === 'hd_derived';
+            && in_array($source->strategy, ['hd_derived', 'gas_station'], true);
     }
 }

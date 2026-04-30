@@ -13,6 +13,16 @@ final class DevRpcAccountEvmTransactionSignerTest extends TestCase
 {
     public function test_it_uses_impersonation_fallback_for_local_hd_sources(): void
     {
+        $this->assertImpersonationFallbackForStrategy('hd_derived');
+    }
+
+    public function test_it_uses_impersonation_fallback_for_local_hd_gas_station_sources(): void
+    {
+        $this->assertImpersonationFallbackForStrategy('gas_station');
+    }
+
+    private function assertImpersonationFallbackForStrategy(string $strategy): void
+    {
         config()->set('payment_addresses.evm.local_hd_enabled', true);
 
         $rpcSpy = new class {
@@ -55,7 +65,7 @@ final class DevRpcAccountEvmTransactionSignerTest extends TestCase
             keyRef: 'anvil:default',
             derivationPath: "m/44'/60'/1234'/0/7",
             derivationIndex: 7,
-            strategy: 'hd_derived',
+            strategy: $strategy,
         );
 
         $signed = $signer->signTransaction('evm_local', $source, [

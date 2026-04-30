@@ -30,7 +30,7 @@ class HostedInvoiceController extends Controller
         return view('hosted-invoices.show', [
             'invoice' => $invoice,
             'paymentUri' => $this->paymentUri($invoice),
-            'statusUrl' => route('hosted-invoice.status', ['publicId' => $invoice->public_id])
+            'statusUrl' => route('hosted-invoice.status', ['publicId' => $invoice->public_id], false)
         ]);
     }
 

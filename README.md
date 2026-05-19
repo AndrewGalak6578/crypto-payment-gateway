@@ -10,8 +10,8 @@ It is positioned as an employer-facing portfolio project for backend and platfor
 
 | Link | URL |
 |---|---|
-| Live demo | [Add demo URL](https://example.com) |
-| GitHub profile | [Add GitHub profile](https://github.com/your-username) |
+| Live demo | [settlane.tech](https://settlane.tech) |
+| GitHub profile |(https://github.com/AndrewGalak6578) |
 
 ## Overview
 

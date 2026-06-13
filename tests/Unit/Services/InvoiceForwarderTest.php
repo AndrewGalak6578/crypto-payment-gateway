@@ -87,8 +87,8 @@ final class InvoiceForwarderTest extends TestCase
 
         $fresh = $invoice->fresh();
         self::assertSame('done', $fresh->forward_status);
-        self::assertSame('0.01000000', (string) $fresh->fee_coin);
-        self::assertSame('0.49000000', (string) $fresh->merchant_payout_coin);
+        self::assertSame('0.010000000000000000', (string) $fresh->fee_coin);
+        self::assertSame('0.490000000000000000', (string) $fresh->merchant_payout_coin);
 
         $balance = MerchantBalance::query()
             ->where('merchant_id', $merchant->id)
@@ -96,7 +96,7 @@ final class InvoiceForwarderTest extends TestCase
             ->first();
 
         self::assertNotNull($balance);
-        self::assertSame('0.49000000', (string) $balance->amount);
+        self::assertSame('0.490000000000000000', (string) $balance->amount);
 
         $forwardedWebhook = WebhookDelivery::query()->where('invoice_id', $invoice->id)->where('event', 'invoice.forwarded')->first();
         self::assertNotNull($forwardedWebhook);

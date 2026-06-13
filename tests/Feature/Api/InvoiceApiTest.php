@@ -74,13 +74,13 @@ final class InvoiceApiTest extends TestCase
         );
     }
 
-    public function test_create_invoice_uses_request_host_for_hosted_url(): void
+    public function test_create_invoice_uses_configured_app_url_for_hosted_url(): void
     {
         Queue::fake();
 
         config()->set('coins.mode', 'mock');
         config()->set('payments.monitor.enabled', true);
-        config()->set('app.url', 'http://192.168.110.64');
+        config()->set('app.url', 'https://settlane.tech');
 
         $fakeRpc = new FakeCoinRpc();
         $this->app->instance(MockRpc::class, $fakeRpc);
@@ -93,7 +93,6 @@ final class InvoiceApiTest extends TestCase
         [, $plainToken] = $this->createApiKey($merchant, ['plain' => 'merchant_api_token_hosted_url']);
 
         $response = $this
-            ->withServerVariables(['HTTP_HOST' => 'settlane.test'])
             ->postJson('/api/v1/invoices', [
                 'external_id' => 'ext-hosted-url',
                 'amount_usd' => 25.00,
@@ -107,7 +106,7 @@ final class InvoiceApiTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonPath(
                 'data.hosted_url',
-                'http://settlane.test/i/' . $response->json('data.public_id')
+                'https://settlane.tech/i/' . $response->json('data.public_id')
             );
     }
 

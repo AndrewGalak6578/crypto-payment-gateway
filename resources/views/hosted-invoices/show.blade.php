@@ -696,7 +696,6 @@
     async function refreshStatus() {
         try {
             const url = new URL(statusUrl, window.location.origin);
-            url.searchParams.set('refresh', '1');
 
             const response = await fetch(url.toString(), {
                 headers: { 'Accept': 'application/json' },

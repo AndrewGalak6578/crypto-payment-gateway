@@ -1,13 +1,13 @@
 <?php
+
 declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
 use App\Models\Invoice;
-use App\Services\InvoiceStatusRefresher;
 use App\Support\Assets\AssetRegistry;
 use App\Support\Chains\ChainRegistry;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\View\View;
 use RuntimeException;
 
@@ -19,7 +19,7 @@ class HostedInvoiceController extends Controller
     /**
      * Renders hosted invoice page by public identifier.
      *
-     * @param string $publicId Public invoice identifier.
+     * @param  string  $publicId  Public invoice identifier.
      */
     public function show(string $publicId): View
     {
@@ -30,30 +30,20 @@ class HostedInvoiceController extends Controller
         return view('hosted-invoices.show', [
             'invoice' => $invoice,
             'paymentUri' => $this->paymentUri($invoice),
-            'statusUrl' => route('hosted-invoice.status', ['publicId' => $invoice->public_id], false)
+            'statusUrl' => route('hosted-invoice.status', ['publicId' => $invoice->public_id], false),
         ]);
     }
 
     /**
      * Returns current hosted invoice status snapshot.
      *
-     * @param string $publicId Public invoice identifier.
-     * @param Request $request
-     * @param InvoiceStatusRefresher $refresher
+     * @param  string  $publicId  Public invoice identifier.
      */
-    public function status(
-        string $publicId,
-        Request $request,
-        InvoiceStatusRefresher $refresher
-    ): JsonResponse
+    public function status(string $publicId): JsonResponse
     {
         $invoice = Invoice::query()
             ->where('public_id', $publicId)
             ->firstOrFail();
-
-        if ($request->boolean('refresh')) {
-            $invoice = $refresher->refresh($invoice);
-        }
 
         return response()->json([
             'success' => true,
@@ -81,8 +71,6 @@ class HostedInvoiceController extends Controller
 
     /**
      * Builds payment URI consumable by wallet apps.
-     *
-     * @param Invoice $invoice
      */
     private function paymentUri(Invoice $invoice): string
     {
@@ -94,8 +82,8 @@ class HostedInvoiceController extends Controller
         };
 
         $query = http_build_query([
-            'amount' => (string)$invoice->amount_coin,
-            'label' => 'Invoice ' . $invoice->public_id,
+            'amount' => (string) $invoice->amount_coin,
+            'label' => 'Invoice '.$invoice->public_id,
         ]);
 
         return "{$scheme}:{$invoice->pay_address}?{$query}";
@@ -106,7 +94,7 @@ class HostedInvoiceController extends Controller
         $assetKey = $invoice->asset_key ?: $invoice->coin;
         $networkKey = $invoice->network_key;
 
-        if (!$assetKey || !$networkKey) {
+        if (! $assetKey || ! $networkKey) {
             return null;
         }
 

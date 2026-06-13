@@ -27,7 +27,9 @@ if (config('app.api_docs_enabled')) {
 }
 
 Route::get('/i/{publicId}', [\App\Http\Controllers\HostedInvoiceController::class, 'show'])->name('hosted-invoice.show');
-Route::get('/i/{publicId}/status', [\App\Http\Controllers\HostedInvoiceController::class, 'status'])->name('hosted-invoice.status');
+Route::get('/i/{publicId}/status', [\App\Http\Controllers\HostedInvoiceController::class, 'status'])
+    ->middleware('throttle:120,1')
+    ->name('hosted-invoice.status');
 
 Route::view('/admin/{path?}', 'admin')
     ->where('path', '.*')

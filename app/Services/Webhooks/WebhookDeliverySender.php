@@ -108,8 +108,8 @@ final class WebhookDeliverySender
      */
     private function markRetryableFailure(int $deliveryId, string $error): void
     {
-        $maxAttempts = (int) config('webhook.retries.max_attempts', 6);
-        $schedule = config('webhook.retries.backoff_sec', [60, 300, 900, 3600, 10800]);
+        $maxAttempts = (int) config('webhooks.retries.max_attempts', 6);
+        $schedule = config('webhooks.retries.backoff_sec', [60, 300, 900, 3600, 10800]);
 
         $shouldRedispatch = false;
         $delaySeconds = null;

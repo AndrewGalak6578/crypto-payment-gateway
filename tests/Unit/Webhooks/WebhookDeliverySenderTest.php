@@ -55,8 +55,8 @@ final class WebhookDeliverySenderTest extends TestCase
         Http::fake(['*' => Http::response(['error' => 'fail'], 500)]);
 
         config()->set('webhooks.timeout_sec', 3);
-        config()->set('webhook.retries.max_attempts', 2);
-        config()->set('webhook.retries.backoff_sec', [10, 20]);
+        config()->set('webhooks.retries.max_attempts', 2);
+        config()->set('webhooks.retries.backoff_sec', [10, 20]);
 
         $merchant = $this->createMerchant();
         $invoice = $this->createInvoice($merchant, ['status' => 'paid']);

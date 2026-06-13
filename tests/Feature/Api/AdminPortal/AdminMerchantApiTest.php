@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Tests\Feature\Api\AdminPortal;
@@ -77,6 +78,19 @@ final class AdminMerchantApiTest extends TestCase
 
         $response->assertStatus(422)
             ->assertJsonStructure(['errors' => ['name']]);
+    }
+
+    public function test_admin_create_merchant_rejects_private_webhook_url(): void
+    {
+        $this->actingAs($this->makeAdmin(), 'admin');
+
+        $response = $this->postJson('/api/admin/merchants', [
+            'name' => 'Internal Webhook Merchant',
+            'webhook_url' => 'http://127.0.0.1/webhook',
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonStructure(['errors' => ['webhook_url']]);
     }
 
     private function makeAdmin(): AdminUser

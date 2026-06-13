@@ -1,9 +1,12 @@
 <?php
+
 declare(strict_types=1);
+
 namespace App\Services\Webhooks;
 
 use App\Jobs\DeliverWebhookJob;
 use App\Models\WebhookDelivery;
+use App\Support\Security\WebhookUrlPolicy;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Throwable;
@@ -13,10 +16,14 @@ use Throwable;
  */
 final class WebhookDeliverySender
 {
+    public function __construct(
+        private readonly WebhookUrlPolicy $webhookUrlPolicy
+    ) {}
+
     /**
      * Sends pending delivery if it is eligible for processing.
      *
-     * @param int $deliveryId Webhook delivery record identifier.
+     * @param  int  $deliveryId  Webhook delivery record identifier.
      */
     public function send(int $deliveryId): void
     {
@@ -52,6 +59,14 @@ final class WebhookDeliverySender
             return;
         }
 
+        $rejectionReason = $this->webhookUrlPolicy->rejectionReason($delivery->url);
+
+        if ($rejectionReason !== null) {
+            $this->markPermanentFailure($delivery->id, $rejectionReason);
+
+            return;
+        }
+
         try {
             $response = Http::timeout((int) config('webhooks.timeout_sec', 10))
                 ->acceptJson()
@@ -65,12 +80,13 @@ final class WebhookDeliverySender
 
             if ($response->successful()) {
                 $this->markDelivered($delivery->id);
+
                 return;
             }
 
             $this->markRetryableFailure(
                 $delivery->id,
-                'HTTP ' . $response->status() . ': ' . mb_substr($response->body(), 0, 2000)
+                'HTTP '.$response->status().': '.mb_substr($response->body(), 0, 2000)
             );
         } catch (Throwable $e) {
             $this->markRetryableFailure($delivery->id, mb_substr($e->getMessage(), 0, 2000));
@@ -78,10 +94,26 @@ final class WebhookDeliverySender
         }
     }
 
+    private function markPermanentFailure(int $deliveryId, string $error): void
+    {
+        DB::transaction(function () use ($deliveryId, $error): void {
+            /** @var WebhookDelivery $delivery */
+            $delivery = WebhookDelivery::query()
+                ->lockForUpdate()
+                ->findOrFail($deliveryId);
+
+            $delivery->attempts++;
+            $delivery->last_error = mb_substr($error, 0, 2000);
+            $delivery->status = 'failed';
+            $delivery->next_retry_at = null;
+            $delivery->save();
+        });
+    }
+
     /**
      * Marks delivery as successful and clears retry fields.
      *
-     * @param int $deliveryId Webhook delivery record identifier.
+     * @param  int  $deliveryId  Webhook delivery record identifier.
      */
     private function markDelivered(int $deliveryId): void
     {
@@ -103,8 +135,8 @@ final class WebhookDeliverySender
     /**
      * Stores delivery error and schedules retry when attempts are still available.
      *
-     * @param int $deliveryId Webhook delivery record identifier.
-     * @param string $error Truncated error details.
+     * @param  int  $deliveryId  Webhook delivery record identifier.
+     * @param  string  $error  Truncated error details.
      */
     private function markRetryableFailure(int $deliveryId, string $error): void
     {

@@ -1,8 +1,10 @@
 <?php
+
 declare(strict_types=1);
 
 namespace App\Http\Requests\Admin;
 
+use App\Rules\PublicWebhookUrl;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -18,7 +20,7 @@ class StoreMerchantRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'fee_percent' => ['nullable', 'numeric', 'min:0'],
-            'webhook_url' => ['nullable', 'url', 'max:255'],
+            'webhook_url' => ['nullable', 'url', 'max:255', new PublicWebhookUrl],
             'webhook_secret' => ['nullable', 'string', 'max:255'],
             'status' => ['sometimes', 'string', Rule::in(['active', 'disabled'])],
         ];

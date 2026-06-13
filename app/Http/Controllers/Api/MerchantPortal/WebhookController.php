@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\MerchantPortal;
@@ -7,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Merchant;
 use App\Models\MerchantUser;
 use App\Models\WebhookDelivery;
+use App\Rules\PublicWebhookUrl;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -25,8 +27,8 @@ class WebhookController extends Controller
             'success' => true,
             'data' => [
                 'webhook_url' => $merchant->webhook_url,
-                'has_webhook_secret' => !empty($merchant->webhook_secret),
-            ]
+                'has_webhook_secret' => ! empty($merchant->webhook_secret),
+            ],
         ]);
     }
 
@@ -39,8 +41,8 @@ class WebhookController extends Controller
         $merchant = Merchant::query()->findOrFail($merchantUser->merchant_id);
 
         $data = $request->validate([
-            'webhook_url' => 'nullable|url|max:1000',
-            'webhook_secret' => 'nullable|string|max:255',
+            'webhook_url' => ['nullable', 'url', 'max:1000', new PublicWebhookUrl],
+            'webhook_secret' => ['nullable', 'string', 'max:255'],
         ]);
 
         $merchant->webhook_url = $data['webhook_url'] ?? null;
@@ -55,7 +57,7 @@ class WebhookController extends Controller
             'success' => true,
             'data' => [
                 'webhook_url' => $merchant->webhook_url,
-                'has_webhook_secret' => !empty($merchant->webhook_secret),
+                'has_webhook_secret' => ! empty($merchant->webhook_secret),
             ],
         ]);
     }

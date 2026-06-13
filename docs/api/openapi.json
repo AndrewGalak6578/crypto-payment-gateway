@@ -1,0 +1,2048 @@
+{
+    "openapi": "3.0.3",
+    "info": {
+        "title": "Laravel API",
+        "version": "0.0.1"
+    },
+    "servers": [
+        {
+            "url": "https://settlane.tech"
+        }
+    ],
+    "paths": {
+        "/api/admin/dashboard": {
+            "get": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "DashboardController",
+                "operationId": "get_api_admin_dashboard",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/admin/invoices": {
+            "get": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "InvoiceController::index",
+                "operationId": "get_api_admin_invoices",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/admin/invoices/{invoice}": {
+            "get": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "InvoiceController::show",
+                "operationId": "get_api_admin_invoices__invoice_",
+                "parameters": [
+                    {
+                        "name": "invoice",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/admin/invoices/{invoice}/refresh": {
+            "post": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "InvoiceController::refresh",
+                "operationId": "post_api_admin_invoices__invoice__refresh",
+                "parameters": [
+                    {
+                        "name": "invoice",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/admin/merchant-api-keys": {
+            "get": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "MerchantApiKeyController::index",
+                "operationId": "get_api_admin_merchant_api_keys",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/admin/merchant-api-keys/{apiKey}/revoke": {
+            "post": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "MerchantApiKeyController::revoke",
+                "operationId": "post_api_admin_merchant_api_keys__apiKey__revoke",
+                "parameters": [
+                    {
+                        "name": "apiKey",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/admin/merchant-users": {
+            "get": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "MerchantUserController::index",
+                "operationId": "get_api_admin_merchant_users",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "MerchantUserController::store",
+                "operationId": "post_api_admin_merchant_users",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "merchant_id": {
+                                        "type": "integer"
+                                    },
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email"
+                                    },
+                                    "password": {
+                                        "type": "string"
+                                    },
+                                    "role_id": {
+                                        "type": "integer"
+                                    },
+                                    "status": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "merchant_id",
+                                    "name",
+                                    "email",
+                                    "password",
+                                    "role_id",
+                                    "status"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/admin/merchant-users/{merchantUser}/role": {
+            "patch": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "MerchantUserController::updateRole",
+                "operationId": "patch_api_admin_merchant_users__merchantUser__role",
+                "parameters": [
+                    {
+                        "name": "merchantUser",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "role_id": {
+                                        "type": "integer"
+                                    }
+                                },
+                                "required": [
+                                    "role_id"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/admin/merchant-users/{merchantUser}/status": {
+            "patch": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "MerchantUserController::updateStatus",
+                "operationId": "patch_api_admin_merchant_users__merchantUser__status",
+                "parameters": [
+                    {
+                        "name": "merchantUser",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "status": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "status"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/admin/merchants": {
+            "get": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "MerchantController::index",
+                "operationId": "get_api_admin_merchants",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "MerchantController::store",
+                "operationId": "post_api_admin_merchants",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "fee_percent": {
+                                        "type": "number"
+                                    },
+                                    "webhook_url": {
+                                        "type": "string"
+                                    },
+                                    "webhook_secret": {
+                                        "type": "string"
+                                    },
+                                    "status": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "name"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/admin/merchants/{merchant}": {
+            "get": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "MerchantController::show",
+                "operationId": "get_api_admin_merchants__merchant_",
+                "parameters": [
+                    {
+                        "name": "merchant",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/admin/merchants/{merchant}/status": {
+            "patch": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "MerchantController::updateStatus",
+                "operationId": "patch_api_admin_merchants__merchant__status",
+                "parameters": [
+                    {
+                        "name": "merchant",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "status": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "status"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/admin/merchants/{merchant}/wallets": {
+            "get": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "MerchantWalletController::index",
+                "operationId": "get_api_admin_merchants__merchant__wallets",
+                "parameters": [
+                    {
+                        "name": "merchant",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "MerchantWalletController::store",
+                "operationId": "post_api_admin_merchants__merchant__wallets",
+                "parameters": [
+                    {
+                        "name": "merchant",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/admin/merchants/{merchant}/wallets/{wallet}": {
+            "put": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "MerchantWalletController::update",
+                "operationId": "put_api_admin_merchants__merchant__wallets__wallet_",
+                "parameters": [
+                    {
+                        "name": "merchant",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "wallet",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "MerchantWalletController::destroy",
+                "operationId": "delete_api_admin_merchants__merchant__wallets__wallet_",
+                "parameters": [
+                    {
+                        "name": "merchant",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "wallet",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/admin/webhook-deliveries": {
+            "get": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "WebhookDeliveryController::index",
+                "operationId": "get_api_admin_webhook_deliveries",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/admin/webhook-deliveries/{delivery}": {
+            "get": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "WebhookDeliveryController::show",
+                "operationId": "get_api_admin_webhook_deliveries__delivery_",
+                "parameters": [
+                    {
+                        "name": "delivery",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/admin/webhook-deliveries/{delivery}/retry": {
+            "post": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "WebhookDeliveryController::retry",
+                "operationId": "post_api_admin_webhook_deliveries__delivery__retry",
+                "parameters": [
+                    {
+                        "name": "delivery",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/auth/admin/login": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "AdminAuthController::login",
+                "operationId": "post_api_auth_admin_login",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email"
+                                    },
+                                    "password": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "email",
+                                    "password"
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/admin/logout": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "AdminAuthController::logout",
+                "operationId": "post_api_auth_admin_logout",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/auth/admin/me": {
+            "get": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "AdminAuthController::me",
+                "operationId": "get_api_auth_admin_me",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/auth/merchant/login": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "MerchantAuthController::login",
+                "operationId": "post_api_auth_merchant_login",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email"
+                                    },
+                                    "password": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "email",
+                                    "password"
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/auth/merchant/logout": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "MerchantAuthController::logout",
+                "operationId": "post_api_auth_merchant_logout",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/auth/merchant/me": {
+            "get": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "MerchantAuthController::me",
+                "operationId": "get_api_auth_merchant_me",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/auth/merchant/register": {
+            "post": {
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "MerchantAuthController::register",
+                "operationId": "post_api_auth_merchant_register",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "merchant_name": {
+                                        "type": "string"
+                                    },
+                                    "owner_name": {
+                                        "type": "string"
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email"
+                                    },
+                                    "password": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "merchant_name",
+                                    "owner_name",
+                                    "email",
+                                    "password"
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/merchant/api-keys": {
+            "get": {
+                "tags": [
+                    "Merchant"
+                ],
+                "summary": "ApiKeyController::index",
+                "operationId": "get_api_merchant_api_keys",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Merchant"
+                ],
+                "summary": "ApiKeyController::store",
+                "operationId": "post_api_merchant_api_keys",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/merchant/api-keys/{id}": {
+            "delete": {
+                "tags": [
+                    "Merchant"
+                ],
+                "summary": "ApiKeyController::destroy",
+                "operationId": "delete_api_merchant_api_keys__id_",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/merchant/balances": {
+            "get": {
+                "tags": [
+                    "Merchant"
+                ],
+                "summary": "BalanceController::__invoke",
+                "operationId": "get_api_merchant_balances",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/merchant/dashboard": {
+            "get": {
+                "tags": [
+                    "Merchant"
+                ],
+                "summary": "DashboardController::__invoke",
+                "operationId": "get_api_merchant_dashboard",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/merchant/invoices": {
+            "post": {
+                "tags": [
+                    "Merchant"
+                ],
+                "summary": "InvoiceController::store",
+                "operationId": "post_api_merchant_invoices",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "external_id": {
+                                        "type": "string"
+                                    },
+                                    "amount_usd": {
+                                        "type": "number"
+                                    },
+                                    "coin": {
+                                        "type": "string"
+                                    },
+                                    "expires_minutes": {
+                                        "type": "integer"
+                                    },
+                                    "metadata": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        }
+                                    }
+                                },
+                                "required": [
+                                    "amount_usd"
+                                ]
+                            },
+                            "example": {
+                                "external_id": "demo-invoice-001",
+                                "amount_usd": 5,
+                                "coin": "ltc",
+                                "expires_minutes": 20
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            },
+            "get": {
+                "tags": [
+                    "Merchant"
+                ],
+                "summary": "InvoiceController::index",
+                "operationId": "get_api_merchant_invoices",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/merchant/invoices/{id}": {
+            "get": {
+                "tags": [
+                    "Merchant"
+                ],
+                "summary": "InvoiceController::show",
+                "operationId": "get_api_merchant_invoices__id_",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/merchant/invoices/{id}/refresh": {
+            "post": {
+                "tags": [
+                    "Merchant"
+                ],
+                "summary": "InvoiceController::refresh",
+                "operationId": "post_api_merchant_invoices__id__refresh",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/merchant/merchant-users": {
+            "get": {
+                "tags": [
+                    "Merchant"
+                ],
+                "summary": "MerchantUserController::index",
+                "operationId": "get_api_merchant_merchant_users",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Merchant"
+                ],
+                "summary": "MerchantUserController::store",
+                "operationId": "post_api_merchant_merchant_users",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email"
+                                    },
+                                    "password": {
+                                        "type": "string"
+                                    },
+                                    "role_id": {
+                                        "type": "integer"
+                                    },
+                                    "status": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "name",
+                                    "email",
+                                    "password",
+                                    "role_id",
+                                    "status"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/merchant/merchant-users/{merchantUser}": {
+            "delete": {
+                "tags": [
+                    "Merchant"
+                ],
+                "summary": "MerchantUserController::destroy",
+                "operationId": "delete_api_merchant_merchant_users__merchantUser_",
+                "parameters": [
+                    {
+                        "name": "merchantUser",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/merchant/merchant-users/{merchantUser}/role": {
+            "patch": {
+                "tags": [
+                    "Merchant"
+                ],
+                "summary": "MerchantUserController::updateRole",
+                "operationId": "patch_api_merchant_merchant_users__merchantUser__role",
+                "parameters": [
+                    {
+                        "name": "merchantUser",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "role_id": {
+                                        "type": "integer"
+                                    }
+                                },
+                                "required": [
+                                    "role_id"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/merchant/merchant-users/{merchantUser}/status": {
+            "patch": {
+                "tags": [
+                    "Merchant"
+                ],
+                "summary": "MerchantUserController::updateStatus",
+                "operationId": "patch_api_merchant_merchant_users__merchantUser__status",
+                "parameters": [
+                    {
+                        "name": "merchantUser",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "status": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "status"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/merchant/wallets": {
+            "get": {
+                "tags": [
+                    "Merchant"
+                ],
+                "summary": "WalletController::index",
+                "operationId": "get_api_merchant_wallets",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Merchant"
+                ],
+                "summary": "WalletController::store",
+                "operationId": "post_api_merchant_wallets",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/merchant/wallets/{id}": {
+            "put": {
+                "tags": [
+                    "Merchant"
+                ],
+                "summary": "WalletController::update",
+                "operationId": "put_api_merchant_wallets__id_",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Merchant"
+                ],
+                "summary": "WalletController::destroy",
+                "operationId": "delete_api_merchant_wallets__id_",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/merchant/webhook-deliveries": {
+            "get": {
+                "tags": [
+                    "Merchant"
+                ],
+                "summary": "WebhookController::deliveries",
+                "operationId": "get_api_merchant_webhook_deliveries",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/merchant/webhook-deliveries/{delivery}": {
+            "get": {
+                "tags": [
+                    "Merchant"
+                ],
+                "summary": "WebhookController::deliveryDetail",
+                "operationId": "get_api_merchant_webhook_deliveries__delivery_",
+                "parameters": [
+                    {
+                        "name": "delivery",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/merchant/webhook-settings": {
+            "get": {
+                "tags": [
+                    "Merchant"
+                ],
+                "summary": "WebhookController::settings",
+                "operationId": "get_api_merchant_webhook_settings",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Merchant"
+                ],
+                "summary": "WebhookController::updateSettings",
+                "operationId": "put_api_merchant_webhook_settings",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "SessionAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/test/webhook-fail": {
+            "post": {
+                "tags": [
+                    "Test"
+                ],
+                "summary": "POST /api/test/webhook-fail",
+                "operationId": "post_api_test_webhook_fail",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/test/webhook-receiver": {
+            "post": {
+                "tags": [
+                    "Test"
+                ],
+                "summary": "POST /api/test/webhook-receiver",
+                "operationId": "post_api_test_webhook_receiver",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/invoices": {
+            "post": {
+                "tags": [
+                    "V1"
+                ],
+                "summary": "InvoiceController::store",
+                "operationId": "post_api_v1_invoices",
+                "parameters": [],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "external_id": {
+                                        "type": "string"
+                                    },
+                                    "amount_usd": {
+                                        "type": "number"
+                                    },
+                                    "coin": {
+                                        "type": "string"
+                                    },
+                                    "expires_minutes": {
+                                        "type": "integer"
+                                    },
+                                    "metadata": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        }
+                                    }
+                                },
+                                "required": [
+                                    "amount_usd"
+                                ]
+                            },
+                            "example": {
+                                "external_id": "demo-invoice-001",
+                                "amount_usd": 5,
+                                "coin": "ltc",
+                                "expires_minutes": 20
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "MerchantApiKey": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/invoices/{id}": {
+            "get": {
+                "tags": [
+                    "V1"
+                ],
+                "summary": "InvoiceController::show",
+                "operationId": "get_api_v1_invoices__id_",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "MerchantApiKey": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/invoices/{id}/refresh": {
+            "post": {
+                "tags": [
+                    "V1"
+                ],
+                "summary": "InvoiceRefreshController::__invoke",
+                "operationId": "post_api_v1_invoices__id__refresh",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "MerchantApiKey": []
+                    }
+                ]
+            }
+        }
+    },
+    "components": {
+        "securitySchemes": {
+            "MerchantApiKey": {
+                "type": "http",
+                "scheme": "bearer"
+            },
+            "SessionAuth": {
+                "type": "apiKey",
+                "in": "cookie",
+                "name": "laravel-session"
+            }
+        }
+    }
+}

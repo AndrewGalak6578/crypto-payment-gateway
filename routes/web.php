@@ -6,6 +6,22 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+Route::get('/swagger', function () {
+    return view('swagger', [
+        'specUrl' => route('swagger.openapi', [], false),
+    ]);
+})->name('swagger.ui');
+
+Route::get('/swagger/openapi.json', function () {
+    $path = base_path('docs/api/openapi.json');
+
+    abort_unless(is_file($path), 404, 'OpenAPI document is not generated. Run php artisan docs:generate-openapi.');
+
+    return response()->file($path, [
+        'Content-Type' => 'application/json',
+    ]);
+})->name('swagger.openapi');
+
 Route::view('/architecture', 'architecture')->name('architecture');
 
 Route::get('/i/{publicId}', [\App\Http\Controllers\HostedInvoiceController::class, 'show'])->name('hosted-invoice.show');

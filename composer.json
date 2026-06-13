@@ -59,6 +59,16 @@
             "@test:fast",
             "@test:integration"
         ],
+        "docs:api": [
+            "@php artisan docs:generate-openapi"
+        ],
+        "docs:code": [
+            "@php artisan docs:generate-code"
+        ],
+        "docs:all": [
+            "@docs:api",
+            "@docs:code"
+        ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
             "@php artisan package:discover --ansi"

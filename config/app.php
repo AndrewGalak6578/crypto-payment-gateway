@@ -125,7 +125,9 @@ return [
 
     'admin_bootstrap_name' => env('ADMIN_BOOTSTRAP_NAME', 'Super Admin'),
     'admin_bootstrap_email' => env('ADMIN_BOOTSTRAP_EMAIL', 'admin@example.com'),
-    'admin_bootstrap_password' => env('ADMIN_BOOTSTRAP_PASSWORD', 'password'),
+    'admin_bootstrap_password' => env('ADMIN_BOOTSTRAP_PASSWORD'),
 
+    'api_docs_enabled' => (bool) env('API_DOCS_ENABLED', env('APP_ENV') !== 'production'),
+    'test_webhook_routes_enabled' => (bool) env('TEST_WEBHOOK_ROUTES_ENABLED', false),
 
 ];

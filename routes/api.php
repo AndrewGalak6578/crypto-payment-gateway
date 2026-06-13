@@ -1,23 +1,24 @@
 <?php
 
+use App\Http\Controllers\Api\AdminPortal\DashboardController;
 use App\Http\Controllers\Api\AdminPortal\InvoiceController;
 use App\Http\Controllers\Api\AdminPortal\MerchantApiKeyController;
 use App\Http\Controllers\Api\AdminPortal\MerchantController;
 use App\Http\Controllers\Api\AdminPortal\MerchantUserController;
 use App\Http\Controllers\Api\AdminPortal\MerchantWalletController;
 use App\Http\Controllers\Api\AdminPortal\WebhookDeliveryController;
-use App\Http\Controllers\Api\AdminPortal\DashboardController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+
 /** Auth routes for admin and merchant */
 Route::prefix('auth/merchant')->middleware('web')->group(function () {
-    Route::post('/register', [\App\Http\Controllers\Api\Auth\MerchantAuthController::class, 'register']);
-    Route::post('/login', [\App\Http\Controllers\Api\Auth\MerchantAuthController::class, 'login']);
+    Route::post('/register', [\App\Http\Controllers\Api\Auth\MerchantAuthController::class, 'register'])->middleware('throttle:3,1');
+    Route::post('/login', [\App\Http\Controllers\Api\Auth\MerchantAuthController::class, 'login'])->middleware('throttle:5,1');
     Route::post('/logout', [\App\Http\Controllers\Api\Auth\MerchantAuthController::class, 'logout'])->middleware('auth.merchant.portal');
     Route::get('/me', [\App\Http\Controllers\Api\Auth\MerchantAuthController::class, 'me'])->middleware('auth.merchant.portal');
 });
 Route::prefix('auth/admin')->middleware('web')->group(function () {
-    Route::post('/login', [\App\Http\Controllers\Api\Auth\AdminAuthController::class, 'login']);
+    Route::post('/login', [\App\Http\Controllers\Api\Auth\AdminAuthController::class, 'login'])->middleware('throttle:5,1');
     Route::post('/logout', [\App\Http\Controllers\Api\Auth\AdminAuthController::class, 'logout'])->middleware('auth.admin');
     Route::get('/me', [\App\Http\Controllers\Api\Auth\AdminAuthController::class, 'me'])->middleware('auth.admin');
 });
@@ -83,31 +84,30 @@ Route::prefix('merchant')->middleware(['auth.merchant.portal', 'web', 'merchant.
     Route::delete('/merchant-users/{merchantUser}', [\App\Http\Controllers\Api\MerchantPortal\MerchantUserController::class, 'destroy'])->middleware('merchant.capability:merchant_users.write');
 });
 
-Route::prefix('v1')->middleware('auth.merchant')->group(function () {
+Route::prefix('v1')->middleware(['auth.merchant', 'throttle:120,1'])->group(function () {
     Route::post('/invoices', [\App\Http\Controllers\Api\InvoiceController::class, 'store']);
     Route::get('/invoices/{id}', [\App\Http\Controllers\Api\InvoiceController::class, 'show']);
     Route::post('/invoices/{id}/refresh', [\App\Http\Controllers\Api\InvoiceRefreshController::class, '__invoke']);
 });
 
+if (config('app.test_webhook_routes_enabled') && ! app()->isProduction()) {
+    Route::post('/test/webhook-receiver', function (Request $request) {
+        Log::info('test webhook received', [
+            'headers' => $request->headers->all(),
+            'body' => $request->getContent(),
+            'json' => $request->all(),
+        ]);
 
-// TEST ROUTES FOR TESTING WEBHOOKS
-// TODO: Delete them when not needed
-Route::post('/test/webhook-receiver', function (Request $request) {
-    Log::info('test webhook received', [
-        'headers' => $request->headers->all(),
-        'body' => $request->getContent(),
-        'json' => $request->all(),
-    ]);
+        return response()->json(['ok' => true]);
+    });
 
-    return response()->json(['ok' => true]);
-});
+    Route::post('/test/webhook-fail', function (Request $request) {
+        Log::info('test webhook fail receiver', [
+            'headers' => $request->headers->all(),
+            'body' => $request->getContent(),
+            'json' => $request->all(),
+        ]);
 
-Route::post('/test/webhook-fail', function (Request $request) {
-    Log::info('test webhook fail receiver', [
-        'headers' => $request->headers->all(),
-        'body' => $request->getContent(),
-        'json' => $request->all(),
-    ]);
-
-    return response()->json(['ok' => false], 500);
-});
+        return response()->json(['ok' => false], 500);
+    });
+}

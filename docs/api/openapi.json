@@ -1849,50 +1849,6 @@
                 ]
             }
         },
-        "/api/test/webhook-fail": {
-            "post": {
-                "tags": [
-                    "Test"
-                ],
-                "summary": "POST /api/test/webhook-fail",
-                "operationId": "post_api_test_webhook_fail",
-                "parameters": [],
-                "responses": {
-                    "200": {
-                        "description": "Successful response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/test/webhook-receiver": {
-            "post": {
-                "tags": [
-                    "Test"
-                ],
-                "summary": "POST /api/test/webhook-receiver",
-                "operationId": "post_api_test_webhook_receiver",
-                "parameters": [],
-                "responses": {
-                    "200": {
-                        "description": "Successful response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/invoices": {
             "post": {
                 "tags": [

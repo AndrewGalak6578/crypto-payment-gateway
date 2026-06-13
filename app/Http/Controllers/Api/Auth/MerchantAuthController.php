@@ -163,10 +163,17 @@ final class MerchantAuthController extends Controller
                 'id' => $user->merchant->id,
                 'name' => $user->merchant->name,
                 'status' => $user->merchant->status,
-                'fee_percent' => (string)$user->merchant->fee_percent,
+                'fee_percent' => $this->formatDecimal((string) $user->merchant->fee_percent),
                 'webhook_url' => $user->merchant->webhook_url,
                 'has_webhook_secret' => !empty($user->merchant->webhook_secret),
             ]
         ];
+    }
+
+    private function formatDecimal(string $value): string
+    {
+        return str_contains($value, '.')
+            ? rtrim(rtrim($value, '0'), '.')
+            : $value;
     }
 }

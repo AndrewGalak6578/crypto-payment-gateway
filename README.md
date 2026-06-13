@@ -226,7 +226,7 @@ stateDiagram-v2
 | Queue/cache | Database queue, Redis |
 | Auth | Session guards for portals, hashed merchant API keys for `/api/v1` |
 | Testing | PHPUnit feature, unit, and integration tests |
-| Local infra | Laravel Sail, Docker Compose, regtest UTXO nodes, Anvil |
+| Local infra | Laravel Sail, Docker Compose, testnet UTXO nodes, Anvil |
 
 ## Local Setup
 
@@ -296,9 +296,9 @@ npm run dev
 - Laravel Sail app container
 - PostgreSQL
 - Redis
-- Bitcoin regtest node
-- Litecoin regtest node
-- Dash regtest node
+- Bitcoin testnet node
+- Litecoin testnet node
+- Dash testnet node
 - Anvil local EVM node
 
 ## Demo Flows

@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\MerchantPortal;
@@ -61,17 +62,17 @@ class DashboardController extends Controller
                 'received_conf_coin',
                 'forward_status',
                 'created_at'])
-            ->map(fn(Invoice $invoice) => [
+            ->map(fn (Invoice $invoice) => [
                 'id' => $invoice->id,
                 'public_id' => $invoice->public_id,
                 'external_id' => $invoice->external_id,
                 'status' => $invoice->status,
-                'coin' => strtoupper($invoice->coin),
+                'coin' => $invoice->coin ? strtoupper($invoice->coin) : null,
                 'asset_key' => $invoice->asset_key,
                 'network_key' => $invoice->network_key,
-                'amount_coin' => (string)$invoice->amount_coin,
-                'expected_usd' => (string)$invoice->expected_usd,
-                'received_conf_coin' => (string)$invoice->received_conf_coin,
+                'amount_coin' => (string) $invoice->amount_coin,
+                'expected_usd' => (string) $invoice->expected_usd,
+                'received_conf_coin' => (string) $invoice->received_conf_coin,
                 'forward_status' => $invoice->forward_status,
                 'created_at' => $invoice->created_at->toIso8601String(),
             ]);
@@ -86,7 +87,7 @@ class DashboardController extends Controller
                 'asset_key' => $wallet->asset_key ?: strtolower((string) $wallet->coin),
                 'network_key' => $wallet->network_key,
                 'wallet' => $wallet->wallet,
-                'fee_rate' => $wallet->fee_rate !== null ? (string)$wallet->fee_rate : null,
+                'fee_rate' => $wallet->fee_rate !== null ? (string) $wallet->fee_rate : null,
             ]);
 
         $failedWebhookCount = WebhookDelivery::query()

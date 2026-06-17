@@ -10,7 +10,9 @@ export default defineConfig({
     plugins: [
         laravel({
             input: ['resources/css/app.css',
+                'resources/css/hosted-invoice.css',
                 'resources/js/app.js',
+                'resources/js/hosted-invoice/checkout.js',
                 'resources/js/merchant-portal/main.js',
                 'resources/js/admin-portal/main.js',
             ],

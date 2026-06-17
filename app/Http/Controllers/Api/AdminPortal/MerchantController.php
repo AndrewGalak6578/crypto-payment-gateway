@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\AdminPortal;
@@ -19,10 +20,10 @@ class MerchantController extends Controller
     {
         $query = Merchant::query()->latest('id');
 
-        if ($search = trim((string)$request->input('search'))) {
+        if ($search = trim((string) $request->input('search'))) {
             $query->where(function (Builder $q) use ($search): void {
                 if (ctype_digit($search)) {
-                    $q->orWhere('id', (int)$search);
+                    $q->orWhere('id', (int) $search);
                 }
 
                 $q->orWhere('name', 'like', "%{$search}%");
@@ -33,15 +34,15 @@ class MerchantController extends Controller
             $query->where('status', $status);
         }
 
-        $merchants = $query->paginate((int)$request->query('per_page', 15));
+        $merchants = $query->paginate((int) $request->query('per_page', 15));
 
         return response()->json([
             'success' => true,
-            'data' => $merchants->through(fn(Merchant $merchant) => [
+            'data' => $merchants->through(fn (Merchant $merchant) => [
                 'id' => $merchant->id,
                 'name' => $merchant->name,
                 'status' => $merchant->status,
-                'fee_percent' => $merchant->fee_percent !== null ? (string)$merchant->fee_percent : null,
+                'fee_percent' => $merchant->fee_percent !== null ? (string) $merchant->fee_percent : null,
                 'webhook_url' => $merchant->webhook_url,
                 'created_at' => $merchant->created_at->toIso8601String(),
             ]),
@@ -50,7 +51,7 @@ class MerchantController extends Controller
                 'last_page' => $merchants->lastPage(),
                 'per_page' => $merchants->perPage(),
                 'total' => $merchants->total(),
-            ]
+            ],
         ]);
     }
 
@@ -74,7 +75,7 @@ class MerchantController extends Controller
                 'status' => $merchant->status,
                 'fee_percent' => $merchant->fee_percent !== null ? (string) $merchant->fee_percent : null,
                 'webhook_url' => $merchant->webhook_url,
-                'has_webhook_secret' => !empty($merchant->webhook_secret),
+                'has_webhook_secret' => ! empty($merchant->webhook_secret),
                 'created_at' => optional($merchant->created_at)->toIso8601String(),
                 'updated_at' => optional($merchant->updated_at)->toIso8601String(),
             ],
@@ -90,14 +91,14 @@ class MerchantController extends Controller
             ->latest('id')
             ->take(10)
             ->get()
-            ->map(fn(Invoice $invoice) => [
+            ->map(fn (Invoice $invoice) => [
                 'id' => $invoice->id,
                 'public_id' => $invoice->public_id,
                 'external_id' => $invoice->external_id,
                 'status' => $invoice->status,
-                'coin' => strtoupper($invoice->coin),
-                'amount_coin' => (string)$invoice->amount_coin,
-                'expected_usd' => (string)$invoice->expected_usd,
+                'coin' => $invoice->coin ? strtoupper($invoice->coin) : null,
+                'amount_coin' => (string) $invoice->amount_coin,
+                'expected_usd' => (string) $invoice->expected_usd,
                 'created_at' => $invoice->created_at->toIso8601String(),
             ]);
 
@@ -112,12 +113,12 @@ class MerchantController extends Controller
                 'id' => $merchant->id,
                 'name' => $merchant->name,
                 'status' => $merchant->status,
-                'fee_percent' => $merchant->fee_percent !== null ? (string)$merchant->fee_percent : null,
+                'fee_percent' => $merchant->fee_percent !== null ? (string) $merchant->fee_percent : null,
                 'webhook_url' => $merchant->webhook_url,
-                'has_webhook_secret' => !empty($merchant->webhook_secret),
+                'has_webhook_secret' => ! empty($merchant->webhook_secret),
                 'created_at' => $merchant->created_at->toIso8601String(),
                 'updated_at' => $merchant->updated_at->toIso8601String(),
-                'merchant_users' => $merchant->users->map(fn($user) => [
+                'merchant_users' => $merchant->users->map(fn ($user) => [
                     'id' => $user->id,
                     'merchant_id' => $user->merchant_id,
                     'name' => $user->name,
@@ -134,7 +135,7 @@ class MerchantController extends Controller
                 ],
                 'wallets' => $wallets,
                 'recent_invoices' => $recent_invoices,
-            ]
+            ],
         ]);
     }
 

@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\MerchantPortal;
@@ -64,7 +65,7 @@ class InvoiceController extends Controller
             $query->whereDate('created_at', '<=', $dateTo);
         }
 
-        $invoices = $query->paginate((int)$request->query('per_page', 15));
+        $invoices = $query->paginate((int) $request->query('per_page', 15));
 
         return response()->json([
             'success' => true,
@@ -73,7 +74,7 @@ class InvoiceController extends Controller
                 'public_id' => $invoice->public_id,
                 'external_id' => $invoice->external_id,
                 'status' => $invoice->status,
-                'coin' => strtoupper($invoice->coin),
+                'coin' => $invoice->coin ? strtoupper($invoice->coin) : null,
                 'asset_key' => $invoice->asset_key,
                 'network_key' => $invoice->network_key,
                 'amount_coin' => (string) $invoice->amount_coin,
@@ -88,7 +89,7 @@ class InvoiceController extends Controller
                 'last_page' => $invoices->lastPage(),
                 'per_page' => $invoices->perPage(),
                 'total' => $invoices->total(),
-            ]
+            ],
         ]);
     }
 
@@ -137,7 +138,7 @@ class InvoiceController extends Controller
             'public_id' => $invoice->public_id,
             'external_id' => $invoice->external_id,
             'status' => $invoice->status,
-            'coin' => strtoupper($invoice->coin),
+            'coin' => $invoice->coin ? strtoupper($invoice->coin) : null,
             'asset_key' => $invoice->asset_key,
             'network_key' => $invoice->network_key,
             'pay_address' => $invoice->pay_address,
@@ -159,7 +160,7 @@ class InvoiceController extends Controller
             'public_id' => $invoice->public_id,
             'external_id' => $invoice->external_id,
             'status' => $invoice->status,
-            'coin' => strtoupper($invoice->coin),
+            'coin' => $invoice->coin ? strtoupper($invoice->coin) : null,
             'asset_key' => $invoice->asset_key,
             'network_key' => $invoice->network_key,
             'pay_address' => $invoice->pay_address,

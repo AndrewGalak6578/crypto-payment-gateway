@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace App\Services;
@@ -29,7 +30,7 @@ class InvoiceCreator
     /**
      * Creates or returns existing invoice for merchant/external_id pair.
      *
-     * @param Merchant $merchant Authenticated merchant owner.
+     * @param  Merchant  $merchant  Authenticated merchant owner.
      * @param array{
      *     amount_usd: float|int|string,
      *     coin?: string,
@@ -37,14 +38,9 @@ class InvoiceCreator
      *     expires_minutes?: int|string,
      *     metadata?: array<string, mixed>|null
      * } $data
-     * @return Invoice
      */
     public function create(Merchant $merchant, array $data): Invoice
     {
-        $assetKey = Coin::normalize($data['coin'] ?? 'dash');
-        $asset = $this->assets->get($assetKey);
-        $networkKey = (string) $asset['network'];
-
         $externalId = $data['external_id'] ?? null;
 
         if ($externalId) {
@@ -52,31 +48,54 @@ class InvoiceCreator
                 ->where('external_id', $externalId)
                 ->first();
 
-            if ($existing) return $existing;
+            if ($existing) {
+                return $existing;
+            }
         }
 
-        $amountUsd = round((float)$data['amount_usd'], 3);
+        $amountUsd = round((float) $data['amount_usd'], 3);
+        $expiresMin = (int) ($data['expires_minutes'] ?? config('payments.invoice.ttl_minutes', 60));
+        $deadline = now('UTC')->addMinutes($expiresMin);
+        $monitorTtlHours = (int) config('payments.monitor.ttl_hours', 24);
+
+        $publicId = Str::lower(Str::random(16));
+        $metadata = is_array($data['metadata'] ?? null) ? $data['metadata'] : [];
+
+        if (! array_key_exists('coin', $data) || $data['coin'] === null || $data['coin'] === '') {
+            return Invoice::create([
+                'merchant_id' => $merchant->id,
+                'public_id' => $publicId,
+                'external_id' => $externalId,
+                'status' => 'awaiting_asset',
+                'coin' => null,
+                'asset_key' => null,
+                'network_key' => null,
+                'pay_address' => null,
+                'amount_coin' => 0,
+                'expected_usd' => $amountUsd,
+                'rate_usd' => 0,
+                'expires_at' => $deadline,
+                'monitor_until' => null,
+                'metadata' => $metadata,
+            ])->fresh();
+        }
+
+        $assetKey = Coin::normalize($data['coin']);
+        $asset = $this->assets->get($assetKey);
+        $networkKey = (string) $asset['network'];
         $rateUsd = $this->rates->usd($assetKey);
 
         $settlementScale = (int) ($asset['settlement_scale'] ?? 8);
         $amountCoin = round($amountUsd / max($rateUsd, 1e-8), $settlementScale);
 
-        $expiresMin = (int)($data['expires_minutes'] ?? config('payments.invoice.ttl_minutes', 60));
-        $deadline = now('UTC')->addMinutes($expiresMin);
-        $monitorTtlHours = (int)config('payments.monitor.ttl_hours', 24);
-
-        $publicId = Str::lower(Str::random(16));
-
         $context = new InvoiceAddressContext(
             publicId: $publicId,
             externalId: $externalId,
-            metadata: is_array($data['metadata'] ?? null) ? $data['metadata'] : [],
+            metadata: $metadata,
         );
 
         $allocator = $this->allocators->forNetwork($networkKey);
         $paymentAddress = $allocator->allocate($merchant, $assetKey, $networkKey, $context);
-
-        $metadata = is_array($data['metadata'] ?? null) ? $data['metadata'] : [];
 
         if ($this->chains->family($this->assets->network($assetKey)) === 'evm') {
             $driver = app(\App\Support\Chains\ChainManager::class)->driverForNetwork($networkKey);
@@ -105,7 +124,7 @@ class InvoiceCreator
 
         $allocator->attachToInvoice($paymentAddress, $inv);
 
-        if ((bool)config('payments.monitor.enabled', true)) {
+        if ((bool) config('payments.monitor.enabled', true)) {
             MonitorInvoiceJob::dispatch($inv->id)->delay(now('UTC')->addSeconds(2));
         }
 

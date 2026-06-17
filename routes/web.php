@@ -30,6 +30,9 @@ Route::get('/i/{publicId}', [\App\Http\Controllers\HostedInvoiceController::clas
 Route::get('/i/{publicId}/status', [\App\Http\Controllers\HostedInvoiceController::class, 'status'])
     ->middleware('throttle:120,1')
     ->name('hosted-invoice.status');
+Route::post('/i/{publicId}/select-asset', [\App\Http\Controllers\HostedInvoiceController::class, 'selectAsset'])
+    ->middleware('throttle:20,1')
+    ->name('hosted-invoice.select-asset');
 
 Route::view('/admin/{path?}', 'admin')
     ->where('path', '.*')

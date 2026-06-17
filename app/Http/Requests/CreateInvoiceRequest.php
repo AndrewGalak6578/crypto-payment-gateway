@@ -13,8 +13,6 @@ class CreateInvoiceRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
-     *
-     * @return bool
      */
     public function authorize(): bool
     {
@@ -29,12 +27,13 @@ class CreateInvoiceRequest extends FormRequest
     public function rules(): array
     {
         $assetKeys = app(AssetRegistry::class)->keys();
+
         return [
             'external_id' => 'nullable|string|max:120',
             'amount_usd' => 'required|numeric|min:0.01',
-            'coin' => ['sometimes', 'string', Rule::in($assetKeys)],
+            'coin' => ['sometimes', 'nullable', 'string', Rule::in($assetKeys)],
             'expires_minutes' => 'sometimes|integer|min:1|max:240',
-            'metadata' => 'sometimes|array'
+            'metadata' => 'sometimes|array',
         ];
     }
 }

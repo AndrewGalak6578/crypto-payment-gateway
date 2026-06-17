@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace App\Services;
@@ -26,7 +27,7 @@ final class InvoiceStatusRefresher
         private readonly AssetRegistry $assets,
         private readonly ChainRegistry $chains,
         private readonly EvmInvoiceMonitorInterface $evmMonitor
-    ){}
+    ) {}
 
     /**
      * Refreshes invoice payment state from chain data.
@@ -36,11 +37,21 @@ final class InvoiceStatusRefresher
      * - pending -> expired
      * - pending|fixated|expired -> paid
      *
-     * @param Invoice $invoice Invoice model instance to refresh.
+     * @param  Invoice  $invoice  Invoice model instance to refresh.
      * @return Invoice Fresh invoice snapshot after transition handling.
      */
     public function refresh(Invoice $invoice): Invoice
     {
+        if ($invoice->status === 'awaiting_asset') {
+            if ($invoice->expires_at && now('UTC')->gt($invoice->expires_at)) {
+                $invoice->forceFill(['status' => 'expired'])->save();
+
+                return $invoice->fresh(['merchant']);
+            }
+
+            return $invoice->fresh(['merchant']);
+        }
+
         $shouldDispatchForward = false;
         $eventsToDispatch = [];
 
@@ -180,14 +191,13 @@ final class InvoiceStatusRefresher
     /**
      * Checks whether confirmed amount satisfies paid threshold.
      *
-     * @param Invoice $inv Invoice snapshot under lock.
-     * @param float $receivedConf Confirmed amount on chain.
-     * @return bool
+     * @param  Invoice  $inv  Invoice snapshot under lock.
+     * @param  float  $receivedConf  Confirmed amount on chain.
      */
     private function isPaid(Invoice $inv, float $receivedConf): bool
     {
-        $pct = (float)config('payments.slippage.paid_coin_percent', 0.5);
-        $expected = (float)$inv->amount_coin;
+        $pct = (float) config('payments.slippage.paid_coin_percent', 0.5);
+        $expected = (float) $inv->amount_coin;
 
         // need >= expected * (1 - pct/100)
         $need = $expected * max(0.0, (1.0 - $pct / 100.0));
@@ -199,7 +209,7 @@ final class InvoiceStatusRefresher
     /**
      * Picks earliest known transaction for invoice address.
      *
-     * @param array<int, array<string, mixed>> $txs
+     * @param  array<int, array<string, mixed>>  $txs
      * @return array<string, mixed>|null
      */
     private function pickFirstTx(array $txs): ?array
@@ -207,33 +217,38 @@ final class InvoiceStatusRefresher
         $best = null;
         foreach ($txs as $tx) {
             $t = $tx['time'] ?? null;
-            if ($t == null) continue;
-            if ($best == null || (int)$t < ($best['time'] ?? PHP_INT_MAX)) {
+            if ($t == null) {
+                continue;
+            }
+            if ($best == null || (int) $t < ($best['time'] ?? PHP_INT_MAX)) {
                 $best = $tx;
             }
         }
+
         return $best ?? ($txs[0] ?? null);
     }
 
     /**
      * Returns first seen transaction timestamp in UTC seconds.
      *
-     * @param array<int, array<string, mixed>> $txs
+     * @param  array<int, array<string, mixed>>  $txs
      * @return int|null Unix timestamp.
      */
     private function firstSeenTime(array $txs): ?int
     {
         $first = $this->pickFirstTx($txs);
-        if (!$first) return  null;
-        return (int)$first['time'] ?? null;
-    }
+        if (! $first) {
+            return null;
+        }
 
+        return (int) $first['time'] ?? null;
+    }
 
     /**
      * Rounds value to configured coin precision.
      *
-     * @param float $value Value to normalize.
-     * @param int $scale Number of decimal places for target coin.
+     * @param  float  $value  Value to normalize.
+     * @param  int  $scale  Number of decimal places for target coin.
      */
     private function norm(float $value, int $scale): float
     {
@@ -242,10 +257,6 @@ final class InvoiceStatusRefresher
 
     /**
      * Collects UTXO chains state
-     *
-     * @param Invoice $invoice
-     * @param int $confirmations
-     * @return array
      */
     private function collectUtxoState(Invoice $invoice, int $confirmations): array
     {
@@ -258,8 +269,8 @@ final class InvoiceStatusRefresher
 
         return [
             'txs' => $txs,
-            'received_all' => (float)($totals['all'] ?? 0.0),
-            'received_confirmed' => (float)($totals['confirmed'] ?? 0.0),
+            'received_all' => (float) ($totals['all'] ?? 0.0),
+            'received_confirmed' => (float) ($totals['confirmed'] ?? 0.0),
         ];
     }
 
@@ -276,5 +287,4 @@ final class InvoiceStatusRefresher
             'first_seen_at' => $result->firstSeenAt,
         ];
     }
-
 }

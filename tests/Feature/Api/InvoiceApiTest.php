@@ -15,8 +15,8 @@ use Tests\TestCase;
 
 final class InvoiceApiTest extends TestCase
 {
-    use RefreshDatabase;
     use BuildsDomainData;
+    use RefreshDatabase;
 
     public function test_create_invoice_requires_bearer_token(): void
     {
@@ -36,7 +36,7 @@ final class InvoiceApiTest extends TestCase
         config()->set('coins.mode', 'mock');
         config()->set('payments.monitor.enabled', true);
 
-        $fakeRpc = new FakeCoinRpc();
+        $fakeRpc = new FakeCoinRpc;
         $this->app->instance(MockRpc::class, $fakeRpc);
 
         $this->mock(CoinRate::class, function ($mock): void {
@@ -54,7 +54,7 @@ final class InvoiceApiTest extends TestCase
             'metadata' => ['order' => 123],
         ];
 
-        $headers = ['Authorization' => 'Bearer ' . $plainToken];
+        $headers = ['Authorization' => 'Bearer '.$plainToken];
 
         $first = $this->postJson('/api/v1/invoices', $payload, $headers);
         $first->assertCreated()
@@ -82,7 +82,7 @@ final class InvoiceApiTest extends TestCase
         config()->set('payments.monitor.enabled', true);
         config()->set('app.url', 'https://settlane.tech');
 
-        $fakeRpc = new FakeCoinRpc();
+        $fakeRpc = new FakeCoinRpc;
         $this->app->instance(MockRpc::class, $fakeRpc);
 
         $this->mock(CoinRate::class, function ($mock): void {
@@ -99,22 +99,50 @@ final class InvoiceApiTest extends TestCase
                 'coin' => 'btc',
                 'expires_minutes' => 30,
             ], [
-                'Authorization' => 'Bearer ' . $plainToken,
+                'Authorization' => 'Bearer '.$plainToken,
             ]);
 
         $response->assertCreated()
             ->assertJsonPath('success', true)
             ->assertJsonPath(
                 'data.hosted_url',
-                'https://settlane.tech/i/' . $response->json('data.public_id')
+                'https://settlane.tech/i/'.$response->json('data.public_id')
             );
+    }
+
+    public function test_create_invoice_without_coin_waits_for_asset_selection(): void
+    {
+        Queue::fake();
+
+        $merchant = $this->createMerchant();
+        [, $plainToken] = $this->createApiKey($merchant, ['plain' => 'merchant_api_token_assetless']);
+
+        $response = $this
+            ->postJson('/api/v1/invoices', [
+                'external_id' => 'ext-assetless',
+                'amount_usd' => 42.00,
+                'expires_minutes' => 30,
+            ], [
+                'Authorization' => 'Bearer '.$plainToken,
+            ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.status', 'awaiting_asset')
+            ->assertJsonPath('data.coin', null)
+            ->assertJsonPath('data.asset_key', null)
+            ->assertJsonPath('data.network_key', null)
+            ->assertJsonPath('data.pay_address', null)
+            ->assertJsonPath('data.amount_coin', '0.00000000');
+
+        Queue::assertNothingPushed();
     }
 
     public function test_show_invoice_with_refresh_flag_returns_status_payload(): void
     {
         config()->set('coins.mode', 'mock');
 
-        $fakeRpc = new FakeCoinRpc();
+        $fakeRpc = new FakeCoinRpc;
         $this->app->instance(MockRpc::class, $fakeRpc);
 
         $this->mock(CoinRate::class, function ($mock): void {
@@ -131,8 +159,8 @@ final class InvoiceApiTest extends TestCase
             'received_all_coin' => 0,
         ]);
 
-        $response = $this->getJson('/api/v1/invoices/' . $invoice->id . '?refresh=1', [
-            'Authorization' => 'Bearer ' . $plainToken,
+        $response = $this->getJson('/api/v1/invoices/'.$invoice->id.'?refresh=1', [
+            'Authorization' => 'Bearer '.$plainToken,
         ]);
 
         $response->assertOk()

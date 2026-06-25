@@ -13,7 +13,7 @@ export default defineConfig({
                 'resources/css/hosted-invoice.css',
                 'resources/js/app.js',
                 'resources/js/hosted-invoice/checkout.js',
-                'resources/js/merchant-portal/main.js',
+                'resources/js/merchant-v2/main.js',
                 'resources/js/admin-portal/main.js',
             ],
             refresh: true,

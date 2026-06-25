@@ -38,34 +38,10 @@ class InvoiceController extends Controller
         /** @var MerchantUser $merchantUser */
         $merchantUser = $request->attributes->get('merchant_user');
 
-        $query = Invoice::query()
-            ->where('merchant_id', $merchantUser->merchant_id)
+        $query = $this->invoiceListQuery($request, $merchantUser->merchant_id)
             ->latest('id');
 
-        if ($search = trim((string) $request->input('search'))) {
-            $query->where(function (Builder $query) use ($search): void {
-                $query->where('public_id', 'like', "%{$search}%")
-                    ->orWhere('external_id', 'like', "%{$search}%");
-            });
-        }
-
-        if ($status = $request->query('status')) {
-            $query->where('status', $status);
-        }
-
-        if ($coin = $request->query('coin')) {
-            $query->where('coin', strtolower((string) $coin));
-        }
-
-        if ($dateFrom = $request->query('date_from')) {
-            $query->whereDate('created_at', '>=', $dateFrom);
-        }
-
-        if ($dateTo = $request->query('date_to')) {
-            $query->whereDate('created_at', '<=', $dateTo);
-        }
-
-        $invoices = $query->paginate((int) $request->query('per_page', 15));
+        $invoices = $query->paginate($this->perPage($request));
 
         return response()->json([
             'success' => true,
@@ -80,6 +56,7 @@ class InvoiceController extends Controller
                 'amount_coin' => (string) $invoice->amount_coin,
                 'expected_usd' => (string) $invoice->expected_usd,
                 'received_conf_coin' => (string) $invoice->received_conf_coin,
+                'received_all_coin' => (string) $invoice->received_all_coin,
                 'forward_status' => $invoice->forward_status,
                 'created_at' => $invoice->created_at->toIso8601String(),
                 'hosted_url' => $this->hostedUrl($invoice),
@@ -89,6 +66,36 @@ class InvoiceController extends Controller
                 'last_page' => $invoices->lastPage(),
                 'per_page' => $invoices->perPage(),
                 'total' => $invoices->total(),
+            ],
+        ]);
+    }
+
+    public function summary(Request $request): JsonResponse
+    {
+        /** @var MerchantUser $merchantUser */
+        $merchantUser = $request->attributes->get('merchant_user');
+
+        $query = $this->invoiceListQuery($request, $merchantUser->merchant_id, applyStatus: false);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'total' => (clone $query)->count(),
+                'paid' => (clone $query)->where('status', 'paid')->count(),
+                'awaiting_asset' => (clone $query)->where('status', 'awaiting_asset')->count(),
+                'pending' => (clone $query)->where('status', 'pending')->count(),
+                'confirming' => (clone $query)->where('status', 'fixated')->count(),
+                'expired' => (clone $query)->where('status', 'expired')->count(),
+                'partial' => (clone $query)
+                    ->whereIn('status', ['pending', 'fixated'])
+                    ->where('received_all_coin', '>', 0)
+                    ->whereColumn('received_all_coin', '<', 'amount_coin')
+                    ->count(),
+                'underpaid' => (clone $query)
+                    ->whereIn('status', ['pending', 'fixated'])
+                    ->where('received_all_coin', '>', 0)
+                    ->whereColumn('received_all_coin', '<', 'amount_coin')
+                    ->count(),
             ],
         ]);
     }
@@ -189,5 +196,64 @@ class InvoiceController extends Controller
     private function hostedUrl(Invoice $invoice): string
     {
         return route('hosted-invoice.show', ['publicId' => $invoice->public_id]);
+    }
+
+    private function invoiceListQuery(Request $request, int $merchantId, bool $applyStatus = true): Builder
+    {
+        $query = Invoice::query()->where('merchant_id', $merchantId);
+
+        if ($search = trim((string) $request->input('search'))) {
+            $query->where(function (Builder $query) use ($search): void {
+                $query->where('public_id', 'like', "%{$search}%")
+                    ->orWhere('external_id', 'like', "%{$search}%");
+            });
+        }
+
+        if ($applyStatus && ($status = $request->query('status'))) {
+            $status = strtolower((string) $status);
+
+            if ($status === 'awaiting') {
+                $query->whereIn('status', ['awaiting_asset', 'pending']);
+            } elseif ($status === 'partial') {
+                $query->whereIn('status', ['pending', 'fixated'])
+                    ->where('received_all_coin', '>', 0)
+                    ->whereColumn('received_all_coin', '<', 'amount_coin');
+            } else {
+                $query->where('status', $status);
+            }
+        }
+
+        if ($coin = $request->query('coin')) {
+            $coins = collect(explode(',', strtolower((string) $coin)))
+                ->map(fn (string $coin): string => trim($coin))
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+
+            if ($coins !== []) {
+                $query->where(function (Builder $query) use ($coins): void {
+                    $query->whereIn('coin', $coins)
+                        ->orWhereIn('asset_key', $coins);
+                });
+            }
+        }
+
+        if ($dateFrom = $request->query('date_from')) {
+            $query->whereDate('created_at', '>=', $dateFrom);
+        }
+
+        if ($dateTo = $request->query('date_to')) {
+            $query->whereDate('created_at', '<=', $dateTo);
+        }
+
+        return $query;
+    }
+
+    private function perPage(Request $request): int
+    {
+        $perPage = (int) $request->query('per_page', 15);
+
+        return in_array($perPage, [15, 25, 50, 100], true) ? $perPage : 15;
     }
 }

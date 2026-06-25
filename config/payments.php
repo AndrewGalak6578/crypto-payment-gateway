@@ -25,8 +25,8 @@ return [
     'monitor' => [
         'enabled' => (bool) env('PAY_MONITOR_ENABLED', true),
         'ttl_hours' => (int) env('PAY_MONITOR_TTL_HOURS', 24),
-        'poll_fast_sec' => (int) env('PAY_MONITOR_FAST_SEC', 60),
-        'poll_slow_sec' => (int) env('PAY_MONITOR_SLOW_SEC', 300),
+        'poll_fast_sec' => (int) env('PAY_MONITOR_FAST_SEC', 10),
+        'poll_slow_sec' => (int) env('PAY_MONITOR_SLOW_SEC', 100),
         'fast_phase_minutes' => (int) env('PAY_MONITOR_FAST_MIN', 30),
     ],
 ];

@@ -57,6 +57,7 @@ Route::prefix('merchant')->middleware(['auth.merchant.portal', 'web', 'merchant.
     Route::get('/dashboard', [\App\Http\Controllers\Api\MerchantPortal\DashboardController::class, '__invoke'])->middleware('merchant.capability:portal.view');
 
     Route::post('/invoices', [\App\Http\Controllers\Api\MerchantPortal\InvoiceController::class, 'store'])->middleware('merchant.capability:invoices.read');
+    Route::get('/invoices/summary', [\App\Http\Controllers\Api\MerchantPortal\InvoiceController::class, 'summary'])->middleware('merchant.capability:invoices.read');
     Route::get('/invoices', [\App\Http\Controllers\Api\MerchantPortal\InvoiceController::class, 'index'])->middleware('merchant.capability:invoices.read');
     Route::get('/invoices/{id}', [\App\Http\Controllers\Api\MerchantPortal\InvoiceController::class, 'show'])->middleware('merchant.capability:invoices.read');
     Route::post('/invoices/{id}/refresh', [\App\Http\Controllers\Api\MerchantPortal\InvoiceController::class, 'refresh'])->middleware('merchant.capability:invoices.read');

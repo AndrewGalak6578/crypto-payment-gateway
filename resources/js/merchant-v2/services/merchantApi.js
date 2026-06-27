@@ -16,6 +16,7 @@ export const merchantApi = {
     updateWebhookSettings: (payload) => api.put('/api/merchant/webhook-settings', payload),
     webhookDeliveries: (params = {}) => api.get('/api/merchant/webhook-deliveries', { params }),
     webhookDelivery: (id) => api.get(`/api/merchant/webhook-deliveries/${id}`),
+    sendTestWebhook: () => api.post('/api/merchant/webhook-deliveries/test'),
     retryWebhookDelivery: (id) => api.post(`/api/merchant/webhook-deliveries/${id}/retry`),
     users: (params = {}) => api.get('/api/merchant/merchant-users', { params }),
 };

@@ -9,6 +9,7 @@ use App\Models\Merchant;
 use App\Models\MerchantUser;
 use App\Models\WebhookDelivery;
 use App\Rules\PublicWebhookUrl;
+use App\Services\Webhooks\SendMerchantTestWebhook;
 use App\Services\Webhooks\WebhookDeliveryRetryer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -69,9 +70,7 @@ class WebhookController extends Controller
         $merchantUser = $request->attributes->get('merchant_user');
 
         $deliveries = WebhookDelivery::query()
-            ->whereHas('invoice', function ($q) use ($merchantUser) {
-                $q->where('merchant_id', $merchantUser->merchant_id);
-            })
+            ->where(fn (Builder $query) => $this->scopeMerchantDeliveries($query, (int) $merchantUser->merchant_id))
             ->latest('id')
             ->paginate((int) $request->input('per_page', 15));
 
@@ -94,7 +93,7 @@ class WebhookController extends Controller
 
         $webhookDelivery = WebhookDelivery::query()
             ->whereKey($delivery)
-            ->whereHas('invoice', fn (Builder $query) => $query->where('merchant_id', $merchantUser->merchant_id))
+            ->where(fn (Builder $query) => $this->scopeMerchantDeliveries($query, (int) $merchantUser->merchant_id))
             ->firstOrFail();
 
         $payload = $webhookDelivery->payload;
@@ -134,7 +133,7 @@ class WebhookController extends Controller
 
         $webhookDelivery = WebhookDelivery::query()
             ->whereKey($delivery)
-            ->whereHas('invoice', fn (Builder $query) => $query->where('merchant_id', $merchantUser->merchant_id))
+            ->where(fn (Builder $query) => $this->scopeMerchantDeliveries($query, (int) $merchantUser->merchant_id))
             ->firstOrFail();
 
         $queued = $retryer->retry($webhookDelivery);
@@ -150,6 +149,35 @@ class WebhookController extends Controller
         ]);
     }
 
+    public function sendTest(Request $request, SendMerchantTestWebhook $testWebhook): JsonResponse
+    {
+        /** @var MerchantUser $merchantUser */
+        $merchantUser = $request->attributes->get('merchant_user');
+
+        /** @var Merchant $merchant */
+        $merchant = Merchant::query()->findOrFail($merchantUser->merchant_id);
+
+        $delivery = $testWebhook->send($merchant);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id' => $delivery->id,
+                'event' => $delivery->event,
+                'status' => $delivery->status,
+                'url' => $delivery->url,
+                'created_at' => optional($delivery->created_at)->toIso8601String(),
+            ],
+        ], 202);
+    }
+
+    private function scopeMerchantDeliveries(Builder $query, int $merchantId): void
+    {
+        $query
+            ->where('merchant_id', $merchantId)
+            ->orWhereHas('invoice', fn (Builder $invoiceQuery) => $invoiceQuery->where('merchant_id', $merchantId));
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -157,6 +185,7 @@ class WebhookController extends Controller
     {
         return [
             'id' => $delivery->id,
+            'merchant_id' => $delivery->merchant_id,
             'invoice_id' => $delivery->invoice_id,
             'event' => $delivery->event,
             'status' => $delivery->status,

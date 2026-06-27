@@ -39,6 +39,7 @@ final class EnqueueInvoiceWebhook
         $payloadJson = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
         $delivery = WebhookDelivery::query()->create([
+            'merchant_id' => $merchant->id,
             'invoice_id' => $invoice->id,
             'event' => $event,
             'url' => $merchant->webhook_url,

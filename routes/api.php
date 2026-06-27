@@ -71,6 +71,7 @@ Route::prefix('merchant')->middleware(['auth.merchant.portal', 'web', 'merchant.
 
     Route::get('/webhook-settings', [\App\Http\Controllers\Api\MerchantPortal\WebhookController::class, 'settings'])->middleware('merchant.capability:webhooks.read');
     Route::put('/webhook-settings', [\App\Http\Controllers\Api\MerchantPortal\WebhookController::class, 'updateSettings'])->middleware('merchant.capability:webhooks.write');
+    Route::post('/webhook-deliveries/test', [\App\Http\Controllers\Api\MerchantPortal\WebhookController::class, 'sendTest'])->middleware('merchant.capability:webhooks.write');
     Route::get('/webhook-deliveries', [\App\Http\Controllers\Api\MerchantPortal\WebhookController::class, 'deliveries'])->middleware('merchant.capability:webhooks.read');
     Route::get('/webhook-deliveries/{delivery}', [\App\Http\Controllers\Api\MerchantPortal\WebhookController::class, 'deliveryDetail'])->middleware('merchant.capability:webhooks.read');
     Route::post('/webhook-deliveries/{delivery}/retry', [\App\Http\Controllers\Api\MerchantPortal\WebhookController::class, 'retryDelivery'])->middleware('merchant.capability:webhooks.write');

@@ -9,6 +9,7 @@ use App\Models\Merchant;
 use App\Models\MerchantUser;
 use App\Models\WebhookDelivery;
 use App\Rules\PublicWebhookUrl;
+use App\Services\Webhooks\WebhookDeliveryRetryer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -122,6 +123,29 @@ class WebhookController extends Controller
                 'next_retry_at' => optional($webhookDelivery->next_retry_at)->toIso8601String(),
                 'payload' => $payload,
                 'payload_preview' => $payloadPreview,
+            ],
+        ]);
+    }
+
+    public function retryDelivery(Request $request, int $delivery, WebhookDeliveryRetryer $retryer): JsonResponse
+    {
+        /** @var MerchantUser $merchantUser */
+        $merchantUser = $request->attributes->get('merchant_user');
+
+        $webhookDelivery = WebhookDelivery::query()
+            ->whereKey($delivery)
+            ->whereHas('invoice', fn (Builder $query) => $query->where('merchant_id', $merchantUser->merchant_id))
+            ->firstOrFail();
+
+        $queued = $retryer->retry($webhookDelivery);
+        $webhookDelivery->refresh();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id' => $webhookDelivery->id,
+                'status' => $webhookDelivery->status,
+                'queued' => $queued,
             ],
         ]);
     }

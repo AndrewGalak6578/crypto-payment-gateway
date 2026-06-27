@@ -4,6 +4,7 @@ return [
     'merchant.owner' => [
         'portal.view',
         'invoices.read',
+        'invoices.write',
         'balances.read',
         'wallets.read',
         'wallets.write',
@@ -18,6 +19,7 @@ return [
     'merchant.admin' => [
         'portal.view',
         'invoices.read',
+        'invoices.write',
         'balances.read',
         'wallets.read',
         'wallets.write',

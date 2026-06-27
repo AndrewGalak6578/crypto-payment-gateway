@@ -12,6 +12,11 @@ return [
         'description' => 'View invoices and their statuses',
     ],
     [
+        'code' => 'invoices.write',
+        'name' => 'Invoices Write',
+        'description' => 'Create and manage invoices',
+    ],
+    [
         'code' => 'balances.read',
         'name' => 'Balances Read',
         'description' => 'View merchant balances',

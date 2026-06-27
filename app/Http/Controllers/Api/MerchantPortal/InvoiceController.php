@@ -11,6 +11,7 @@ use App\Models\Merchant;
 use App\Models\MerchantUser;
 use App\Services\InvoiceCreator;
 use App\Services\InvoiceStatusRefresher;
+use App\Services\MerchantPortalAccess;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -100,38 +101,47 @@ class InvoiceController extends Controller
         ]);
     }
 
-    public function show(Request $request, int $id): JsonResponse
+    public function show(Request $request, int $id, MerchantPortalAccess $access): JsonResponse
     {
         /** @var MerchantUser $merchantUser */
         $merchantUser = $request->attributes->get('merchant_user');
+        $includeWebhooks = $access->can($merchantUser, 'webhooks.read');
 
         $invoice = Invoice::query()
+            ->when($includeWebhooks, fn (Builder $query) => $query->with([
+                'webhookDeliveries' => fn ($query) => $query->latest('id')->limit(5),
+            ]))
             ->where('merchant_id', $merchantUser->merchant_id)
             ->findOrFail($id);
 
         return response()->json([
             'success' => true,
-            'data' => $this->serializeInvoiceDetail($invoice),
+            'data' => $this->serializeInvoiceDetail($invoice, $includeWebhooks),
         ]);
     }
 
     public function refresh(
         Request $request,
         int $id,
-        InvoiceStatusRefresher $refresher
+        InvoiceStatusRefresher $refresher,
+        MerchantPortalAccess $access
     ): JsonResponse {
         /** @var MerchantUser $merchantUser */
         $merchantUser = $request->attributes->get('merchant_user');
+        $includeWebhooks = $access->can($merchantUser, 'webhooks.read');
 
         $invoice = Invoice::query()
             ->where('merchant_id', $merchantUser->merchant_id)
             ->findOrFail($id);
 
         $invoice = $refresher->refresh($invoice);
+        if ($includeWebhooks) {
+            $invoice->load(['webhookDeliveries' => fn ($query) => $query->latest('id')->limit(5)]);
+        }
 
         return response()->json([
             'success' => true,
-            'data' => $this->serializeInvoiceDetail($invoice),
+            'data' => $this->serializeInvoiceDetail($invoice, $includeWebhooks),
         ]);
     }
 
@@ -160,9 +170,9 @@ class InvoiceController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function serializeInvoiceDetail(Invoice $invoice): array
+    private function serializeInvoiceDetail(Invoice $invoice, bool $includeWebhooks = false): array
     {
-        return [
+        $data = [
             'id' => $invoice->id,
             'public_id' => $invoice->public_id,
             'external_id' => $invoice->external_id,
@@ -183,14 +193,34 @@ class InvoiceController extends Controller
             'merchant_payout_usd' => $invoice->merchant_payout_usd !== null ? (string) $invoice->merchant_payout_usd : null,
             'forward_status' => $invoice->forward_status,
             'forwarded_coin' => $invoice->forwarded_coin !== null ? (string) $invoice->forwarded_coin : null,
+            'forwarding_coin' => $invoice->forwarding_coin !== null ? (string) $invoice->forwarding_coin : null,
             'forward_txids' => $invoice->forward_txids ?? [],
+            'first_txid' => $invoice->first_txid,
+            'first_amount_coin' => $invoice->first_amount_coin !== null ? (string) $invoice->first_amount_coin : null,
             'expires_at' => optional($invoice->expires_at)->toIso8601String(),
             'fixated_at' => optional($invoice->fixated_at)->toIso8601String(),
             'paid_at' => optional($invoice->paid_at)->toIso8601String(),
+            'forwarding_started_at' => optional($invoice->forwarding_started_at)->toIso8601String(),
+            'last_forwarded_at' => optional($invoice->last_forwarded_at)->toIso8601String(),
             'created_at' => optional($invoice->created_at)->toIso8601String(),
             'metadata' => $invoice->metadata ?? [],
             'hosted_url' => $this->hostedUrl($invoice),
         ];
+
+        if ($includeWebhooks) {
+            $data['webhook_deliveries'] = $invoice->webhookDeliveries->map(fn ($delivery) => [
+                'id' => $delivery->id,
+                'event' => $delivery->event,
+                'status' => $delivery->status,
+                'attempts' => $delivery->attempts,
+                'url' => $delivery->url,
+                'last_error' => $delivery->last_error,
+                'delivered_at' => optional($delivery->delivered_at)->toIso8601String(),
+                'created_at' => optional($delivery->created_at)->toIso8601String(),
+            ])->values()->all();
+        }
+
+        return $data;
     }
 
     private function hostedUrl(Invoice $invoice): string

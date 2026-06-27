@@ -4,8 +4,8 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\AdminPortal;
 
 use App\Http\Controllers\Controller;
-use App\Jobs\DeliverWebhookJob;
 use App\Models\WebhookDelivery;
+use App\Services\Webhooks\WebhookDeliveryRetryer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -101,16 +101,17 @@ class WebhookDeliveryController extends Controller
         ]);
     }
 
-    public function retry(WebhookDelivery $delivery): JsonResponse
+    public function retry(WebhookDelivery $delivery, WebhookDeliveryRetryer $retryer): JsonResponse
     {
-        DeliverWebhookJob::dispatch($delivery->id);
+        $queued = $retryer->retry($delivery);
+        $delivery->refresh();
 
         return response()->json([
             'success' => true,
             'data' => [
                 'id' => $delivery->id,
                 'status' => $delivery->status,
-                'queued' => true,
+                'queued' => $queued,
             ],
         ]);
     }

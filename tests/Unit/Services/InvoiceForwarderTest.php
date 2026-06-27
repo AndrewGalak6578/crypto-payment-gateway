@@ -69,6 +69,46 @@ final class InvoiceForwarderTest extends TestCase
         self::assertNotNull($forwardedWebhook);
     }
 
+    public function test_forward_uses_paid_settlement_snapshot_when_merchant_fee_changes(): void
+    {
+        config()->set('coins.mode', 'mock');
+        config()->set('forwarding.assets.btc.min', 0.00001);
+        config()->set('webhooks.enabled', true);
+
+        $fakeRpc = new FakeCoinRpc();
+        $fakeRpc->nextTxid = 'tx_forward_snapshot';
+        $this->app->instance(MockRpc::class, $fakeRpc);
+
+        $merchant = $this->createMerchant(['fee_percent' => 1.5]);
+
+        SuperWallet::query()->create([
+            'merchant_id' => null,
+            'coin' => 'btc',
+            'wallet' => 'bcrt1qdestinationwalletsnapshot',
+            'fee_rate' => 1.2,
+        ]);
+
+        $invoice = $this->createInvoice($merchant, [
+            'status' => 'paid',
+            'coin' => 'btc',
+            'received_conf_coin' => 0.01,
+            'merchant_payout_coin' => 0.00985,
+            'forwarded_coin' => 0,
+            'forward_status' => 'none',
+        ]);
+
+        $merchant->forceFill(['fee_percent' => 10.0])->save();
+
+        app(InvoiceForwarder::class)->forward($invoice->id);
+
+        $fresh = $invoice->fresh();
+
+        self::assertSame('done', $fresh->forward_status);
+        self::assertSame('0.00985000', (string) $fresh->forwarded_coin);
+        self::assertCount(1, $fakeRpc->sendCalls);
+        self::assertEqualsWithDelta(0.00985, $fakeRpc->sendCalls[0]['amount'], 0.00000001);
+    }
+
     public function test_forward_without_wallet_credits_merchant_balance_and_emits_webhook(): void
     {
         config()->set('coins.mode', 'mock');
@@ -80,6 +120,10 @@ final class InvoiceForwarderTest extends TestCase
             'status' => 'paid',
             'coin' => 'btc',
             'received_conf_coin' => 0.5,
+            'fee_coin' => 0.01,
+            'merchant_payout_coin' => 0.49,
+            'fee_usd' => 100.00,
+            'merchant_payout_usd' => 4900.00,
             'forward_status' => 'none',
         ]);
 

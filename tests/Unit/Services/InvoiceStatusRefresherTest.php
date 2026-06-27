@@ -101,6 +101,11 @@ final class InvoiceStatusRefresherTest extends TestCase
         self::assertSame('paid', $fresh->status);
         self::assertNotNull($fresh->paid_at);
         self::assertNotNull($fresh->paid_usd);
+        self::assertEquals(99.50, (float) $fresh->paid_usd);
+        self::assertEquals(1.49, (float) $fresh->fee_usd);
+        self::assertEquals(98.01, (float) $fresh->merchant_payout_usd);
+        self::assertEquals(0.00014925, (float) $fresh->fee_coin);
+        self::assertEquals(0.00980075, (float) $fresh->merchant_payout_coin);
 
         $paidWebhook = WebhookDelivery::query()->where('invoice_id', $invoice->id)->where('event', 'invoice.paid')->first();
         self::assertNotNull($paidWebhook);

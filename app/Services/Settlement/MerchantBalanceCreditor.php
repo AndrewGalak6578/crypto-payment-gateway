@@ -31,7 +31,7 @@ final class MerchantBalanceCreditor
                 return;
             }
 
-            if ($invoice->merchant_payout_coin !== null) {
+            if ($invoice->forward_status === 'done') {
                 return;
             }
 
@@ -40,12 +40,20 @@ final class MerchantBalanceCreditor
             $grossCoin = $this->norm((float)($invoice->received_conf_coin ?? 0), $scale);
             $feePercent = (float)($invoice->merchant->fee_percent ?? 0.0);
 
-            $feeCoin = $this->norm($grossCoin * ($feePercent / 100), $scale);
-            $payoutCoin = $this->norm($grossCoin - $feeCoin, $scale);
+            $feeCoin = $invoice->fee_coin !== null
+                ? (float) $invoice->fee_coin
+                : $this->norm($grossCoin * ($feePercent / 100), $scale);
+            $payoutCoin = $invoice->merchant_payout_coin !== null
+                ? (float) $invoice->merchant_payout_coin
+                : $this->norm($grossCoin - $feeCoin, $scale);
 
             $rateUsd = (float)($invoice->rate_usd ?? 0.0);
-            $feeUsd = round($feeCoin * $rateUsd, 2);
-            $payoutUsd = round($payoutCoin * $rateUsd, 2);
+            $feeUsd = $invoice->fee_usd !== null
+                ? (float) $invoice->fee_usd
+                : round($feeCoin * $rateUsd, 2);
+            $payoutUsd = $invoice->merchant_payout_usd !== null
+                ? (float) $invoice->merchant_payout_usd
+                : round($payoutCoin * $rateUsd, 2);
 
             /** @var MerchantBalance $balance */
             $balance = MerchantBalance::query()

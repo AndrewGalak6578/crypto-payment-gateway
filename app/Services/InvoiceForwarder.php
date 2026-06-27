@@ -162,9 +162,7 @@ final class InvoiceForwarder
 
             $confirmed = $this->norm((float)($invoice->received_conf_coin ?? 0), $scale);
             $forwarded = $this->norm((float)($invoice->forwarded_coin ?? 0), $scale);
-            $feePercent = (float)($invoice->merchant->fee_percent ?? 0.0);
-            // Merchant receives net amount after fee retention by the gateway.
-            $targetNet = $this->norm($confirmed - ($confirmed * ($feePercent / 100)), $scale);
+            $targetNet = $this->settlementTargetNetCoin($invoice, $confirmed, $scale);
             $targetNet = max(0.0, $targetNet);
             $amount = $this->norm($targetNet - $forwarded, $scale);
             $amount = max(0.0, $amount);
@@ -236,8 +234,7 @@ final class InvoiceForwarder
             );
 
             $confirmed = $this->norm((float)($invoice->received_conf_coin ?? 0), $scale);
-            $feePercent = (float)($invoice->merchant->fee_percent ?? 0.0);
-            $targetNet = $this->norm($confirmed - ($confirmed * ($feePercent / 100)), $scale);
+            $targetNet = $this->settlementTargetNetCoin($invoice, $confirmed, $scale);
             $targetNet = max(0.0, $targetNet);
             $rest = $this->norm($targetNet - $newForwarded, $scale);
 
@@ -315,6 +312,17 @@ final class InvoiceForwarder
     private function norm(float $value, int $scale): float
     {
         return round($value, $scale);
+    }
+
+    private function settlementTargetNetCoin(Invoice $invoice, float $confirmed, int $scale): float
+    {
+        if ($invoice->merchant_payout_coin !== null) {
+            return $this->norm((float) $invoice->merchant_payout_coin, $scale);
+        }
+
+        $feePercent = (float)($invoice->merchant->fee_percent ?? 0.0);
+
+        return $this->norm($confirmed - ($confirmed * ($feePercent / 100)), $scale);
     }
 
     /**

@@ -20,6 +20,7 @@ const props = defineProps({
 const label = computed(() => {
     const asset = displayAssetLabel(props.item);
     const key = displayAssetKey(props.item);
-    return key && key !== '—' ? `${asset} · ${key}` : asset;
+    // return key && key !== '—' ? `${asset} · ${key}` : asset;
+    return key && key !== '—' ? `${asset}` : asset;
 });
 </script>

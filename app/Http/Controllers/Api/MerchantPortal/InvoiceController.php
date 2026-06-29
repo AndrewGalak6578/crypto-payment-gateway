@@ -101,18 +101,20 @@ class InvoiceController extends Controller
         ]);
     }
 
-    public function show(Request $request, int $id, MerchantPortalAccess $access): JsonResponse
+    public function show(Request $request, int|string $id, MerchantPortalAccess $access): JsonResponse
     {
         /** @var MerchantUser $merchantUser */
         $merchantUser = $request->attributes->get('merchant_user');
         $includeWebhooks = $access->can($merchantUser, 'webhooks.read');
 
-        $invoice = Invoice::query()
+        $query = Invoice::query()
             ->when($includeWebhooks, fn (Builder $query) => $query->with([
                 'webhookDeliveries' => fn ($query) => $query->latest('id')->limit(5),
             ]))
-            ->where('merchant_id', $merchantUser->merchant_id)
-            ->findOrFail($id);
+            ->where('merchant_id', $merchantUser->merchant_id);
+
+        $this->whereInvoiceIdentifier($query, $id);
+        $invoice = $query->firstOrFail();
 
         return response()->json([
             'success' => true,
@@ -122,7 +124,7 @@ class InvoiceController extends Controller
 
     public function refresh(
         Request $request,
-        int $id,
+        int|string $id,
         InvoiceStatusRefresher $refresher,
         MerchantPortalAccess $access
     ): JsonResponse {
@@ -130,9 +132,11 @@ class InvoiceController extends Controller
         $merchantUser = $request->attributes->get('merchant_user');
         $includeWebhooks = $access->can($merchantUser, 'webhooks.read');
 
-        $invoice = Invoice::query()
-            ->where('merchant_id', $merchantUser->merchant_id)
-            ->findOrFail($id);
+        $query = Invoice::query()
+            ->where('merchant_id', $merchantUser->merchant_id);
+
+        $this->whereInvoiceIdentifier($query, $id);
+        $invoice = $query->firstOrFail();
 
         $invoice = $refresher->refresh($invoice);
         if ($includeWebhooks) {
@@ -226,6 +230,18 @@ class InvoiceController extends Controller
     private function hostedUrl(Invoice $invoice): string
     {
         return route('hosted-invoice.show', ['publicId' => $invoice->public_id]);
+    }
+
+    private function whereInvoiceIdentifier(Builder $query, int|string $identifier): void
+    {
+        $identifier = (string) $identifier;
+
+        if (ctype_digit($identifier)) {
+            $query->where('id', (int) $identifier);
+            return;
+        }
+
+        $query->where('public_id', $identifier);
     }
 
     private function invoiceListQuery(Request $request, int $merchantId, bool $applyStatus = true): Builder

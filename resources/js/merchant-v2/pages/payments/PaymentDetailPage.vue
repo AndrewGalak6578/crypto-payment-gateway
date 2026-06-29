@@ -7,7 +7,7 @@
                 <p class="page-subtitle">{{ payment.external_id || 'No merchant reference' }}</p>
             </div>
             <div class="page-actions detail-desktop-actions">
-                <RouterLink class="btn btn-secondary" :to="{ name: 'merchant-v2.payments', query: backToPaymentsQuery }">Back to payments</RouterLink>
+                <RouterLink class="btn btn-secondary" :to="backTarget.to">{{ backTarget.desktopLabel }}</RouterLink>
                 <button class="btn btn-secondary" type="button" :disabled="refreshing" @click="refresh">{{ refreshing ? 'Refreshing...' : 'Refresh' }}</button>
                 <button class="btn btn-primary" type="button" :disabled="!payment.hosted_url" @click="copy(payment.hosted_url, 'Hosted link copied.')">Copy checkout link</button>
             </div>
@@ -41,7 +41,7 @@
             </section>
 
             <nav class="detail-mobile-dock" aria-label="Payment actions">
-                <RouterLink class="btn btn-secondary" :to="{ name: 'merchant-v2.payments', query: backToPaymentsQuery }">Payments</RouterLink>
+                <RouterLink class="btn btn-secondary" :to="backTarget.to">{{ backTarget.mobileLabel }}</RouterLink>
                 <button class="btn btn-secondary" type="button" :disabled="refreshing" @click="refresh">{{ refreshing ? 'Refreshing...' : 'Refresh' }}</button>
                 <button class="btn btn-primary" type="button" :disabled="!payment.hosted_url" @click="copy(payment.hosted_url, 'Hosted link copied.')">Copy link</button>
             </nav>
@@ -277,8 +277,24 @@ const error = ref('');
 const payment = ref({});
 const backToPaymentsQuery = computed(() => ({
     ...route.query,
+    from: undefined,
     selected: props.paymentId,
 }));
+const backTarget = computed(() => {
+    if (route.query.from === 'settlements') {
+        return {
+            to: { name: 'merchant-v2.settlements' },
+            desktopLabel: 'Back to settlements',
+            mobileLabel: 'Settlements',
+        };
+    }
+
+    return {
+        to: { name: 'merchant-v2.payments', query: backToPaymentsQuery.value },
+        desktopLabel: 'Back to payments',
+        mobileLabel: 'Payments',
+    };
+});
 const canViewWebhooks = computed(() => authStore.hasCapability('webhooks.read'));
 const canRetryWebhooks = computed(() => authStore.hasCapability('webhooks.write'));
 const webhookDeliveries = computed(() => Array.isArray(payment.value.webhook_deliveries) ? payment.value.webhook_deliveries : []);

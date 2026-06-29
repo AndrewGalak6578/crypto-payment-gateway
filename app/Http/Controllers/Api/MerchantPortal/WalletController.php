@@ -9,6 +9,7 @@ use App\Models\SuperWallet;
 use App\Support\Assets\AssetRegistry;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
 
 class WalletController extends Controller
@@ -53,6 +54,7 @@ class WalletController extends Controller
         $assetKey = strtolower($data['coin']);
         $asset = app(AssetRegistry::class)->get($assetKey);
         $networkKey = (string) $asset['network'];
+        $this->validateWalletAddress($data['wallet'], $networkKey);
 
         $wallet = SuperWallet::query()->updateOrCreate(
             [
@@ -94,6 +96,7 @@ class WalletController extends Controller
             'wallet' => 'required|string|max:255',
             'fee_rate' => 'nullable|numeric|min:0',
         ]);
+        $this->validateWalletAddress($data['wallet'], $wallet->network_key ?: $wallet->resolvedNetworkKey());
 
         $wallet->update([
             'wallet' => $data['wallet'],
@@ -128,5 +131,23 @@ class WalletController extends Controller
         $wallet->delete();
 
         return response()->json(['success' => true]);
+    }
+
+    /**
+     * @throws ValidationException
+     */
+    private function validateWalletAddress(string $wallet, string $networkKey): void
+    {
+        if (preg_match('/\s/', $wallet) === 1 || preg_match('/[[:cntrl:]]/', $wallet) === 1) {
+            throw ValidationException::withMessages([
+                'wallet' => 'Wallet address must not contain whitespace or control characters.',
+            ]);
+        }
+
+        if ($networkKey === 'evm_local' && preg_match('/^0x[a-fA-F0-9]{40}$/', $wallet) !== 1) {
+            throw ValidationException::withMessages([
+                'wallet' => 'EVM wallet address must be a valid 0x-prefixed address.',
+            ]);
+        }
     }
 }

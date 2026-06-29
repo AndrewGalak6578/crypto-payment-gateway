@@ -12,6 +12,7 @@ use App\Jobs\ForwardInvoiceJob;
 use App\Models\Invoice;
 use App\Models\SuperWallet;
 use App\Services\Settlement\MerchantBalanceCreditor;
+use App\Services\Settlement\MerchantSettlementLedger;
 use App\Services\Settlement\SuperWalletResolver;
 use App\Services\Webhooks\EnqueueInvoiceWebhook;
 use App\Support\Assets\AssetRegistry;
@@ -35,6 +36,7 @@ final class InvoiceForwarder
         private readonly EnqueueInvoiceWebhook           $enqueueWebhook,
         private readonly SuperWalletResolver             $walletResolver,
         private readonly MerchantBalanceCreditor         $balanceCreditor,
+        private readonly MerchantSettlementLedger        $settlementLedger,
         private readonly AssetRegistry                   $assets,
         private readonly ChainRegistry                   $chains,
         private readonly EvmSweepSourceResolverInterface $evmSweepSourceResolver,
@@ -120,7 +122,7 @@ final class InvoiceForwarder
                     ->delay(now('UTC')->addSeconds($e->outcome->retryAfterSeconds));
             }
         } catch (Throwable $e) {
-            $this->markFailed($invoiceId, $plan['attempt_uuid']);
+            $this->markFailed($invoiceId, $plan['attempt_uuid'], $e->getMessage());
             report($e);
             throw $e;
         }
@@ -191,6 +193,13 @@ final class InvoiceForwarder
             $invoice->forwarding_started_at = now('UTC');
             $invoice->save();
 
+            $this->settlementLedger->recordForwardPending(
+                invoice: $invoice,
+                attemptUuid: $attemptUuid,
+                amount: $amount,
+                destinationWallet: $wallet->wallet,
+            );
+
             return [
                 'attempt_uuid' => $attemptUuid,
                 'asset_key' => $assetKey,
@@ -248,6 +257,13 @@ final class InvoiceForwarder
             $invoice->forwarding_started_at = null;
 
             $invoice->save();
+
+            $this->settlementLedger->markForwardCompleted(
+                invoice: $invoice,
+                attemptUuid: $attemptUuid,
+                amount: $amount,
+                txid: $txid,
+            );
         });
     }
 
@@ -257,9 +273,9 @@ final class InvoiceForwarder
      * @param int $invoiceId Internal invoice identifier.
      * @param string $attemptUuid Forwarding attempt UUID.
      */
-    private function markFailed(int $invoiceId, string $attemptUuid): void
+    private function markFailed(int $invoiceId, string $attemptUuid, ?string $errorMessage = null): void
     {
-        DB::transaction(function () use ($invoiceId, $attemptUuid): void {
+        DB::transaction(function () use ($invoiceId, $attemptUuid, $errorMessage): void {
             /** @var Invoice $invoice */
             $invoice = Invoice::query()
                 ->lockForUpdate()
@@ -274,6 +290,12 @@ final class InvoiceForwarder
             $invoice->forwarding_coin = null;
             $invoice->forwarding_started_at = null;
             $invoice->save();
+
+            $this->settlementLedger->markForwardFailed(
+                invoice: $invoice,
+                attemptUuid: $attemptUuid,
+                errorMessage: $errorMessage,
+            );
         });
     }
 
@@ -299,6 +321,12 @@ final class InvoiceForwarder
             $invoice->forwarding_coin = null;
             $invoice->forwarding_started_at = null;
             $invoice->save();
+
+            $this->settlementLedger->markForwardDeferred(
+                invoice: $invoice,
+                attemptUuid: $attemptUuid,
+                reason: 'EVM gas top-up submitted; payout will retry after funding settles.',
+            );
         });
     }
 

@@ -12,6 +12,11 @@ use Illuminate\Support\Facades\DB;
  */
 final class MerchantBalanceCreditor
 {
+    public function __construct(
+        private readonly MerchantSettlementLedger $settlementLedger,
+    ) {
+    }
+
     /**
      * Idempotently books fee and merchant payout for a paid invoice.
      *
@@ -77,6 +82,13 @@ final class MerchantBalanceCreditor
             $invoice->merchant_payout_usd = $payoutUsd;
             $invoice->forward_status = 'done';
             $invoice->save();
+
+            $this->settlementLedger->recordInternalCredit(
+                invoice: $invoice,
+                amount: $payoutCoin,
+                feeCoin: $feeCoin,
+                amountUsd: $payoutUsd,
+            );
         });
     }
 

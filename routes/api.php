@@ -63,6 +63,7 @@ Route::prefix('merchant')->middleware(['auth.merchant.portal', 'web', 'merchant.
     Route::post('/invoices/{id}/refresh', [\App\Http\Controllers\Api\MerchantPortal\InvoiceController::class, 'refresh'])->middleware('merchant.capability:invoices.read');
 
     Route::get('/balances', [\App\Http\Controllers\Api\MerchantPortal\BalanceController::class, '__invoke'])->middleware('merchant.capability:balances.read');
+    Route::get('/settlement-entries', [\App\Http\Controllers\Api\MerchantPortal\SettlementEntryController::class, 'index'])->middleware('merchant.capability:balances.read');
 
     Route::get('/wallets', [\App\Http\Controllers\Api\MerchantPortal\WalletController::class, 'index'])->middleware('merchant.capability:wallets.read');
     Route::post('/wallets', [\App\Http\Controllers\Api\MerchantPortal\WalletController::class, 'store'])->middleware('merchant.capability:wallets.write');

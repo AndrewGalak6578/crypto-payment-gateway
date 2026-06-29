@@ -52,6 +52,26 @@ final class MerchantPaymentDetailWebhookApiTest extends TestCase
             ->assertJsonMissingPath('data.webhook_deliveries');
     }
 
+    public function test_detail_payload_can_be_loaded_by_public_id_with_merchant_scope(): void
+    {
+        $merchant = $this->createMerchant('Merchant A');
+        $otherMerchant = $this->createMerchant('Merchant B');
+        $invoice = $this->createInvoice($merchant);
+        $otherInvoice = $this->createInvoice($otherMerchant);
+
+        $owner = $this->createMerchantUser($merchant, 'merchant.owner', 'owner-public-id@example.test');
+        $this->actingAs($owner, 'merchant');
+
+        $response = $this->getJson("/api/merchant/invoices/{$invoice->public_id}");
+
+        $response->assertOk()
+            ->assertJsonPath('data.id', $invoice->id)
+            ->assertJsonPath('data.public_id', $invoice->public_id);
+
+        $this->getJson("/api/merchant/invoices/{$otherInvoice->public_id}")
+            ->assertNotFound();
+    }
+
     public function test_owner_can_retry_own_failed_webhook_delivery(): void
     {
         Queue::fake();

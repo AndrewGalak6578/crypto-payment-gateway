@@ -21,8 +21,7 @@ class MerchantUserController extends Controller
 
         $query = MerchantUser::query()
             ->with('role')
-            ->where('merchant_id', $merchantUser->merchant_id)
-            ->latest('id');
+            ->where('merchant_id', $merchantUser->merchant_id);
 
         if ($status = $request->query('status')) {
             $query->where('status', $status);
@@ -30,6 +29,14 @@ class MerchantUserController extends Controller
 
         if ($roleId = $request->query('role_id')) {
             $query->where('role_id', (int) $roleId);
+        }
+
+        if ($createdFrom = $request->query('created_from')) {
+            $query->whereDate('created_at', '>=', $createdFrom);
+        }
+
+        if ($createdTo = $request->query('created_to')) {
+            $query->whereDate('created_at', '<=', $createdTo);
         }
 
         if ($search = trim((string) $request->query('search'))) {
@@ -43,6 +50,19 @@ class MerchantUserController extends Controller
             });
         }
 
+        $sort = (string) $request->query('sort', 'created_at');
+        $direction = strtolower((string) $request->query('direction', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $sortColumn = match ($sort) {
+            'name' => 'name',
+            'email' => 'email',
+            'status' => 'status',
+            'last_login_at' => 'last_login_at',
+            default => 'created_at',
+        };
+
+        $query->orderBy($sortColumn, $direction)
+            ->orderBy('id', $direction);
+
         $users = $query->paginate((int) $request->query('per_page', 15));
         $roles = $this->merchantRoles();
 
@@ -53,6 +73,14 @@ class MerchantUserController extends Controller
                 'id' => $role->id,
                 'slug' => $role->slug,
                 'name' => $role->name,
+                'description' => $role->description,
+                'capability_count' => $role->capabilities->count(),
+                'capabilities' => $role->capabilities->map(fn ($capability) => [
+                    'id' => $capability->id,
+                    'code' => $capability->code,
+                    'name' => $capability->name,
+                    'description' => $capability->description,
+                ])->values(),
             ]),
             'meta' => [
                 'current_page' => $users->currentPage(),
@@ -193,9 +221,10 @@ class MerchantUserController extends Controller
     private function merchantRoles()
     {
         return Role::query()
+            ->with(['capabilities' => fn ($query) => $query->orderBy('code')])
             ->where('slug', 'like', 'merchant.%')
             ->orderBy('id')
-            ->get(['id', 'slug', 'name']);
+            ->get(['id', 'slug', 'name', 'description']);
     }
 
     private function merchantRoleById(int $roleId): Role

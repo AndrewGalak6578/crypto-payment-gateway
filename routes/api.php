@@ -53,8 +53,10 @@ Route::prefix('admin')->middleware(['web', 'auth.admin'])->group(function () {
     Route::post('/merchant-api-keys/{apiKey}/revoke', [MerchantApiKeyController::class, 'revoke']);
 });
 
-Route::prefix('merchant')->middleware(['auth.merchant.portal', 'web', 'merchant.enabled'])->group(function () {
+    Route::prefix('merchant')->middleware(['auth.merchant.portal', 'web', 'merchant.enabled'])->group(function () {
     Route::get('/dashboard', [\App\Http\Controllers\Api\MerchantPortal\DashboardController::class, '__invoke'])->middleware('merchant.capability:portal.view');
+    Route::get('/settings', [\App\Http\Controllers\Api\MerchantPortal\SettingsController::class, 'show'])->middleware('merchant.capability:portal.view');
+    Route::put('/settings', [\App\Http\Controllers\Api\MerchantPortal\SettingsController::class, 'update'])->middleware('merchant.capability:invoices.write');
 
     Route::post('/invoices', [\App\Http\Controllers\Api\MerchantPortal\InvoiceController::class, 'store'])->middleware('merchant.capability:invoices.write');
     Route::get('/invoices/summary', [\App\Http\Controllers\Api\MerchantPortal\InvoiceController::class, 'summary'])->middleware('merchant.capability:invoices.read');

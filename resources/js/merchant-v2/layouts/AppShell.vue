@@ -71,6 +71,7 @@ const navItems = computed(() => [
     { label: 'Developers', to: '/merchant/developers', mark: '03' },
     { label: 'Settlements', to: '/merchant/settlements', mark: '04' },
     { label: 'Team', to: '/merchant/team', mark: '05' },
+    { label: 'Settings', to: '/merchant/settings', mark: '06' },
 ]);
 
 const merchantName = computed(() => authStore.merchant?.name || 'Merchant');

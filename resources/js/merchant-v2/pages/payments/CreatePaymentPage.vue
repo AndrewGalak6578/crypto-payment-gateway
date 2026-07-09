@@ -42,7 +42,15 @@
                     </div>
                     <label class="field amount-field">
                         <span class="field-label">Amount USD</span>
-                        <input v-model="form.amount_usd" class="input amount-input" type="number" min="0.01" step="0.01" required />
+                        <input
+                            v-model="form.amount_usd"
+                            class="input amount-input"
+                            type="number"
+                            :min="checkoutDefaults?.min_amount_usd || 0.01"
+                            :max="checkoutDefaults?.max_amount_usd || undefined"
+                            step="0.01"
+                            required
+                        />
                         <span v-if="fieldErrors.amount_usd" class="field-error">{{ fieldErrors.amount_usd }}</span>
                     </label>
                 </section>
@@ -203,7 +211,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useAuthStore } from '../../../stores/auth';
 import { merchantApi } from '../../services/merchantApi';
 import { MERCHANT_ASSET_CATALOG } from '../../../utils/merchantAssetCatalog';
@@ -216,23 +224,29 @@ const submitting = ref(false);
 const formError = ref('');
 const success = ref('');
 const createdInvoice = ref(null);
+const checkoutDefaults = ref(null);
 const fieldErrors = reactive({});
 const canCreateInvoices = computed(() => authStore.hasCapability('invoices.write'));
-const assetOptions = MERCHANT_ASSET_CATALOG.filter((asset) => asset.assetKey);
+const allAssetOptions = MERCHANT_ASSET_CATALOG.filter((asset) => asset.assetKey);
+const assetOptions = computed(() => {
+    const allowed = checkoutDefaults.value?.allowed_assets || [];
+    if (!Array.isArray(allowed) || allowed.length === 0) return allAssetOptions;
+    return allAssetOptions.filter((asset) => allowed.includes(asset.assetKey));
+});
 
 const initialForm = () => ({
-    payer_can_choose_asset: true,
-    coin: assetOptions[0]?.assetKey || 'btc',
+    payer_can_choose_asset: checkoutDefaults.value?.payer_can_choose_asset !== false,
+    coin: checkoutDefaults.value?.default_asset || assetOptions.value[0]?.assetKey || 'btc',
     amount_usd: '10.00',
-    expires_minutes: '',
-    success_url: '',
-    cancel_url: '',
+    expires_minutes: checkoutDefaults.value?.expires_minutes || '',
+    success_url: checkoutDefaults.value?.success_url || '',
+    cancel_url: checkoutDefaults.value?.cancel_url || '',
     external_id: '',
     metadata_json: '',
 });
 
 const form = reactive(initialForm());
-const selectedAsset = computed(() => assetOptions.find((asset) => asset.assetKey === form.coin) || assetOptions[0]);
+const selectedAsset = computed(() => assetOptions.value.find((asset) => asset.assetKey === form.coin) || assetOptions.value[0]);
 const amountPreview = computed(() => Number(form.amount_usd || 0).toFixed(2));
 const methodPreview = computed(() => (
     form.payer_can_choose_asset
@@ -241,7 +255,7 @@ const methodPreview = computed(() => (
 ));
 const assetPreview = computed(() => (
     form.payer_can_choose_asset
-        ? `${assetOptions.length} supported assets`
+        ? `${assetOptions.value.length} supported assets`
         : `${selectedAsset.value?.assetLabel || form.coin} · ${selectedAsset.value?.networkLabel || 'Selected network'}`
 ));
 const redirectSummary = computed(() => [form.success_url && 'success', form.cancel_url && 'cancel'].filter(Boolean).join(', ') || 'None');
@@ -261,6 +275,19 @@ const resetForm = () => {
     formError.value = '';
     success.value = '';
     Object.keys(fieldErrors).forEach((key) => delete fieldErrors[key]);
+};
+
+const loadCheckoutDefaults = async () => {
+    try {
+        const response = await merchantApi.settings();
+        checkoutDefaults.value = response.data?.data?.checkout || null;
+        Object.assign(form, initialForm());
+        if (!assetOptions.value.some((asset) => asset.assetKey === form.coin)) {
+            form.coin = assetOptions.value[0]?.assetKey || 'btc';
+        }
+    } catch {
+        checkoutDefaults.value = null;
+    }
 };
 
 const parseMetadata = () => {
@@ -325,6 +352,8 @@ const submit = async () => {
         submitting.value = false;
     }
 };
+
+onMounted(loadCheckoutDefaults);
 </script>
 
 <style scoped>

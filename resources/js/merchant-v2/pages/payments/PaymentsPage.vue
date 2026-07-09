@@ -303,6 +303,7 @@ const meta = reactive({ current_page: 1, last_page: 1, per_page: 15, total: 0 })
 const summary = reactive({ total: 0, paid: 0, awaiting_asset: 0, pending: 0, confirming: 0, partial: 0, expired: 0 });
 const filters = reactive({ search: '', status: '', assets: [], date_from: '', date_to: '', per_page: 15 });
 const assetFilterOptions = MERCHANT_ASSET_CATALOG.filter((asset) => asset.assetKey);
+const MIN_PINNED_PAYMENT_COUNT = 8;
 
 const selectedId = computed(() => route.query.selected || '');
 const activeView = computed(() => {
@@ -323,6 +324,7 @@ const decoratedStatusViews = computed(() => statusViews.map((view) => ({
 })));
 
 const displayedPayments = computed(() => payments.value);
+const canPinDetailPanel = computed(() => displayedPayments.value.length >= MIN_PINNED_PAYMENT_COUNT);
 const paymentWorkspaceStyle = computed(() => ({
     '--payment-detail-width': `${detailPanelWidth.value}px`,
     '--payment-detail-left': `${detailPanelLeft.value}px`,
@@ -520,7 +522,7 @@ const setView = (view) => {
 
 const changePage = (page) => router.push({ name: 'merchant-v2.payments', query: { ...route.query, page } });
 const selectPayment = async (payment) => {
-    pendingScrollRestore.value = window.scrollY;
+    pendingScrollRestore.value = canPinDetailPanel.value ? window.scrollY : null;
     selectedPayment.value = payment;
 
     await router.replace({ name: 'merchant-v2.payments', query: { ...route.query, selected: payment.id } });
@@ -538,7 +540,7 @@ const DETAILS_WIDTH_STORAGE_KEY = 'merchant-v2.payment-detail-width';
 const clampDetailWidth = (value) => Math.min(Math.max(value, 320), 560);
 const updateDetailPanelPosition = () => {
     const workspaceRect = paymentWorkspace.value?.getBoundingClientRect();
-    if (!workspaceRect) {
+    if (!workspaceRect || !canPinDetailPanel.value) {
         isDetailPinned.value = false;
         return;
     }

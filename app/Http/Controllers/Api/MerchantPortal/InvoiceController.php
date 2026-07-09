@@ -26,7 +26,12 @@ class InvoiceController extends Controller
         /** @var Merchant $merchant */
         $merchant = Merchant::query()->findOrFail($merchantUser->merchant_id);
 
-        $invoice = $creator->create($merchant, $request->validated());
+        $data = $this->applyMerchantDefaults($merchant, $request->validated());
+        if ($guard = $this->validateAgainstMerchantSettings($merchant, $data)) {
+            return $guard;
+        }
+
+        $invoice = $creator->create($merchant, $data);
 
         return response()->json([
             'success' => true,
@@ -169,6 +174,74 @@ class InvoiceController extends Controller
             'expires_at' => optional($invoice->expires_at)->toIso8601String(),
             'hosted_url' => $this->hostedUrl($invoice),
         ];
+    }
+
+    private function applyMerchantDefaults(Merchant $merchant, array $data): array
+    {
+        if (! array_key_exists('expires_minutes', $data) && $merchant->checkout_expires_minutes) {
+            $data['expires_minutes'] = $merchant->checkout_expires_minutes;
+        }
+
+        if (! array_key_exists('coin', $data) && ! $merchant->checkout_payer_can_choose_asset && $merchant->checkout_default_asset) {
+            $data['coin'] = $merchant->checkout_default_asset;
+        }
+
+        $metadata = $data['metadata'] ?? [];
+        $redirects = $metadata['redirects'] ?? [];
+
+        if (! isset($redirects['success_url']) && $merchant->checkout_success_url) {
+            $redirects['success_url'] = $merchant->checkout_success_url;
+        }
+
+        if (! isset($redirects['cancel_url']) && $merchant->checkout_cancel_url) {
+            $redirects['cancel_url'] = $merchant->checkout_cancel_url;
+        }
+
+        if ($redirects !== []) {
+            $metadata['redirects'] = $redirects;
+            $data['metadata'] = $metadata;
+        }
+
+        return $data;
+    }
+
+    private function validateAgainstMerchantSettings(Merchant $merchant, array $data): ?JsonResponse
+    {
+        $amountUsd = (float) ($data['amount_usd'] ?? 0);
+
+        if ($merchant->checkout_min_amount_usd !== null && $amountUsd < (float) $merchant->checkout_min_amount_usd) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Amount is below the merchant minimum.',
+                'errors' => [
+                    'amount_usd' => ['Amount is below the merchant minimum.'],
+                ],
+            ], 422);
+        }
+
+        if ($merchant->checkout_max_amount_usd !== null && $amountUsd > (float) $merchant->checkout_max_amount_usd) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Amount is above the merchant maximum.',
+                'errors' => [
+                    'amount_usd' => ['Amount is above the merchant maximum.'],
+                ],
+            ], 422);
+        }
+
+        $allowedAssets = $merchant->checkout_allowed_assets ?? [];
+        $asset = $data['coin'] ?? null;
+        if ($asset && $allowedAssets !== [] && ! in_array($asset, $allowedAssets, true)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Selected asset is not allowed by merchant settings.',
+                'errors' => [
+                    'coin' => ['Selected asset is not allowed by merchant settings.'],
+                ],
+            ], 422);
+        }
+
+        return null;
     }
 
     /**

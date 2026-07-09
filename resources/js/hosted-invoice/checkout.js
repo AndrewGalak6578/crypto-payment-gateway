@@ -1,9 +1,8 @@
 import QRCode from 'qrcode';
 
 const POLL_INTERVAL_MS = 5000;
-const REDIRECT_SECONDS = 5;
-
 const config = window.hostedInvoiceCheckout;
+const settings = config?.settings || {};
 const card = document.querySelector('[data-checkout-card]');
 const sections = document.querySelectorAll('[data-checkout-state]');
 const announcer = document.getElementById('checkout-status-announcer');
@@ -12,7 +11,7 @@ let invoice = { ...(config?.invoice || {}) };
 let pollTimer = null;
 let countdownTimer = null;
 let redirectTimer = null;
-let redirectSecondsLeft = REDIRECT_SECONDS;
+let redirectSecondsLeft = Number(settings.redirect_delay_seconds ?? 5);
 
 const els = {
     invoiceIds: document.querySelectorAll('[data-invoice-id]'),
@@ -36,6 +35,9 @@ const els = {
     redirectNotes: document.querySelectorAll('[data-redirect-note]'),
     closeButton: document.querySelector('[data-close-checkout]'),
     copyButtons: document.querySelectorAll('[data-copy-kind]'),
+    invoiceMetaRows: document.querySelectorAll('[data-invoice-meta]'),
+    supportEmailNotes: document.querySelectorAll('[data-support-email]'),
+    merchantDisplayName: document.querySelector('[data-merchant-display-name]'),
 };
 
 function numeric(value) {
@@ -156,6 +158,20 @@ function renderStaticFields() {
     setText(els.remainingAmounts, remaining);
     setText(els.paidAmounts, crypto);
 
+    if (els.merchantDisplayName && settings.display_name) {
+        els.merchantDisplayName.textContent = settings.display_name;
+    }
+
+    els.invoiceMetaRows.forEach((row) => {
+        row.hidden = settings.show_invoice_id === false;
+    });
+
+    els.supportEmailNotes.forEach((note) => {
+        const email = settings.show_support_email !== false ? settings.support_email : '';
+        note.hidden = !email;
+        note.textContent = email ? `Need help? Contact ${email}.` : '';
+    });
+
     els.openWalletLinks.forEach((link) => {
         const canOpenWallet = invoice.payment_mode === 'utxo' && paymentUri;
         link.hidden = !canOpenWallet;
@@ -177,7 +193,9 @@ function renderStaticFields() {
     }
 
     if (els.partialExpiredText) {
-        els.partialExpiredText.textContent = `Received ${received}. Contact the merchant with this invoice ID.`;
+        els.partialExpiredText.textContent = settings.show_invoice_id === false
+            ? `Received ${received}. Contact the merchant for support.`
+            : `Received ${received}. Contact the merchant with this invoice ID.`;
     }
 }
 
@@ -355,9 +373,13 @@ function copyPayload(kind) {
 
 function startRedirectCountdown() {
     const url = config.redirects?.complete_url;
-    if (!url || redirectTimer) return;
+    if (!url || redirectTimer || settings.auto_redirect === false) return;
 
-    redirectSecondsLeft = REDIRECT_SECONDS;
+    redirectSecondsLeft = Number(settings.redirect_delay_seconds ?? 5);
+    if (redirectSecondsLeft <= 0) {
+        window.location.assign(url);
+        return;
+    }
     els.redirectNotes.forEach((note) => {
         note.hidden = false;
         note.textContent = `Redirecting in ${redirectSecondsLeft} seconds`;

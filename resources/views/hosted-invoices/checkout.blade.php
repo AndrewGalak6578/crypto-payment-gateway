@@ -15,7 +15,7 @@
             <header class="checkout-header">
                 <div class="merchant-identity">
                     <span class="merchant-icon" aria-hidden="true">✓</span>
-                    <span>Merchant checkout</span>
+                    <span data-merchant-display-name>{{ $viewModel->settings['display_name'] ?? 'Merchant checkout' }}</span>
                 </div>
 
                 <button class="icon-button" type="button" aria-label="Close checkout" data-close-checkout hidden>
@@ -51,6 +51,7 @@
                 </div>
 
                 <p class="safety-note">For token payments, use the correct network.</p>
+                <p class="checkout-small" data-support-email hidden></p>
                 <p class="copy-feedback" data-asset-feedback role="status" aria-live="polite"></p>
             </section>
 
@@ -185,6 +186,7 @@
             invoice: @json($viewModel->invoiceData),
             assets: @json($viewModel->assets),
             redirects: @json($viewModel->redirects),
+            settings: @json($viewModel->settings),
             statusUrl: @json($viewModel->statusUrl),
             selectAssetUrl: @json($viewModel->selectAssetUrl),
             csrfToken: @json(csrf_token()),

@@ -2,6 +2,8 @@ import api from '../../api/axios';
 
 export const merchantApi = {
     dashboard: () => api.get('/api/merchant/dashboard'),
+    settings: () => api.get('/api/merchant/settings'),
+    updateSettings: (payload) => api.put('/api/merchant/settings', payload),
     payments: (params = {}) => api.get('/api/merchant/invoices', { params }),
     paymentsSummary: (params = {}) => api.get('/api/merchant/invoices/summary', { params }),
     payment: (id) => api.get(`/api/merchant/invoices/${id}`),
@@ -23,4 +25,8 @@ export const merchantApi = {
     sendTestWebhook: () => api.post('/api/merchant/webhook-deliveries/test'),
     retryWebhookDelivery: (id) => api.post(`/api/merchant/webhook-deliveries/${id}/retry`),
     users: (params = {}) => api.get('/api/merchant/merchant-users', { params }),
+    createUser: (payload) => api.post('/api/merchant/merchant-users', payload),
+    updateUserRole: (id, payload) => api.patch(`/api/merchant/merchant-users/${id}/role`, payload),
+    updateUserStatus: (id, payload) => api.patch(`/api/merchant/merchant-users/${id}/status`, payload),
+    deleteUser: (id) => api.delete(`/api/merchant/merchant-users/${id}`),
 };

@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Settlane</title>
-    <meta name="description" content="Settlane - Multi-asset invoice and settlement gateway.">
+    <meta name="description" content="Settlane by Andrew Galaktionov - multi-asset invoice and settlement gateway.">
     <meta name="robots" content="noindex,nofollow">
     <style>
         :root {
@@ -132,6 +132,74 @@
             font-size: clamp(1.3rem, 2.5vw, 1.95rem);
             line-height: 1.12;
             letter-spacing: -0.03em;
+        }
+
+        .builder-line {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            width: fit-content;
+            margin: 16px 0 0;
+            padding: 8px 12px;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.54);
+            color: var(--ink);
+            font-size: 13px;
+            font-weight: 700;
+            box-shadow: var(--shadow-soft);
+        }
+
+        .builder-profile-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            color: var(--ink);
+            transition: color 140ms ease;
+        }
+
+        .builder-profile-link:hover,
+        .project-link:hover {
+            color: var(--accent);
+        }
+
+        .builder-profile-link svg,
+        .builder-role-link svg,
+        .project-link svg {
+            width: 15px;
+            height: 15px;
+            flex: 0 0 auto;
+            fill: currentColor;
+        }
+
+        .builder-name {
+            color: inherit;
+            font-weight: 800;
+        }
+
+        .builder-line > span {
+            color: var(--muted);
+            font-weight: 600;
+        }
+
+        .builder-role-link,
+        .project-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            color: var(--muted);
+            font-weight: 650;
+            transition: color 140ms ease;
+        }
+
+        .builder-role-link:hover {
+            color: var(--accent);
+        }
+
+        .builder-divider {
+            color: rgba(104, 113, 126, 0.55);
+            font-weight: 600;
         }
 
         .support {
@@ -574,6 +642,45 @@
             <span class="eyebrow">Laravel + Vue fintech infrastructure MVP</span>
             <h1>Settlane</h1>
             <p class="subtitle">Multi-asset invoice and settlement gateway</p>
+            <p class="builder-line">
+                <a
+                    class="builder-profile-link"
+                    href="https://www.linkedin.com/in/andrew-galaktionov"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Andrew Galaktionov on LinkedIn"
+                >
+                    <span class="builder-name">Andrew Galaktionov</span>
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M20.45 20.45h-3.55v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.36V9h3.41v1.56h.05c.47-.9 1.64-1.85 3.37-1.85 3.6 0 4.26 2.37 4.26 5.46v6.28ZM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12Zm1.78 13.02H3.56V9h3.56v11.45ZM22.22 0H1.77C.79 0 0 .77 0 1.72v20.56C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.72V1.72C24 .77 23.2 0 22.22 0Z" />
+                    </svg>
+                </a>
+                <a
+                    class="builder-role-link"
+                    href="https://github.com/AndrewGalak6578"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Andrew Galaktionov GitHub profile"
+                >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-2.16c-3.2.7-3.87-1.36-3.87-1.36-.52-1.34-1.28-1.7-1.28-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.25.45-2.28 1.18-3.08-.12-.29-.51-1.46.11-3.04 0 0 .97-.31 3.16 1.18a10.96 10.96 0 0 1 5.76 0c2.19-1.49 3.15-1.18 3.15-1.18.63 1.58.24 2.75.12 3.04.74.8 1.18 1.83 1.18 3.08 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.13v3.16c0 .31.21.68.8.56A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z" />
+                    </svg>
+                    Backend Engineer
+                </a>
+                <span class="builder-divider">/</span>
+                <a
+                    class="project-link"
+                    href="https://github.com/AndrewGalak6578/crypto-payment-gateway"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Settlane project repository on GitHub"
+                >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56v-2.16c-3.2.7-3.87-1.36-3.87-1.36-.52-1.34-1.28-1.7-1.28-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.76 2.69 1.25 3.35.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.25.45-2.28 1.18-3.08-.12-.29-.51-1.46.11-3.04 0 0 .97-.31 3.16 1.18a10.96 10.96 0 0 1 5.76 0c2.19-1.49 3.15-1.18 3.15-1.18.63 1.58.24 2.75.12 3.04.74.8 1.18 1.83 1.18 3.08 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.13v3.16c0 .31.21.68.8.56A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z" />
+                    </svg>
+                    Project GitHub
+                </a>
+            </p>
             <p class="support">
                 Settlane brings invoice issuance, chain monitoring, settlement routing, and webhook delivery into one
                 calm operational surface for merchant and admin teams.
@@ -746,8 +853,9 @@
                 <span class="section-label">Final CTA</span>
                 <h2 class="cta-title">Ready to demo Settlane</h2>
                 <p>
-                    Start at the overview, open architecture for the system picture, then move into merchant and admin
-                    portals for the operational walkthrough.
+                    Built by Andrew Galaktionov as a backend-focused portfolio project. Start at the overview, open
+                    architecture for the system picture, then move into merchant and admin portals for the operational
+                    walkthrough.
                 </p>
             </div>
 

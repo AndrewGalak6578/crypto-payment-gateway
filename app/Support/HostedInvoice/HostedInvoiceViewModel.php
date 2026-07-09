@@ -15,12 +15,14 @@ final readonly class HostedInvoiceViewModel
      * @param  array<int, array<string, string>>  $assets
      * @param  array<string, mixed>  $invoiceData
      * @param  array<string, string|null>  $redirects
+     * @param  array<string, mixed>  $settings
      */
     public function __construct(
         public Invoice $invoice,
         public array $assets,
         public array $invoiceData,
         public array $redirects,
+        public array $settings,
         public string $statusUrl,
         public string $selectAssetUrl,
         public string $paymentUri,
@@ -36,9 +38,10 @@ final readonly class HostedInvoiceViewModel
     ): self {
         return new self(
             invoice: $invoice,
-            assets: self::availableAssets($assets),
+            assets: self::availableAssets($invoice, $assets),
             invoiceData: self::invoiceData($invoice, $assets, $chains, $paymentUri),
             redirects: self::redirects($invoice),
+            settings: self::settings($invoice),
             statusUrl: $statusUrl,
             selectAssetUrl: $selectAssetUrl,
             paymentUri: $paymentUri,
@@ -48,9 +51,12 @@ final readonly class HostedInvoiceViewModel
     /**
      * @return array<int, array<string, string>>
      */
-    private static function availableAssets(AssetRegistry $assets): array
+    private static function availableAssets(Invoice $invoice, AssetRegistry $assets): array
     {
+        $allowedAssets = $invoice->merchant?->checkout_allowed_assets ?? [];
+
         return collect($assets->enabled())
+            ->when($allowedAssets !== [], fn ($collection) => $collection->only($allowedAssets))
             ->map(fn (array $asset, string $key): array => [
                 'key' => $key,
                 'symbol' => (string) ($asset['symbol'] ?? strtoupper($key)),
@@ -61,6 +67,23 @@ final readonly class HostedInvoiceViewModel
             ])
             ->values()
             ->all();
+    }
+
+    private static function settings(Invoice $invoice): array
+    {
+        $merchant = $invoice->merchant;
+
+        return [
+            'display_name' => $merchant?->checkout_display_name ?: $merchant?->name ?: 'Merchant checkout',
+            'support_email' => $merchant?->checkout_support_email,
+            'show_invoice_id' => $merchant?->checkout_show_invoice_id ?? true,
+            'show_support_email' => $merchant?->checkout_show_support_email ?? true,
+            'partial_payment_policy' => $merchant?->checkout_partial_payment_policy ?: 'allow_top_up',
+            'confirmation_display' => $merchant?->checkout_confirmation_display ?: 'simple',
+            'auto_redirect' => $merchant?->checkout_auto_redirect ?? true,
+            'redirect_delay_seconds' => $merchant?->checkout_redirect_delay_seconds ?? 5,
+            'brand_color' => $merchant?->checkout_brand_color,
+        ];
     }
 
     /**

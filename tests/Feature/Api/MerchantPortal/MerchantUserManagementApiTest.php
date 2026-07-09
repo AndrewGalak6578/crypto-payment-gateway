@@ -57,6 +57,18 @@ final class MerchantUserManagementApiTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonCount(2, 'data.data');
 
+        $ownerRole = collect($listResponse->json('roles'))
+            ->firstWhere('slug', 'merchant.owner');
+
+        $this->assertNotNull($ownerRole);
+        $this->assertGreaterThan(0, $ownerRole['capability_count']);
+        $this->assertContains('merchant_users.write', collect($ownerRole['capabilities'])->pluck('code'));
+
+        $sortedResponse = $this->getJson('/api/merchant/merchant-users?sort=name&direction=asc');
+
+        $sortedResponse->assertOk()
+            ->assertJsonPath('data.data.0.email', 'ops@example.test');
+
         $disableResponse = $this->patchJson("/api/merchant/merchant-users/{$createdUserId}/status", [
             'status' => 'disabled',
         ]);

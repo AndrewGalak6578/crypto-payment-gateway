@@ -4,14 +4,17 @@
 
 Settlane is a Laravel + Vue project that models the backend workflow of a payment gateway: merchant APIs, invoice creation, deposit address allocation, asynchronous payment monitoring, settlement, internal balance fallback, signed webhooks, and admin operations.
 
-It is positioned as an employer-facing portfolio project for backend and platform roles in fintech, banking, crypto exchanges, iGaming, and payment infrastructure. It is not positioned as production-ready software for real funds.
+It is positioned as an employer-facing backend/platform portfolio project for fintech, banking, crypto exchanges, iGaming, and payment infrastructure. It is close to a product-shaped MVP, but it should still be evaluated as a demo system rather than an audited production gateway for real funds.
 
 ## Quick Links
 
 | Link | URL |
 |---|---|
 | Live demo | [settlane.tech](https://settlane.tech) |
-| GitHub profile |(https://github.com/AndrewGalak6578) |
+| GitHub profile | [AndrewGalak6578](https://github.com/AndrewGalak6578) |
+| Merchant Portal v2 notes | [docs/MERCHANT_PORTAL_V2.md](docs/MERCHANT_PORTAL_V2.md) |
+| Hosted checkout metadata | [docs/HOSTED_CHECKOUT_METADATA.md](docs/HOSTED_CHECKOUT_METADATA.md) |
+| Verification checklist | [docs/MVP_VERIFICATION_CHECKLIST.md](docs/MVP_VERIFICATION_CHECKLIST.md) |
 
 ## Overview
 
@@ -27,8 +30,8 @@ This project models the operational flow of a gateway that accepts crypto-denomi
 The repository includes:
 
 - merchant API endpoints for invoice operations
-- merchant and admin web portals
-- public hosted invoice pages
+- Merchant Portal v2 and Admin Portal web interfaces
+- public hosted checkout pages with payer asset selection
 - queue-driven invoice monitoring, settlement, and webhook delivery
 - UTXO support for `btc`, `ltc`, and `dash`
 - local/dev EVM support for `eth_local` and `eth_usdt_local`
@@ -57,12 +60,20 @@ Settlane models the backend concerns of a transactional payment system:
   - dedicated payment address allocation
   - hosted invoice URL generation
   - monitor job dispatch
+- Merchant Portal invoice creation with:
+  - payer asset selection support
+  - merchant checkout defaults
+  - allowed asset restrictions
+  - redirect URL metadata
+  - min/max checkout amount controls
 - Invoice state refresh with transitions:
   - `pending`
   - `fixated`
   - `paid`
   - `expired`
-- Public hosted invoice page and polling endpoint by `public_id`.
+- Public hosted checkout page and polling endpoint by `public_id`.
+- Hosted checkout states for asset selection, awaiting payment, partial/underpaid, confirming, paid, and expired.
+- Expired checkout states hide QR/address/copy actions to prevent accidental payment.
 
 ### Address allocation
 
@@ -77,6 +88,8 @@ Settlane models the backend concerns of a transactional payment system:
 - Forwarding to merchant-specific or global destination wallet when configured.
 - Internal balance credit fallback when no forwarding wallet exists.
 - Forwarding status tracking on invoices.
+- Settlement ledger entries for internal credits and forward-sent outcomes.
+- Backfill command for older invoices based on `invoices.forward_txids` and balance-credit fields.
 - EVM-native payout path.
 - Local ERC-20 payout path with gas pre-check and gas top-up deferral logic.
 
@@ -92,16 +105,18 @@ Settlane models the backend concerns of a transactional payment system:
 ### Merchant operations
 
 - Merchant portal login/logout/me flow.
-- Merchant portal pages for:
+- Merchant Portal v2 pages for:
   - dashboard
-  - invoices list and detail
-  - balances
-  - wallets
-  - webhook settings
-  - webhook deliveries
-  - API keys
-  - create test invoice
+  - payments list, filters, detail drawer, and full payment detail
+  - create payment link
+  - settlements, destination wallets, balances, wallet estimate, and settlement ledger
+  - developer tools: API keys, webhook settings, webhook deliveries, test webhook signal, payload inspection, and retry
+  - checkout/settings customization
+  - team management
+  - teammate dossier pages with activity timeline
 - Merchant RBAC model with roles and capabilities enforced on portal routes.
+- Merchant activity logging for auth, team, settings, developer, wallet, invoice, and settlement-related actions.
+- Action metadata scrubbing for sensitive keys such as passwords, tokens, and webhook secrets.
 
 ### Admin operations
 
@@ -163,6 +178,8 @@ Key tables and models:
 - `payment_addresses`
 - `super_wallets`
 - `merchant_balances`
+- `merchant_settlement_entries`
+- `merchant_activity_logs`
 - `webhook_deliveries`
 - `evm_gas_fundings`
 
@@ -309,33 +326,43 @@ npm run dev
 2. Log in to the admin portal.
 3. Create a merchant.
 4. Create a merchant user.
-5. Log in to the merchant portal.
-6. Configure a forwarding wallet.
-7. Create an API key or use the portal test-invoice page.
-8. Create an invoice.
-9. Open the hosted invoice page.
-10. Pay the deposit address in the local demo environment.
-11. Observe status progression: `pending -> fixated -> paid`.
+5. Log in to the Merchant Portal v2 at `/merchant/login`.
+6. Open `/merchant/settings` and configure checkout defaults such as brand, allowed assets, redirects, and amount limits.
+7. Configure a destination wallet in `/merchant/settlements`.
+8. Create a payment link from `/merchant/payments/new`.
+9. Open the hosted checkout URL.
+10. Choose an asset if the invoice has no fixed asset.
+11. Pay the deposit address in the local demo environment.
+12. Observe status progression in `/merchant/payments`: `pending -> fixated -> paid`.
 
 ### Flow 2: Settlement forwarding
 
 1. Configure a forwarding wallet for the merchant or global scope.
 2. Pay a test invoice.
-3. Observe `forward_status` and forwarding tx IDs on the invoice detail page.
-4. Verify settlement behavior in admin and merchant views.
+3. Observe `forward_status`, forwarding tx IDs, and settlement entries on the invoice/payment detail page.
+4. Verify settlement behavior in admin and merchant settlement views.
 
 ### Flow 3: Internal balance fallback
 
 1. Remove or skip wallet configuration.
 2. Pay a test invoice.
 3. Observe merchant balance credit in `merchant_balances`.
+4. Observe the corresponding settlement ledger entry in `/merchant/settlements`.
 
 ### Flow 4: Webhook delivery and retry
 
 1. Configure merchant webhook URL and secret.
 2. Trigger invoice events through payment state changes.
-3. Inspect webhook delivery records in merchant or admin portal.
-4. Retry a failed delivery from the admin portal.
+3. Inspect webhook delivery records in Merchant Portal v2 or Admin Portal.
+4. Send a test webhook signal from the developer page.
+5. Inspect payload/response details and retry a failed delivery.
+
+### Flow 5: Team audit dossier
+
+1. Open `/merchant/team`.
+2. Create or update a teammate.
+3. Open the teammate dossier page.
+4. Verify the activity timeline, role access, profile facts, and action categories.
 
 ## Testing
 
@@ -347,16 +374,6 @@ npm run dev
 | `composer test:all` | Fast tests plus integration tests |
 | `npm run build` | Frontend production build |
 
-## Screenshots
-
-Placeholder section:
-
-- Merchant dashboard
-- Merchant invoice detail
-- Hosted invoice page
-- Admin merchant detail
-- Admin webhook delivery detail
-
 ## What This Project Demonstrates
 
 For backend team leads and hiring managers, this project demonstrates:
@@ -367,6 +384,8 @@ For backend team leads and hiring managers, this project demonstrates:
 - multi-asset and multi-network abstraction using registries and family-aware services
 - operational modeling around idempotency, retries, settlement fallback, and status visibility
 - practical admin tooling for merchants, wallets, invoice inspection, and webhook debugging
+- product-shaped merchant tooling: dashboard, payments, settlements, developers, settings, team, and checkout
+- activity/audit visibility for role-sensitive merchant actions
 - an implementation style that is closer to payment infrastructure than to a CRUD demo
 
 ## Portfolio / Demo Scope Note
@@ -381,12 +400,13 @@ It is intentionally useful as a code sample for:
 - settlement bookkeeping
 - webhook delivery pipelines
 - operator-facing admin tooling
+- merchant-facing operational UI and role-aware workflows
 
 It should not be evaluated as a claim of production readiness for custody or real-money operations.
 
 ## What This Project Is Not
 
-- Not a production-ready gateway for real funds.
+- Not an audited production gateway for real funds.
 - Not a complete custody platform or audited wallet/signing system.
 - Not a hardened compliance, treasury, or reconciliation platform.
 - Not full mainnet EVM support; current EVM support is local/dev-oriented.
@@ -396,7 +416,7 @@ It should not be evaluated as a claim of production readiness for custody or rea
 ## Current Scope Notes
 
 - Merchant API routes are implemented under `/api/v1`.
-- Merchant and admin portals are implemented as separate Vue apps.
+- Merchant Portal v2 and Admin Portal are implemented as separate Vue apps.
 - Hosted invoices are implemented at `/i/{publicId}`.
 - UTXO support is the strongest end-to-end path in the repository today.
 - EVM support is implemented but should be presented as local/demo scope rather than production custody architecture.

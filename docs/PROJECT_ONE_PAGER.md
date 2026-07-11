@@ -1,30 +1,32 @@
-# Crypto Payment Gateway MVP - One Pager
+# Settlane - One Pager
 
 ## What this product is
-Crypto Payment Gateway is an MVP for issuing USD-denominated invoices, accepting crypto payments, and settling merchant funds through either on-chain forwarding or internal balance crediting.
+Settlane is a product-shaped MVP for issuing USD-denominated crypto invoices, accepting payments, and settling merchant funds through either on-chain forwarding or internal balance crediting.
 
 It is designed as an operational backend plus role-based interfaces:
 - merchant API for system-to-system invoice operations
-- merchant portal for day-to-day merchant operations
+- Merchant Portal v2 for day-to-day merchant operations
 - admin portal for platform operations and controls
-- hosted invoice page for end-customer payment
+- hosted checkout page for end-customer payment
 
 ## Business flow this system covers
 The system closes the invoice-to-settlement loop for merchants that want to bill in USD and receive crypto settlement:
 1. Merchant creates invoice.
-2. Gateway allocates a payment address and tracks incoming payments.
-3. Invoice status advances by chain evidence.
-4. Merchant net amount is settled:
-- forwarded to configured destination wallet, or
-- credited to internal merchant balance if wallet is missing.
-5. Merchant receives signed webhooks for lifecycle events.
+2. Payer either uses a fixed asset or chooses an allowed asset on the hosted checkout page.
+3. Gateway allocates a payment address and tracks incoming payments.
+4. Invoice status advances by chain evidence.
+5. Merchant net amount is settled after merchant fee deduction:
+   - forwarded to configured destination wallet, or
+   - credited to internal merchant balance if wallet is missing.
+6. Merchant receives signed webhooks for lifecycle events.
+7. Merchant users can inspect payments, settlements, webhook deliveries, and teammate audit activity in the portal.
 
 ## Roles and interaction surfaces
-- Merchant (API + Portal): invoice creation, invoice tracking, wallets, balances, API keys, webhook settings, webhook delivery history.
+- Merchant (API + Portal): invoice creation, payment tracking, checkout settings, destination wallets, balances, settlement ledger, API keys, webhook settings, webhook delivery history, team management, teammate dossiers.
 - Admin (Admin Portal): merchant management, merchant users and roles, wallet governance, invoice operations, webhook delivery operations.
-- Customer (Hosted Invoice): public invoice page with payment instructions and status polling endpoint.
+- Customer (Hosted Checkout): public checkout page with asset selection, payment instructions, QR/address copy actions, status polling, partial-payment guidance, confirmation state, and expired-state safety behavior.
 
-## Supported assets and networks on current `main`
+## Supported assets and networks in the current codebase
 Configured in `config/assets.php` and `config/chains.php`:
 - `btc` on `bitcoin` (UTXO)
 - `ltc` on `litecoin` (UTXO)
@@ -39,12 +41,15 @@ Core status path:
 3. `fixated` -> first valid payment seen before expiry
 4. `paid` -> confirmed amount crosses paid threshold
 5. settlement:
-- `forwarded` on-chain to destination wallet, or
-- internal merchant balance fallback (`merchant_balances`)
+   - `forwarded` on-chain to destination wallet, or
+   - internal merchant balance fallback (`merchant_balances`)
 6. webhook delivery:
-- lifecycle events are enqueued
-- async sender performs signed HTTP delivery
-- retries are handled via persisted delivery attempts
+   - lifecycle events are enqueued
+   - async sender performs signed HTTP delivery
+   - retries are handled via persisted delivery attempts
+7. merchant activity:
+   - portal actions are written to `merchant_activity_logs`
+   - teammate dossier pages expose activity by actor/subject, section, and action type
 
 ## Technical highlights
 - Laravel 12 backend + Vue 3 portals + Docker Sail workflow
@@ -52,8 +57,11 @@ Core status path:
 - persisted webhook deliveries with retry/backoff behavior
 - multi-asset model with `asset_key` + `network_key`
 - chain-family abstraction: UTXO + native EVM + ERC-20
-- separate admin and merchant operational portals
+- separate admin portal and Merchant Portal v2
+- merchant dashboard metrics, payment workspace, create-payment flow, settlement workspace, developer tools, settings, and team module
 - wallet management and settlement routing
+- settlement ledger entries with backfill command for older invoice forwarding summaries
+- merchant activity logging with sensitive metadata scrubbing
 - EVM address allocation through derivation strategy
 - ERC-20 gas sponsorship flow to unblock token payout from deposit addresses
 
@@ -61,17 +69,21 @@ Core status path:
 - Reliability: asynchronous jobs isolate long-running settlement work from API response path.
 - State machine discipline: explicit invoice transitions reduce ambiguous payment state.
 - Auditability: invoice, forwarding, and webhook attempts are persisted and inspectable.
+- Accountability: merchant team actions are logged and visible through teammate dossier pages.
 - Retries: webhook and deferred payout paths are designed for eventual completion.
 - Operational visibility: admin and merchant UIs expose status, balances, and delivery history.
 - Role separation: merchant vs admin responsibilities are enforced by separate auth and capability layers.
 
 ## Current MVP scope
 - End-to-end invoice lifecycle from creation to settlement + webhook delivery.
-- Merchant API, Merchant Portal, Admin Portal, Hosted Invoice flow.
+- Merchant API, Merchant Portal v2, Admin Portal, Hosted Checkout flow.
 - Multi-asset support with UTXO and local EVM/ERC-20 paths.
 - Internal balance fallback when forwarding destination is not configured.
+- Merchant checkout settings for branding, redirects, allowed assets, expiration, partial-payment behavior, confirmation display, and min/max amounts.
+- Team management and teammate audit dossiers.
 
 ## Known constraints / next steps
 - EVM paths are implemented for `evm_local` and should be treated as MVP/local-first integration until environment-specific custody/signing setup is finalized.
 - Test webhook endpoints still exist in API routes and should be environment-controlled.
 - Legacy `coin` compatibility still exists alongside `asset_key/network_key`; backfill discipline remains important.
+- There is no browser E2E suite yet; portal regression coverage is a mix of PHPUnit API tests, Vite build, and manual smoke.

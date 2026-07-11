@@ -11,6 +11,7 @@ use App\Models\Merchant;
 use App\Models\MerchantUser;
 use App\Services\InvoiceCreator;
 use App\Services\InvoiceStatusRefresher;
+use App\Services\MerchantActivityLogger;
 use App\Services\MerchantPortalAccess;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -18,7 +19,7 @@ use Illuminate\Http\Request;
 
 class InvoiceController extends Controller
 {
-    public function store(CreateInvoiceRequest $request, InvoiceCreator $creator): JsonResponse
+    public function store(CreateInvoiceRequest $request, InvoiceCreator $creator, MerchantActivityLogger $activity): JsonResponse
     {
         /** @var MerchantUser $merchantUser */
         $merchantUser = $request->attributes->get('merchant_user');
@@ -32,6 +33,20 @@ class InvoiceController extends Controller
         }
 
         $invoice = $creator->create($merchant, $data);
+
+        $activity->log($request, 'payments', 'invoice.created', [
+            'public_id' => $invoice->public_id,
+            'external_id' => $invoice->external_id,
+            'status' => $invoice->status,
+            'asset_key' => $invoice->asset_key,
+            'network_key' => $invoice->network_key,
+            'expected_usd' => (string) $invoice->expected_usd,
+        ], [
+            'type' => 'write',
+            'target_type' => Invoice::class,
+            'target_id' => $invoice->id,
+            'target_label' => $invoice->public_id,
+        ]);
 
         return response()->json([
             'success' => true,
@@ -144,6 +159,19 @@ class InvoiceController extends Controller
         $invoice = $query->firstOrFail();
 
         $invoice = $refresher->refresh($invoice);
+
+        $activity = app(MerchantActivityLogger::class);
+        $activity->log($request, 'payments', 'invoice.refreshed', [
+            'public_id' => $invoice->public_id,
+            'status' => $invoice->status,
+            'received_all_coin' => (string) $invoice->received_all_coin,
+            'received_conf_coin' => (string) $invoice->received_conf_coin,
+        ], [
+            'type' => 'action',
+            'target_type' => Invoice::class,
+            'target_id' => $invoice->id,
+            'target_label' => $invoice->public_id,
+        ]);
         if ($includeWebhooks) {
             $invoice->load(['webhookDeliveries' => fn ($query) => $query->latest('id')->limit(5)]);
         }

@@ -14,6 +14,7 @@ return [
         'api_keys.write',
         'merchant_users.read',
         'merchant_users.write',
+        'audit.read',
     ],
 
     'merchant.admin' => [
@@ -28,6 +29,7 @@ return [
         'api_keys.read',
         // 'api_keys.write' пока не даём
         'merchant_users.read',
+        'audit.read',
     ],
 
     'merchant.analyst' => [

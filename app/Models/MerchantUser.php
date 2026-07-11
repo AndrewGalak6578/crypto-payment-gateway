@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Notifiable;
@@ -58,5 +59,15 @@ class MerchantUser extends Authenticatable
     public function role(): BelongsTo
     {
         return $this->belongsTo(Role::class);
+    }
+
+    public function activityLogs(): HasMany
+    {
+        return $this->hasMany(MerchantActivityLog::class, 'actor_merchant_user_id');
+    }
+
+    public function subjectActivityLogs(): HasMany
+    {
+        return $this->hasMany(MerchantActivityLog::class, 'subject_merchant_user_id');
     }
 }

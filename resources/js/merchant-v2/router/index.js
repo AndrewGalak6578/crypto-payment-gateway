@@ -12,6 +12,7 @@ const CreatePaymentPage = () => import('../pages/payments/CreatePaymentPage.vue'
 const DevelopersPage = () => import('../pages/developers/DevelopersPage.vue');
 const SettlementsPage = () => import('../pages/settlements/SettlementsPage.vue');
 const TeamPage = () => import('../pages/team/TeamPage.vue');
+const TeamMemberProfilePage = () => import('../pages/team/TeamMemberProfilePage.vue');
 const SettingsPage = () => import('../pages/settings/SettingsPage.vue');
 
 const routes = [
@@ -41,6 +42,7 @@ const routes = [
             { path: 'developers', name: 'merchant-v2.developers', component: DevelopersPage },
             { path: 'settlements', name: 'merchant-v2.settlements', component: SettlementsPage },
             { path: 'team', name: 'merchant-v2.team', component: TeamPage },
+            { path: 'team/:userId', name: 'merchant-v2.team-member', component: TeamMemberProfilePage, props: true },
             { path: 'settings', name: 'merchant-v2.settings', component: SettingsPage },
         ],
     },

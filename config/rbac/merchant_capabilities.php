@@ -61,4 +61,9 @@ return [
         'name' => 'Merchant Users Write',
         'description' => 'Manage merchant users',
     ],
+    [
+        'code' => 'audit.read',
+        'name' => 'Audit Read',
+        'description' => 'View teammate profiles and merchant activity logs',
+    ],
 ];

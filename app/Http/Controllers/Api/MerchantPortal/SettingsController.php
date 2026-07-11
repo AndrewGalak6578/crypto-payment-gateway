@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api\MerchantPortal;
 use App\Http\Controllers\Controller;
 use App\Models\Merchant;
 use App\Models\MerchantUser;
+use App\Services\MerchantActivityLogger;
 use App\Support\Assets\AssetRegistry;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,7 +24,7 @@ class SettingsController extends Controller
         ]);
     }
 
-    public function update(Request $request, AssetRegistry $assets): JsonResponse
+    public function update(Request $request, AssetRegistry $assets, MerchantActivityLogger $activity): JsonResponse
     {
         $merchant = $this->currentMerchant($request);
 
@@ -87,11 +88,26 @@ class SettingsController extends Controller
 
         $data['checkout_allowed_assets'] = array_values(array_unique($data['checkout_allowed_assets'] ?? [])) ?: null;
 
+        $before = $merchant->only(array_keys($data));
         $merchant->update($data);
+        $fresh = $merchant->fresh();
+
+        $activity->log($request, 'settings', 'checkout_settings.updated', [
+            'changed_fields' => collect($data)
+                ->filter(fn ($value, string $key) => ($before[$key] ?? null) != $value)
+                ->keys()
+                ->values()
+                ->all(),
+        ], [
+            'type' => 'write',
+            'target_type' => Merchant::class,
+            'target_id' => $merchant->id,
+            'target_label' => $merchant->name,
+        ]);
 
         return response()->json([
             'success' => true,
-            'data' => $this->payload($merchant->fresh()),
+            'data' => $this->payload($fresh),
         ]);
     }
 

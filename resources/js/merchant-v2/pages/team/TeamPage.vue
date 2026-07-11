@@ -86,6 +86,54 @@
                         <span class="status-badge status-info">{{ meta.total }} total</span>
                     </div>
 
+                    <div class="team-mobile-filter-strip">
+                        <input v-model.trim="filters.search" class="input" type="search" placeholder="Search name, email, or ID" @keyup.enter="applyFilters" />
+                        <details class="team-mobile-filter-panel">
+                            <summary>
+                                <span>Filters</span>
+                                <strong v-if="activeTeamFilterCount">{{ activeTeamFilterCount }}</strong>
+                            </summary>
+                            <div class="team-mobile-filter-body">
+                                <select v-model="filters.status" class="input" @change="applyFilters">
+                                    <option value="">All statuses</option>
+                                    <option value="active">Active</option>
+                                    <option value="disabled">Disabled</option>
+                                </select>
+                                <select v-model="filters.role_id" class="input" @change="applyFilters">
+                                    <option value="">All roles</option>
+                                    <option v-for="role in roles" :key="role.id" :value="role.id">{{ role.name }}</option>
+                                </select>
+                                <div class="team-mobile-date-grid">
+                                    <input v-model="filters.created_from" class="input" type="date" aria-label="Created from" @change="applyFilters" />
+                                    <input v-model="filters.created_to" class="input" type="date" aria-label="Created to" @change="applyFilters" />
+                                </div>
+                                <div class="team-mobile-sort-grid">
+                                    <select v-model="filters.sort" class="input" @change="applyFilters">
+                                        <option value="created_at">Created date</option>
+                                        <option value="name">Name</option>
+                                        <option value="email">Email</option>
+                                        <option value="status">Status</option>
+                                        <option value="last_login_at">Last login</option>
+                                    </select>
+                                    <select v-model="filters.direction" class="input" @change="applyFilters">
+                                        <option value="desc">Descending</option>
+                                        <option value="asc">Ascending</option>
+                                    </select>
+                                </div>
+                                <select v-model.number="filters.per_page" class="input" @change="applyFilters">
+                                    <option :value="10">10 / page</option>
+                                    <option :value="15">15 / page</option>
+                                    <option :value="25">25 / page</option>
+                                    <option :value="50">50 / page</option>
+                                </select>
+                                <div class="team-mobile-filter-actions">
+                                    <button class="btn btn-secondary" type="button" @click="clearFilters">Reset</button>
+                                    <button class="btn btn-primary" type="button" @click="applyFilters">Apply</button>
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+
                     <div class="team-filter-bar">
                         <input v-model.trim="filters.search" class="input" type="search" placeholder="Search name, email, or ID" @keyup.enter="applyFilters" />
                         <select v-model="filters.status" class="input" @change="applyFilters">
@@ -128,7 +176,12 @@
                             <div class="team-user-main">
                                 <span class="user-avatar">{{ initials(user) }}</span>
                                 <div>
-                                    <strong>{{ user.name || user.email }}</strong>
+                                    <div class="team-user-name-row">
+                                        <strong>{{ user.name || user.email }}</strong>
+                                        <RouterLink class="dossier-link" :to="{ name: 'merchant-v2.team-member', params: { userId: user.id } }">
+                                            Dossier
+                                        </RouterLink>
+                                    </div>
                                     <p>{{ user.email }}</p>
                                     <small>ID #{{ user.id }} · Added {{ formatDate(user.created_at) }}</small>
                                 </div>
@@ -300,6 +353,16 @@ const activeUsers = computed(() => users.value.filter((user) => user.status === 
 const disabledUsers = computed(() => users.value.filter((user) => user.status === 'disabled').length);
 const ownerUsers = computed(() => users.value.filter((user) => user.role_slug === 'merchant.owner' && user.status === 'active').length);
 const selectedRole = computed(() => roles.value.find((role) => String(role.id) === String(form.role_id)) || null);
+const activeTeamFilterCount = computed(() => [
+    filters.search,
+    filters.status,
+    filters.role_id,
+    filters.created_from,
+    filters.created_to,
+    filters.sort !== 'created_at' ? filters.sort : '',
+    filters.direction !== 'desc' ? filters.direction : '',
+    filters.per_page !== 15 ? filters.per_page : '',
+].filter(Boolean).length);
 const metrics = computed(() => [
     { label: 'Total users', value: meta.total, note: `${users.value.length} shown on this page`, tone: 'metric-blue' },
     { label: 'Active access', value: activeUsers.value, note: 'Can sign in now', tone: 'metric-green' },
@@ -672,6 +735,10 @@ onBeforeUnmount(() => {
     border-bottom: 1px solid var(--color-border);
 }
 
+.team-mobile-filter-strip {
+    display: none;
+}
+
 .team-filter-bar input[type='date'],
 .team-filter-bar select:nth-of-type(4),
 .team-filter-bar select:nth-of-type(5) {
@@ -719,6 +786,13 @@ onBeforeUnmount(() => {
     flex: 0 0 auto;
 }
 
+.team-user-name-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
 .team-user-main strong {
     display: block;
     color: var(--color-text);
@@ -758,6 +832,36 @@ onBeforeUnmount(() => {
     grid-template-columns: minmax(130px, 1fr) auto auto;
     gap: 8px;
     align-items: end;
+}
+
+.dossier-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 0 9px;
+    border: 1px solid rgba(36, 107, 254, 0.18);
+    border-radius: 999px;
+    background: linear-gradient(180deg, #ffffff 0%, var(--color-brand-50) 100%);
+    color: var(--color-brand-700);
+    font-size: 11px;
+    font-weight: 800;
+    text-decoration: none;
+    box-shadow: 0 5px 12px rgba(36, 107, 254, 0.08);
+}
+
+.dossier-link::before {
+    content: '';
+    width: 4px;
+    height: 4px;
+    margin-right: 6px;
+    border-radius: 999px;
+    background: var(--color-brand-500);
+}
+
+.dossier-link:hover {
+    border-color: rgba(36, 107, 254, 0.28);
+    color: var(--color-brand-500);
+    transform: translateY(-1px);
 }
 
 .team-user-actions label {
@@ -1181,24 +1285,78 @@ onBeforeUnmount(() => {
     }
 
     .team-filter-bar {
-        grid-template-columns: 1fr;
-        gap: 8px;
+        display: none;
+    }
+
+    .team-mobile-filter-strip {
+        display: grid;
+        gap: 9px;
         padding: 0 16px 16px;
-        border-bottom: 0;
         background: var(--color-surface);
     }
 
-    .team-filter-bar input[type='date'],
-    .team-filter-bar select:nth-of-type(4),
-    .team-filter-bar select:nth-of-type(5),
-    .team-filter-bar button {
-        grid-row: auto;
-    }
-
-    .team-filter-bar .input,
-    .team-filter-bar .btn {
+    .team-mobile-filter-strip > .input {
         min-height: 44px;
         border-radius: 14px;
+    }
+
+    .team-mobile-filter-panel {
+        border: 1px solid rgba(214, 221, 232, 0.95);
+        border-radius: 16px;
+        background:
+            radial-gradient(circle at top right, rgba(36, 107, 254, 0.08), transparent 34%),
+            var(--color-surface-subtle);
+        overflow: hidden;
+    }
+
+    .team-mobile-filter-panel summary {
+        min-height: 44px;
+        padding: 0 13px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        color: var(--color-text);
+        font-size: 13px;
+        font-weight: 800;
+        cursor: pointer;
+        list-style: none;
+    }
+
+    .team-mobile-filter-panel summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .team-mobile-filter-panel summary strong {
+        min-width: 22px;
+        height: 22px;
+        border-radius: 999px;
+        display: inline-grid;
+        place-items: center;
+        background: var(--color-brand-600);
+        color: #ffffff;
+        font-size: 11px;
+        font-weight: 850;
+    }
+
+    .team-mobile-filter-body {
+        display: grid;
+        gap: 10px;
+        padding: 0 10px 10px;
+    }
+
+    .team-mobile-filter-body .input,
+    .team-mobile-filter-body .btn {
+        min-height: 42px;
+        border-radius: 13px;
+    }
+
+    .team-mobile-date-grid,
+    .team-mobile-sort-grid,
+    .team-mobile-filter-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
     }
 
     .team-user-list,

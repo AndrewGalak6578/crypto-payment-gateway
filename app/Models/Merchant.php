@@ -36,8 +36,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property-read Collection<int, MerchantApiKey> $apiKeys
  * @property-read Collection<int, Invoice> $invoices
  * @property-read Collection<int, SuperWallet> $superWallets
- * @property-read Collection<int, MerchantBalance> $balances
- * @property-read Collection<int, MerchantUser> $users
+     * @property-read Collection<int, MerchantBalance> $balances
+     * @property-read Collection<int, MerchantUser> $users
+     * @property-read Collection<int, MerchantActivityLog> $activityLogs
  */
 class Merchant extends Model
 {
@@ -102,6 +103,11 @@ class Merchant extends Model
     public function users(): HasMany
     {
         return $this->hasMany(MerchantUser::class);
+    }
+
+    public function activityLogs(): HasMany
+    {
+        return $this->hasMany(MerchantActivityLog::class);
     }
 
     public function paymentAddresses(): HasMany

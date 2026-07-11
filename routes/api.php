@@ -84,6 +84,7 @@ Route::prefix('admin')->middleware(['web', 'auth.admin'])->group(function () {
     Route::delete('/api-keys/{id}', [\App\Http\Controllers\Api\MerchantPortal\ApiKeyController::class, 'destroy'])->middleware('merchant.capability:api_keys.write');
 
     Route::get('/merchant-users', [\App\Http\Controllers\Api\MerchantPortal\MerchantUserController::class, 'index'])->middleware('merchant.capability:merchant_users.read');
+    Route::get('/merchant-users/{merchantUser}', [\App\Http\Controllers\Api\MerchantPortal\MerchantUserController::class, 'show'])->middleware('merchant.capability:merchant_users.read');
     Route::post('/merchant-users', [\App\Http\Controllers\Api\MerchantPortal\MerchantUserController::class, 'store'])->middleware('merchant.capability:merchant_users.write');
     Route::patch('/merchant-users/{merchantUser}/role', [\App\Http\Controllers\Api\MerchantPortal\MerchantUserController::class, 'updateRole'])->middleware('merchant.capability:merchant_users.write');
     Route::patch('/merchant-users/{merchantUser}/status', [\App\Http\Controllers\Api\MerchantPortal\MerchantUserController::class, 'updateStatus'])->middleware('merchant.capability:merchant_users.write');

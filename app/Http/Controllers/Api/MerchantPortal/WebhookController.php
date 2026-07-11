@@ -9,6 +9,7 @@ use App\Models\Merchant;
 use App\Models\MerchantUser;
 use App\Models\WebhookDelivery;
 use App\Rules\PublicWebhookUrl;
+use App\Services\MerchantActivityLogger;
 use App\Services\Webhooks\SendMerchantTestWebhook;
 use App\Services\Webhooks\WebhookDeliveryRetryer;
 use Illuminate\Database\Eloquent\Builder;
@@ -34,7 +35,7 @@ class WebhookController extends Controller
         ]);
     }
 
-    public function updateSettings(Request $request): JsonResponse
+    public function updateSettings(Request $request, MerchantActivityLogger $activity): JsonResponse
     {
         /** @var MerchantUser $merchantUser */
         $merchantUser = $request->attributes->get('merchant_user');
@@ -54,6 +55,17 @@ class WebhookController extends Controller
         }
 
         $merchant->save();
+
+        $activity->log($request, 'developers', 'webhook_settings.updated', [
+            'webhook_url_changed' => array_key_exists('webhook_url', $data),
+            'webhook_secret_changed' => array_key_exists('webhook_secret', $data),
+            'has_webhook_url' => ! empty($merchant->webhook_url),
+        ], [
+            'type' => 'security',
+            'target_type' => Merchant::class,
+            'target_id' => $merchant->id,
+            'target_label' => $merchant->name,
+        ]);
 
         return response()->json([
             'success' => true,
@@ -126,7 +138,7 @@ class WebhookController extends Controller
         ]);
     }
 
-    public function retryDelivery(Request $request, int $delivery, WebhookDeliveryRetryer $retryer): JsonResponse
+    public function retryDelivery(Request $request, int $delivery, WebhookDeliveryRetryer $retryer, MerchantActivityLogger $activity): JsonResponse
     {
         /** @var MerchantUser $merchantUser */
         $merchantUser = $request->attributes->get('merchant_user');
@@ -139,6 +151,18 @@ class WebhookController extends Controller
         $queued = $retryer->retry($webhookDelivery);
         $webhookDelivery->refresh();
 
+        $activity->log($request, 'developers', 'webhook_delivery.retried', [
+            'delivery_id' => $webhookDelivery->id,
+            'event' => $webhookDelivery->event,
+            'status' => $webhookDelivery->status,
+            'queued' => $queued,
+        ], [
+            'type' => 'action',
+            'target_type' => WebhookDelivery::class,
+            'target_id' => $webhookDelivery->id,
+            'target_label' => $webhookDelivery->event,
+        ]);
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -149,7 +173,7 @@ class WebhookController extends Controller
         ]);
     }
 
-    public function sendTest(Request $request, SendMerchantTestWebhook $testWebhook): JsonResponse
+    public function sendTest(Request $request, SendMerchantTestWebhook $testWebhook, MerchantActivityLogger $activity): JsonResponse
     {
         /** @var MerchantUser $merchantUser */
         $merchantUser = $request->attributes->get('merchant_user');
@@ -158,6 +182,17 @@ class WebhookController extends Controller
         $merchant = Merchant::query()->findOrFail($merchantUser->merchant_id);
 
         $delivery = $testWebhook->send($merchant);
+
+        $activity->log($request, 'developers', 'webhook_test.sent', [
+            'delivery_id' => $delivery->id,
+            'event' => $delivery->event,
+            'url' => $delivery->url,
+        ], [
+            'type' => 'action',
+            'target_type' => WebhookDelivery::class,
+            'target_id' => $delivery->id,
+            'target_label' => $delivery->event,
+        ]);
 
         return response()->json([
             'success' => true,

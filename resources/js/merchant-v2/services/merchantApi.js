@@ -25,6 +25,7 @@ export const merchantApi = {
     sendTestWebhook: () => api.post('/api/merchant/webhook-deliveries/test'),
     retryWebhookDelivery: (id) => api.post(`/api/merchant/webhook-deliveries/${id}/retry`),
     users: (params = {}) => api.get('/api/merchant/merchant-users', { params }),
+    userProfile: (id, params = {}) => api.get(`/api/merchant/merchant-users/${id}`, { params }),
     createUser: (payload) => api.post('/api/merchant/merchant-users', payload),
     updateUserRole: (id, payload) => api.patch(`/api/merchant/merchant-users/${id}/role`, payload),
     updateUserStatus: (id, payload) => api.patch(`/api/merchant/merchant-users/${id}/status`, payload),

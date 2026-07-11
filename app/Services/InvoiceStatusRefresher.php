@@ -150,6 +150,8 @@ final class InvoiceStatusRefresher
                     $inv->metadata = $meta;
                 }
 
+                $this->applySettlementSnapshot($inv, $receivedConf, $assetKey);
+
                 $eventsToDispatch[] = 'invoice.paid';
             }
 
@@ -204,6 +206,34 @@ final class InvoiceStatusRefresher
 
         // micro epsilon against float whitenoise
         return $receivedConf + 1e-12 >= $need;
+    }
+
+    private function applySettlementSnapshot(Invoice $inv, float $receivedConf, string $assetKey): void
+    {
+        $scale = $this->assets->settlementScale($assetKey);
+        $grossCoin = $this->norm($receivedConf, $scale);
+        $feePercent = (float) ($inv->merchant->fee_percent ?? 0.0);
+        $feeCoin = $this->norm($grossCoin * ($feePercent / 100), $scale);
+        $payoutCoin = $this->norm($grossCoin - $feeCoin, $scale);
+        $paidUsd = (float) ($inv->paid_usd ?? 0);
+        $feeUsd = round($paidUsd * ($feePercent / 100), 2);
+        $payoutUsd = round($paidUsd - $feeUsd, 2);
+
+        if ($inv->fee_coin === null) {
+            $inv->fee_coin = $feeCoin;
+        }
+
+        if ($inv->merchant_payout_coin === null) {
+            $inv->merchant_payout_coin = $payoutCoin;
+        }
+
+        if ($inv->fee_usd === null) {
+            $inv->fee_usd = $feeUsd;
+        }
+
+        if ($inv->merchant_payout_usd === null) {
+            $inv->merchant_payout_usd = $payoutUsd;
+        }
     }
 
     /**

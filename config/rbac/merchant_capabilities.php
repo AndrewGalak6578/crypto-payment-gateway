@@ -12,6 +12,11 @@ return [
         'description' => 'View invoices and their statuses',
     ],
     [
+        'code' => 'invoices.write',
+        'name' => 'Invoices Write',
+        'description' => 'Create and manage invoices',
+    ],
+    [
         'code' => 'balances.read',
         'name' => 'Balances Read',
         'description' => 'View merchant balances',
@@ -55,5 +60,10 @@ return [
         'code' => 'merchant_users.write',
         'name' => 'Merchant Users Write',
         'description' => 'Manage merchant users',
+    ],
+    [
+        'code' => 'audit.read',
+        'name' => 'Audit Read',
+        'description' => 'View teammate profiles and merchant activity logs',
     ],
 ];

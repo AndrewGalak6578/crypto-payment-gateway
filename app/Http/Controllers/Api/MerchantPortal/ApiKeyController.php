@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api\MerchantPortal;
 use App\Http\Controllers\Controller;
 use App\Models\MerchantApiKey;
 use App\Models\MerchantUser;
+use App\Services\MerchantActivityLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -35,7 +36,7 @@ class ApiKeyController extends Controller
         ]);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(Request $request, MerchantActivityLogger $activity): JsonResponse
     {
         /** @var MerchantUser $merchantUser */
         $merchantUser = $request->attributes->get('merchant_user');
@@ -52,6 +53,15 @@ class ApiKeyController extends Controller
             'token_hash' => hash('sha256', $plainToken),
         ]);
 
+        $activity->log($request, 'developers', 'api_key.created', [
+            'name' => $key->name,
+        ], [
+            'type' => 'security',
+            'target_type' => MerchantApiKey::class,
+            'target_id' => $key->id,
+            'target_label' => $key->name,
+        ]);
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -63,7 +73,7 @@ class ApiKeyController extends Controller
         ], 201);
     }
 
-    public function destroy(Request $request, int $id): JsonResponse
+    public function destroy(Request $request, int $id, MerchantActivityLogger $activity): JsonResponse
     {
         /** @var MerchantUser $merchantUser */
         $merchantUser = $request->attributes->get('merchant_user');
@@ -74,6 +84,15 @@ class ApiKeyController extends Controller
 
         $key->update([
             'revoked_at' => now('UTC'),
+        ]);
+
+        $activity->log($request, 'developers', 'api_key.revoked', [
+            'name' => $key->name,
+        ], [
+            'type' => 'security',
+            'target_type' => MerchantApiKey::class,
+            'target_id' => $key->id,
+            'target_label' => $key->name,
         ]);
 
         return response()->json([

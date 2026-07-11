@@ -33,6 +33,7 @@ class HostedInvoiceController extends Controller
     public function show(string $publicId): View
     {
         $invoice = Invoice::query()
+            ->with('merchant')
             ->where('public_id', $publicId)
             ->firstOrFail();
 
@@ -56,8 +57,17 @@ class HostedInvoiceController extends Controller
     public function status(string $publicId): JsonResponse
     {
         $invoice = Invoice::query()
+            ->with('merchant')
             ->where('public_id', $publicId)
             ->firstOrFail();
+
+        $allowedAssets = $invoice->merchant?->checkout_allowed_assets ?? [];
+        if ($allowedAssets !== [] && ! in_array((string) $data['asset_key'], $allowedAssets, true)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This payment method is not available for this checkout.',
+            ], 422);
+        }
 
         if ($invoice->status === 'awaiting_asset' && $invoice->expires_at && now('UTC')->gt($invoice->expires_at)) {
             $invoice->forceFill(['status' => 'expired'])->save();

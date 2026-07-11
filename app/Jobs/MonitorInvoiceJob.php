@@ -65,8 +65,8 @@ class MonitorInvoiceJob implements ShouldQueue
      */
     private function nextDelaySeconds(Invoice $inv, Carbon $nowUtc): int
     {
-        $fastSec = (int) config('payments.monitor.poll_fast_sec', 60);
-        $slowSec = (int) config('payments.monitor.poll_slow_sec', 300);
+        $fastSec = (int) config('payments.monitor.poll_fast_sec', 10);
+        $slowSec = (int) config('payments.monitor.poll_slow_sec', 100);
         $fastPhaseMinutes = (int) config('payments.monitor.fast_phase_minutes', 30);
 
         // safety

@@ -25,3 +25,4 @@ Thumbs.db
 /nodes/anvil/anvil-state.json
 /cloudflared.deb
 /docs/project
+/docker-data

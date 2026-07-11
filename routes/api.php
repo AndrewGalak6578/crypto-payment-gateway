@@ -53,15 +53,19 @@ Route::prefix('admin')->middleware(['web', 'auth.admin'])->group(function () {
     Route::post('/merchant-api-keys/{apiKey}/revoke', [MerchantApiKeyController::class, 'revoke']);
 });
 
-Route::prefix('merchant')->middleware(['auth.merchant.portal', 'web', 'merchant.enabled'])->group(function () {
+    Route::prefix('merchant')->middleware(['auth.merchant.portal', 'web', 'merchant.enabled'])->group(function () {
     Route::get('/dashboard', [\App\Http\Controllers\Api\MerchantPortal\DashboardController::class, '__invoke'])->middleware('merchant.capability:portal.view');
+    Route::get('/settings', [\App\Http\Controllers\Api\MerchantPortal\SettingsController::class, 'show'])->middleware('merchant.capability:portal.view');
+    Route::put('/settings', [\App\Http\Controllers\Api\MerchantPortal\SettingsController::class, 'update'])->middleware('merchant.capability:invoices.write');
 
-    Route::post('/invoices', [\App\Http\Controllers\Api\MerchantPortal\InvoiceController::class, 'store'])->middleware('merchant.capability:invoices.read');
+    Route::post('/invoices', [\App\Http\Controllers\Api\MerchantPortal\InvoiceController::class, 'store'])->middleware('merchant.capability:invoices.write');
+    Route::get('/invoices/summary', [\App\Http\Controllers\Api\MerchantPortal\InvoiceController::class, 'summary'])->middleware('merchant.capability:invoices.read');
     Route::get('/invoices', [\App\Http\Controllers\Api\MerchantPortal\InvoiceController::class, 'index'])->middleware('merchant.capability:invoices.read');
     Route::get('/invoices/{id}', [\App\Http\Controllers\Api\MerchantPortal\InvoiceController::class, 'show'])->middleware('merchant.capability:invoices.read');
     Route::post('/invoices/{id}/refresh', [\App\Http\Controllers\Api\MerchantPortal\InvoiceController::class, 'refresh'])->middleware('merchant.capability:invoices.read');
 
     Route::get('/balances', [\App\Http\Controllers\Api\MerchantPortal\BalanceController::class, '__invoke'])->middleware('merchant.capability:balances.read');
+    Route::get('/settlement-entries', [\App\Http\Controllers\Api\MerchantPortal\SettlementEntryController::class, 'index'])->middleware('merchant.capability:balances.read');
 
     Route::get('/wallets', [\App\Http\Controllers\Api\MerchantPortal\WalletController::class, 'index'])->middleware('merchant.capability:wallets.read');
     Route::post('/wallets', [\App\Http\Controllers\Api\MerchantPortal\WalletController::class, 'store'])->middleware('merchant.capability:wallets.write');
@@ -70,14 +74,17 @@ Route::prefix('merchant')->middleware(['auth.merchant.portal', 'web', 'merchant.
 
     Route::get('/webhook-settings', [\App\Http\Controllers\Api\MerchantPortal\WebhookController::class, 'settings'])->middleware('merchant.capability:webhooks.read');
     Route::put('/webhook-settings', [\App\Http\Controllers\Api\MerchantPortal\WebhookController::class, 'updateSettings'])->middleware('merchant.capability:webhooks.write');
+    Route::post('/webhook-deliveries/test', [\App\Http\Controllers\Api\MerchantPortal\WebhookController::class, 'sendTest'])->middleware('merchant.capability:webhooks.write');
     Route::get('/webhook-deliveries', [\App\Http\Controllers\Api\MerchantPortal\WebhookController::class, 'deliveries'])->middleware('merchant.capability:webhooks.read');
     Route::get('/webhook-deliveries/{delivery}', [\App\Http\Controllers\Api\MerchantPortal\WebhookController::class, 'deliveryDetail'])->middleware('merchant.capability:webhooks.read');
+    Route::post('/webhook-deliveries/{delivery}/retry', [\App\Http\Controllers\Api\MerchantPortal\WebhookController::class, 'retryDelivery'])->middleware('merchant.capability:webhooks.write');
 
     Route::get('/api-keys', [\App\Http\Controllers\Api\MerchantPortal\ApiKeyController::class, 'index'])->middleware('merchant.capability:api_keys.read');
     Route::post('/api-keys', [\App\Http\Controllers\Api\MerchantPortal\ApiKeyController::class, 'store'])->middleware('merchant.capability:api_keys.write');
     Route::delete('/api-keys/{id}', [\App\Http\Controllers\Api\MerchantPortal\ApiKeyController::class, 'destroy'])->middleware('merchant.capability:api_keys.write');
 
     Route::get('/merchant-users', [\App\Http\Controllers\Api\MerchantPortal\MerchantUserController::class, 'index'])->middleware('merchant.capability:merchant_users.read');
+    Route::get('/merchant-users/{merchantUser}', [\App\Http\Controllers\Api\MerchantPortal\MerchantUserController::class, 'show'])->middleware('merchant.capability:merchant_users.read');
     Route::post('/merchant-users', [\App\Http\Controllers\Api\MerchantPortal\MerchantUserController::class, 'store'])->middleware('merchant.capability:merchant_users.write');
     Route::patch('/merchant-users/{merchantUser}/role', [\App\Http\Controllers\Api\MerchantPortal\MerchantUserController::class, 'updateRole'])->middleware('merchant.capability:merchant_users.write');
     Route::patch('/merchant-users/{merchantUser}/status', [\App\Http\Controllers\Api\MerchantPortal\MerchantUserController::class, 'updateStatus'])->middleware('merchant.capability:merchant_users.write');

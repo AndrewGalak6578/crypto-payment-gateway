@@ -4,8 +4,8 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\AdminPortal;
 
 use App\Http\Controllers\Controller;
-use App\Jobs\DeliverWebhookJob;
 use App\Models\WebhookDelivery;
+use App\Services\Webhooks\WebhookDeliveryRetryer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,11 +16,15 @@ class WebhookDeliveryController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = WebhookDelivery::query()
-            ->with('invoice.merchant')
+            ->with(['invoice.merchant', 'merchant'])
             ->latest('id');
 
         if ($merchantId = $request->query('merchant_id')) {
-            $query->whereHas('invoice', fn (Builder $q) => $q->where('merchant_id', (int) $merchantId));
+            $query->where(function (Builder $deliveryQuery) use ($merchantId): void {
+                $deliveryQuery
+                    ->where('merchant_id', (int) $merchantId)
+                    ->orWhereHas('invoice', fn (Builder $q) => $q->where('merchant_id', (int) $merchantId));
+            });
         }
 
         if ($invoiceId = $request->query('invoice_id')) {
@@ -53,8 +57,8 @@ class WebhookDeliveryController extends Controller
             'data' => $deliveries->through(fn (WebhookDelivery $delivery) => [
                 'id' => $delivery->id,
                 'invoice_id' => $delivery->invoice_id,
-                'merchant_id' => $delivery->invoice?->merchant?->id,
-                'merchant_name' => $delivery->invoice?->merchant?->name,
+                'merchant_id' => $delivery->merchant_id ?? $delivery->invoice?->merchant?->id,
+                'merchant_name' => $delivery->merchant?->name ?? $delivery->invoice?->merchant?->name,
                 'event' => $delivery->event,
                 'status' => $delivery->status,
                 'attempts' => $delivery->attempts,
@@ -74,7 +78,7 @@ class WebhookDeliveryController extends Controller
 
     public function show(WebhookDelivery $delivery): JsonResponse
     {
-        $delivery->load('invoice.merchant');
+        $delivery->load(['invoice.merchant', 'merchant']);
 
         return response()->json([
             'success' => true,
@@ -83,8 +87,8 @@ class WebhookDeliveryController extends Controller
                 'invoice' => [
                     'id' => $delivery->invoice?->id,
                     'public_id' => $delivery->invoice?->public_id,
-                    'merchant_id' => $delivery->invoice?->merchant?->id,
-                    'merchant_name' => $delivery->invoice?->merchant?->name,
+                    'merchant_id' => $delivery->merchant_id ?? $delivery->invoice?->merchant?->id,
+                    'merchant_name' => $delivery->merchant?->name ?? $delivery->invoice?->merchant?->name,
                 ],
                 'event' => $delivery->event,
                 'status' => $delivery->status,
@@ -101,16 +105,17 @@ class WebhookDeliveryController extends Controller
         ]);
     }
 
-    public function retry(WebhookDelivery $delivery): JsonResponse
+    public function retry(WebhookDelivery $delivery, WebhookDeliveryRetryer $retryer): JsonResponse
     {
-        DeliverWebhookJob::dispatch($delivery->id);
+        $queued = $retryer->retry($delivery);
+        $delivery->refresh();
 
         return response()->json([
             'success' => true,
             'data' => [
                 'id' => $delivery->id,
                 'status' => $delivery->status,
-                'queued' => true,
+                'queued' => $queued,
             ],
         ]);
     }

@@ -9,6 +9,7 @@ use App\Http\Requests\Auth\MerchantRegisterRequest;
 use App\Models\Merchant;
 use App\Models\MerchantUser;
 use App\Models\Role;
+use App\Services\MerchantActivityLogger;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,7 +19,7 @@ use Illuminate\Support\Facades\Hash;
 
 final class MerchantAuthController extends Controller
 {
-    public function register(MerchantRegisterRequest $request): JsonResponse
+    public function register(MerchantRegisterRequest $request, MerchantActivityLogger $activity): JsonResponse
     {
         $data = $request->validated();
 
@@ -61,13 +62,26 @@ final class MerchantAuthController extends Controller
         $user->load('role');
         $user->load('role.capabilities');
 
+        $activity->log($request, 'auth', 'merchant_user.registered', [
+            'email' => $user->email,
+            'merchant_name' => $user->merchant->name,
+        ], [
+            'merchant_id' => $user->merchant_id,
+            'actor_merchant_user_id' => $user->id,
+            'subject_merchant_user_id' => $user->id,
+            'type' => 'security',
+            'target_type' => MerchantUser::class,
+            'target_id' => $user->id,
+            'target_label' => $user->email,
+        ]);
+
         return response()->json([
             'success' => true,
             'data' => $this->payload($user),
         ], 201);
     }
 
-    public function login(MerchantLoginRequest $request): JsonResponse
+    public function login(MerchantLoginRequest $request, MerchantActivityLogger $activity): JsonResponse
     {
         /** @var MerchantUser $user */
         $user = MerchantUser::query()
@@ -103,6 +117,18 @@ final class MerchantAuthController extends Controller
             'last_login_at' => now('UTC'),
         ])->save();
 
+        $activity->log($request, 'auth', 'merchant_user.logged_in', [
+            'email' => $user->email,
+        ], [
+            'merchant_id' => $user->merchant_id,
+            'actor_merchant_user_id' => $user->id,
+            'subject_merchant_user_id' => $user->id,
+            'type' => 'security',
+            'target_type' => MerchantUser::class,
+            'target_id' => $user->id,
+            'target_label' => $user->email,
+        ]);
+
         return response()->json([
             'success' => true,
             'data' => ''
@@ -131,8 +157,25 @@ final class MerchantAuthController extends Controller
         ]);
     }
 
-    public function logout(Request $request): JsonResponse
+    public function logout(Request $request, MerchantActivityLogger $activity): JsonResponse
     {
+        /** @var MerchantUser|null $user */
+        $user = Auth::guard('merchant')->user();
+
+        if ($user) {
+            $activity->log($request, 'auth', 'merchant_user.logged_out', [
+                'email' => $user->email,
+            ], [
+                'merchant_id' => $user->merchant_id,
+                'actor_merchant_user_id' => $user->id,
+                'subject_merchant_user_id' => $user->id,
+                'type' => 'security',
+                'target_type' => MerchantUser::class,
+                'target_id' => $user->id,
+                'target_label' => $user->email,
+            ]);
+        }
+
         Auth::guard('merchant')->logout();
 
         $request->session()->invalidate();

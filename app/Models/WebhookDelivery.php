@@ -10,7 +10,8 @@ use Illuminate\Support\Carbon;
  * Stored outbound webhook delivery with retry metadata.
  *
  * @property int $id
- * @property int $invoice_id
+ * @property int|null $merchant_id
+ * @property int|null $invoice_id
  * @property string $event
  * @property string $url
  * @property array $payload
@@ -24,10 +25,12 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $updated_at
  *
  * @property-read Invoice $invoice
+ * @property-read Merchant|null $merchant
  */
 class WebhookDelivery extends Model
 {
     protected $fillable = [
+        'merchant_id',
         'invoice_id',
         'event',
         'url',
@@ -55,5 +58,10 @@ class WebhookDelivery extends Model
     public function invoice(): BelongsTo
     {
         return $this->belongsTo(Invoice::class);
+    }
+
+    public function merchant(): BelongsTo
+    {
+        return $this->belongsTo(Merchant::class);
     }
 }

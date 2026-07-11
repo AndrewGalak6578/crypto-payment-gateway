@@ -6,9 +6,11 @@ namespace App\Http\Controllers\Api\MerchantPortal;
 use App\Http\Controllers\Controller;
 use App\Models\MerchantUser;
 use App\Models\SuperWallet;
+use App\Services\MerchantActivityLogger;
 use App\Support\Assets\AssetRegistry;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
 
 class WalletController extends Controller
@@ -39,7 +41,7 @@ class WalletController extends Controller
         ]);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(Request $request, MerchantActivityLogger $activity): JsonResponse
     {
         /** @var MerchantUser $merchantUser */
         $merchantUser = $request->attributes->get('merchant_user');
@@ -53,6 +55,7 @@ class WalletController extends Controller
         $assetKey = strtolower($data['coin']);
         $asset = app(AssetRegistry::class)->get($assetKey);
         $networkKey = (string) $asset['network'];
+        $this->validateWalletAddress($data['wallet'], $networkKey);
 
         $wallet = SuperWallet::query()->updateOrCreate(
             [
@@ -68,6 +71,17 @@ class WalletController extends Controller
             ]
         );
 
+        $activity->log($request, 'settlements', 'wallet.upserted', [
+            'asset_key' => $wallet->asset_key,
+            'network_key' => $wallet->network_key,
+            'fee_rate' => $wallet->fee_rate !== null ? (string) $wallet->fee_rate : null,
+        ], [
+            'type' => 'security',
+            'target_type' => SuperWallet::class,
+            'target_id' => $wallet->id,
+            'target_label' => strtoupper((string) $wallet->coin),
+        ]);
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -81,7 +95,7 @@ class WalletController extends Controller
         ], 201);
     }
 
-    public function update(Request $request, int $id): JsonResponse
+    public function update(Request $request, int $id, MerchantActivityLogger $activity): JsonResponse
     {
         /** @var MerchantUser $merchantUser */
         $merchantUser = $request->attributes->get('merchant_user');
@@ -94,10 +108,27 @@ class WalletController extends Controller
             'wallet' => 'required|string|max:255',
             'fee_rate' => 'nullable|numeric|min:0',
         ]);
+        $this->validateWalletAddress($data['wallet'], $wallet->network_key ?: $wallet->resolvedNetworkKey());
+
+        $previousWallet = $wallet->wallet;
+        $previousFeeRate = $wallet->fee_rate !== null ? (string) $wallet->fee_rate : null;
 
         $wallet->update([
             'wallet' => $data['wallet'],
             'fee_rate' => $data['fee_rate'] ?? null,
+        ]);
+
+        $activity->log($request, 'settlements', 'wallet.updated', [
+            'asset_key' => $wallet->asset_key ?: strtolower((string) $wallet->coin),
+            'network_key' => $wallet->network_key,
+            'wallet_changed' => $previousWallet !== $wallet->wallet,
+            'previous_fee_rate' => $previousFeeRate,
+            'next_fee_rate' => $wallet->fee_rate !== null ? (string) $wallet->fee_rate : null,
+        ], [
+            'type' => 'security',
+            'target_type' => SuperWallet::class,
+            'target_id' => $wallet->id,
+            'target_label' => strtoupper((string) $wallet->coin),
         ]);
 
         $assets = app(AssetRegistry::class);
@@ -116,7 +147,7 @@ class WalletController extends Controller
         ]);
     }
 
-    public function destroy(Request $request, int $id): JsonResponse
+    public function destroy(Request $request, int $id, MerchantActivityLogger $activity): JsonResponse
     {
         /** @var MerchantUser $merchantUser */
         $merchantUser = $request->attributes->get('merchant_user');
@@ -125,8 +156,41 @@ class WalletController extends Controller
             ->where('merchant_id', $merchantUser->merchant_id)
             ->findOrFail($id);
 
+        $walletId = $wallet->id;
+        $walletCoin = strtoupper((string) $wallet->coin);
+        $walletAsset = $wallet->asset_key ?: strtolower((string) $wallet->coin);
+        $walletNetwork = $wallet->network_key;
+
         $wallet->delete();
 
+        $activity->log($request, 'settlements', 'wallet.deleted', [
+            'asset_key' => $walletAsset,
+            'network_key' => $walletNetwork,
+        ], [
+            'type' => 'security',
+            'target_type' => SuperWallet::class,
+            'target_id' => $walletId,
+            'target_label' => $walletCoin,
+        ]);
+
         return response()->json(['success' => true]);
+    }
+
+    /**
+     * @throws ValidationException
+     */
+    private function validateWalletAddress(string $wallet, string $networkKey): void
+    {
+        if (preg_match('/\s/', $wallet) === 1 || preg_match('/[[:cntrl:]]/', $wallet) === 1) {
+            throw ValidationException::withMessages([
+                'wallet' => 'Wallet address must not contain whitespace or control characters.',
+            ]);
+        }
+
+        if ($networkKey === 'evm_local' && preg_match('/^0x[a-fA-F0-9]{40}$/', $wallet) !== 1) {
+            throw ValidationException::withMessages([
+                'wallet' => 'EVM wallet address must be a valid 0x-prefixed address.',
+            ]);
+        }
     }
 }

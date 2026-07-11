@@ -1,0 +1,136 @@
+[
+  {
+    "name": "register_invalid",
+    "screenshot": "/home/user/Desktop/personal_projects_for_git/crypto_payment_gateway/codex-artifacts/merchant-register-invalid.png",
+    "url": "https://settlane.tech/merchant/register",
+    "title": "Merchant Portal",
+    "viewport": {
+      "w": 1440,
+      "h": 914
+    },
+    "scroll": {
+      "w": 1440,
+      "h": 914
+    },
+    "text": "Register Merchant\n\nStart with a base platform fee of 2.0% and create the first owner account for Merchant Portal access.\n\nBase fee: 2.0%\nMerchant name\nOwner name\nOwner email\nPassword\nConfirm password\nCreate merchant and owner account\nBack to login",
+    "links": [
+      {
+        "text": "Back to login",
+        "href": "https://settlane.tech/merchant/login"
+      }
+    ],
+    "buttons": [
+      {
+        "text": "Create merchant and owner account",
+        "disabled": false
+      }
+    ],
+    "inputs": [
+      {
+        "tag": "INPUT",
+        "type": "text",
+        "placeholder": "",
+        "value": "QA Very Long Merchant Name QA Very Long Merchant Name QA Very Long Merchant Name QA Very Long Merchant Name QA Very Long Merchant Name QA Very Long Merchant Name QA Very Long Merchant Name QA Very Long Merchant Name QA Very Long Merchant Name QA Very Long Merchant Name QA Very Long Merchant Name QA Very Long Merchant Name QA Very Long Merchant Name QA Very Long Merchant Name QA Very Long Merchant Name QA Very Long Merchant Name QA Very Long Merchant Name QA Very Long Merchant Name QA Very Long Merchant Name QA Very Long Merchant Name",
+        "required": true,
+        "disabled": false,
+        "readonly": false,
+        "label": "Merchant name"
+      },
+      {
+        "tag": "INPUT",
+        "type": "text",
+        "placeholder": "",
+        "value": "Q",
+        "required": true,
+        "disabled": false,
+        "readonly": false,
+        "label": "Owner name"
+      },
+      {
+        "tag": "INPUT",
+        "type": "email",
+        "placeholder": "",
+        "value": "not-an-email",
+        "required": true,
+        "disabled": false,
+        "readonly": false,
+        "label": "Owner email"
+      },
+      {
+        "tag": "INPUT",
+        "type": "password",
+        "placeholder": "",
+        "value": "***",
+        "required": true,
+        "disabled": false,
+        "readonly": false,
+        "label": "Password"
+      },
+      {
+        "tag": "INPUT",
+        "type": "password",
+        "placeholder": "",
+        "value": "***",
+        "required": true,
+        "disabled": false,
+        "readonly": false,
+        "label": "Confirm password"
+      }
+    ],
+    "horizontalOverflow": false,
+    "outside": [],
+    "errors": []
+  },
+  {
+    "name": "settings_pre_login_redirect",
+    "screenshot": "/home/user/Desktop/personal_projects_for_git/crypto_payment_gateway/codex-artifacts/settings-pre-login-redirect.png",
+    "url": "https://settlane.tech/merchant/login?redirect=/merchant/settings",
+    "title": "Merchant Portal",
+    "viewport": {
+      "w": 1440,
+      "h": 914
+    },
+    "scroll": {
+      "w": 1440,
+      "h": 914
+    },
+    "text": "Merchant Login\n\nSign in to access your dashboard and invoices.\n\nEmail\nPassword\nSign in\nRegister Merchant",
+    "links": [
+      {
+        "text": "Register Merchant",
+        "href": "https://settlane.tech/merchant/register"
+      }
+    ],
+    "buttons": [
+      {
+        "text": "Sign in",
+        "disabled": false
+      }
+    ],
+    "inputs": [
+      {
+        "tag": "INPUT",
+        "type": "email",
+        "placeholder": "",
+        "value": "",
+        "required": true,
+        "disabled": false,
+        "readonly": false,
+        "label": "Email"
+      },
+      {
+        "tag": "INPUT",
+        "type": "password",
+        "placeholder": "",
+        "value": "***",
+        "required": true,
+        "disabled": false,
+        "readonly": false,
+        "label": "Password"
+      }
+    ],
+    "horizontalOverflow": false,
+    "outside": [],
+    "errors": []
+  }
+]

@@ -10,6 +10,7 @@ use App\Data\EvmGasTopUpOutcome;
 use App\Jobs\ForwardInvoiceJob;
 use App\Models\PaymentAddress;
 use App\Models\MerchantBalance;
+use App\Models\MerchantSettlementEntry;
 use App\Models\SuperWallet;
 use App\Models\WebhookDelivery;
 use App\Contracts\EvmGasTopUpServiceInterface;
@@ -65,8 +66,55 @@ final class InvoiceForwarderTest extends TestCase
         self::assertCount(1, $fakeRpc->sendCalls);
         self::assertEqualsWithDelta(0.00985, $fakeRpc->sendCalls[0]['amount'], 0.00000001);
 
+        $entry = MerchantSettlementEntry::query()->where('invoice_id', $invoice->id)->first();
+        self::assertNotNull($entry);
+        self::assertSame(MerchantSettlementEntry::TYPE_FORWARD_SENT, $entry->type);
+        self::assertSame(MerchantSettlementEntry::STATUS_COMPLETED, $entry->status);
+        self::assertSame('0.009850000000000000', (string) $entry->amount_coin);
+        self::assertSame('tx_forward_1', $entry->txid);
+
         $forwardedWebhook = WebhookDelivery::query()->where('invoice_id', $invoice->id)->where('event', 'invoice.forwarded')->first();
         self::assertNotNull($forwardedWebhook);
+    }
+
+    public function test_forward_uses_paid_settlement_snapshot_when_merchant_fee_changes(): void
+    {
+        config()->set('coins.mode', 'mock');
+        config()->set('forwarding.assets.btc.min', 0.00001);
+        config()->set('webhooks.enabled', true);
+
+        $fakeRpc = new FakeCoinRpc();
+        $fakeRpc->nextTxid = 'tx_forward_snapshot';
+        $this->app->instance(MockRpc::class, $fakeRpc);
+
+        $merchant = $this->createMerchant(['fee_percent' => 1.5]);
+
+        SuperWallet::query()->create([
+            'merchant_id' => null,
+            'coin' => 'btc',
+            'wallet' => 'bcrt1qdestinationwalletsnapshot',
+            'fee_rate' => 1.2,
+        ]);
+
+        $invoice = $this->createInvoice($merchant, [
+            'status' => 'paid',
+            'coin' => 'btc',
+            'received_conf_coin' => 0.01,
+            'merchant_payout_coin' => 0.00985,
+            'forwarded_coin' => 0,
+            'forward_status' => 'none',
+        ]);
+
+        $merchant->forceFill(['fee_percent' => 10.0])->save();
+
+        app(InvoiceForwarder::class)->forward($invoice->id);
+
+        $fresh = $invoice->fresh();
+
+        self::assertSame('done', $fresh->forward_status);
+        self::assertSame('0.00985000', (string) $fresh->forwarded_coin);
+        self::assertCount(1, $fakeRpc->sendCalls);
+        self::assertEqualsWithDelta(0.00985, $fakeRpc->sendCalls[0]['amount'], 0.00000001);
     }
 
     public function test_forward_without_wallet_credits_merchant_balance_and_emits_webhook(): void
@@ -80,6 +128,10 @@ final class InvoiceForwarderTest extends TestCase
             'status' => 'paid',
             'coin' => 'btc',
             'received_conf_coin' => 0.5,
+            'fee_coin' => 0.01,
+            'merchant_payout_coin' => 0.49,
+            'fee_usd' => 100.00,
+            'merchant_payout_usd' => 4900.00,
             'forward_status' => 'none',
         ]);
 
@@ -97,6 +149,13 @@ final class InvoiceForwarderTest extends TestCase
 
         self::assertNotNull($balance);
         self::assertSame('0.490000000000000000', (string) $balance->amount);
+
+        $entry = MerchantSettlementEntry::query()->where('invoice_id', $invoice->id)->first();
+        self::assertNotNull($entry);
+        self::assertSame(MerchantSettlementEntry::TYPE_INTERNAL_CREDIT, $entry->type);
+        self::assertSame(MerchantSettlementEntry::STATUS_COMPLETED, $entry->status);
+        self::assertSame('0.490000000000000000', (string) $entry->amount_coin);
+        self::assertNull($entry->txid);
 
         $forwardedWebhook = WebhookDelivery::query()->where('invoice_id', $invoice->id)->where('event', 'invoice.forwarded')->first();
         self::assertNotNull($forwardedWebhook);
@@ -216,6 +275,10 @@ final class InvoiceForwarderTest extends TestCase
         self::assertNull($fresh->forward_attempt_uuid);
         self::assertNull($fresh->forwarding_coin);
         self::assertNull($fresh->forwarding_started_at);
+
+        $entry = MerchantSettlementEntry::query()->where('invoice_id', $invoice->id)->first();
+        self::assertNotNull($entry);
+        self::assertSame(MerchantSettlementEntry::STATUS_DEFERRED, $entry->status);
 
         Queue::assertPushed(ForwardInvoiceJob::class, function ($job) use ($invoice): bool {
             return $job->invoiceId === $invoice->id;

@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Api\MerchantPortal;
 
 use App\Models\Merchant;
+use App\Models\MerchantActivityLog;
 use App\Models\MerchantUser;
 use App\Models\Role;
 use Database\Seeders\MerchantAccessSeeder;
@@ -57,6 +58,18 @@ final class MerchantUserManagementApiTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonCount(2, 'data.data');
 
+        $ownerRole = collect($listResponse->json('roles'))
+            ->firstWhere('slug', 'merchant.owner');
+
+        $this->assertNotNull($ownerRole);
+        $this->assertGreaterThan(0, $ownerRole['capability_count']);
+        $this->assertContains('merchant_users.write', collect($ownerRole['capabilities'])->pluck('code'));
+
+        $sortedResponse = $this->getJson('/api/merchant/merchant-users?sort=name&direction=asc');
+
+        $sortedResponse->assertOk()
+            ->assertJsonPath('data.data.0.email', 'ops@example.test');
+
         $disableResponse = $this->patchJson("/api/merchant/merchant-users/{$createdUserId}/status", [
             'status' => 'disabled',
         ]);
@@ -87,6 +100,65 @@ final class MerchantUserManagementApiTest extends TestCase
         $this->assertDatabaseMissing('merchant_users', [
             'id' => $createdUserId,
         ]);
+    }
+
+    public function test_team_actions_are_logged_and_visible_in_teammate_profile(): void
+    {
+        $merchant = Merchant::query()->create([
+            'name' => 'Merchant A',
+            'status' => 'active',
+            'fee_percent' => 2.00,
+        ]);
+        $otherMerchant = Merchant::query()->create([
+            'name' => 'Merchant B',
+            'status' => 'active',
+            'fee_percent' => 2.00,
+        ]);
+
+        $owner = $this->createMerchantUser($merchant, 'merchant.owner', 'owner@example.test');
+        $otherOwner = $this->createMerchantUser($otherMerchant, 'merchant.owner', 'owner-b@example.test');
+        $adminRoleId = $this->roleId('merchant.admin');
+
+        $this->actingAs($owner, 'merchant');
+
+        $createResponse = $this->postJson('/api/merchant/merchant-users', [
+            'name' => 'Ops Admin',
+            'email' => 'ops-profile@example.test',
+            'password' => 'password123',
+            'role_id' => $adminRoleId,
+            'status' => 'active',
+        ]);
+
+        $createResponse->assertCreated();
+        $createdUserId = (int) $createResponse->json('data.id');
+
+        $this->patchJson("/api/merchant/merchant-users/{$createdUserId}/status", [
+            'status' => 'disabled',
+        ])->assertOk();
+
+        MerchantActivityLog::query()->create([
+            'merchant_id' => $otherMerchant->id,
+            'actor_merchant_user_id' => $otherOwner->id,
+            'subject_merchant_user_id' => $otherOwner->id,
+            'section' => 'team',
+            'type' => 'security',
+            'action' => 'merchant_user.status_updated',
+            'target_type' => MerchantUser::class,
+            'target_id' => (string) $otherOwner->id,
+            'target_label' => $otherOwner->email,
+        ]);
+
+        $profileResponse = $this->getJson("/api/merchant/merchant-users/{$createdUserId}");
+
+        $profileResponse->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.user.email', 'ops-profile@example.test')
+            ->assertJsonPath('data.stats.total_events', 2)
+            ->assertJsonPath('data.activity.data.0.action', 'merchant_user.status_updated')
+            ->assertJsonPath('data.activity.data.1.action', 'merchant_user.created');
+
+        $actions = collect($profileResponse->json('data.activity.data'))->pluck('target_label');
+        $this->assertFalse($actions->contains('owner-b@example.test'));
     }
 
     public function test_admin_cannot_create_or_update_merchant_users_without_write_capability(): void

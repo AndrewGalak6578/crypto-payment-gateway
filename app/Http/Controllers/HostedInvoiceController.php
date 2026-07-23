@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Models\Invoice;
+use App\Services\AssetPolicyResolver;
 use App\Services\InvoiceAssetSelector;
 use App\Support\Assets\AssetRegistry;
 use App\Support\Chains\ChainRegistry;
@@ -23,6 +24,7 @@ class HostedInvoiceController extends Controller
     public function __construct(
         private readonly AssetRegistry $assets,
         private readonly ChainRegistry $chains,
+        private readonly AssetPolicyResolver $assetPolicies,
     ) {}
 
     /**
@@ -42,6 +44,7 @@ class HostedInvoiceController extends Controller
                 invoice: $invoice,
                 assets: $this->assets,
                 chains: $this->chains,
+                assetPolicies: $this->assetPolicies,
                 statusUrl: route('hosted-invoice.status', ['publicId' => $invoice->public_id], false),
                 selectAssetUrl: route('hosted-invoice.select-asset', ['publicId' => $invoice->public_id], false),
                 paymentUri: $this->paymentUri($invoice),
@@ -60,14 +63,6 @@ class HostedInvoiceController extends Controller
             ->with('merchant')
             ->where('public_id', $publicId)
             ->firstOrFail();
-
-        $allowedAssets = $invoice->merchant?->checkout_allowed_assets ?? [];
-        if ($allowedAssets !== [] && ! in_array((string) $data['asset_key'], $allowedAssets, true)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'This payment method is not available for this checkout.',
-            ], 422);
-        }
 
         if ($invoice->status === 'awaiting_asset' && $invoice->expires_at && now('UTC')->gt($invoice->expires_at)) {
             $invoice->forceFill(['status' => 'expired'])->save();
@@ -125,7 +120,7 @@ class HostedInvoiceController extends Controller
         };
 
         $query = http_build_query([
-            'amount' => (string) $invoice->amount_coin,
+            'amount' => $invoice->formattedCoinAmount('amount_coin'),
             'label' => 'Invoice '.$invoice->public_id,
         ]);
 
@@ -170,11 +165,11 @@ class HostedInvoiceController extends Controller
             'network_label' => $this->networkLabel((string) $invoice->network_key),
             'payment_mode' => $this->paymentMode($invoice),
             'pay_address' => $invoice->pay_address,
-            'amount_coin' => (string) $invoice->amount_coin,
+            'amount_coin' => $invoice->formattedCoinAmount('amount_coin'),
             'expected_usd' => (string) $invoice->expected_usd,
             'rate_usd' => (string) $invoice->rate_usd,
-            'received_conf_coin' => (string) $invoice->received_conf_coin,
-            'received_all_coin' => (string) $invoice->received_all_coin,
+            'received_conf_coin' => $invoice->formattedCoinAmount('received_conf_coin'),
+            'received_all_coin' => $invoice->formattedCoinAmount('received_all_coin'),
             'forward_status' => $invoice->forward_status,
             'expires_at' => optional($invoice->expires_at)->toIso8601String(),
             'fixated_at' => optional($invoice->fixated_at)->toIso8601String(),

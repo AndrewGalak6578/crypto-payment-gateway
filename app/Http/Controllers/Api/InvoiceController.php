@@ -8,6 +8,7 @@ use App\Models\Invoice;
 use App\Models\Merchant;
 use App\Services\InvoiceCreator;
 use App\Services\InvoiceStatusRefresher;
+use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -24,7 +25,17 @@ class InvoiceController extends Controller
         /** @var Merchant $merchant */
         $merchant = $request->attributes->get('merchant');
 
-        $invoice = $creator->create($merchant, $request->validated());
+        try {
+            $invoice = $creator->create($merchant, $request->validated());
+        } catch (DomainException $exception) {
+            return response()->json([
+                'success' => false,
+                'message' => $exception->getMessage(),
+                'errors' => [
+                    'coin' => [$exception->getMessage()],
+                ],
+            ], 422);
+        }
 
         return response()->json([
             'success' => true,
@@ -37,7 +48,7 @@ class InvoiceController extends Controller
                 'asset_key' => $invoice->asset_key,
                 'network_key' => $invoice->network_key,
                 'pay_address' => $invoice->pay_address,
-                'amount_coin' => (string) $invoice->amount_coin,
+                'amount_coin' => $invoice->formattedCoinAmount('amount_coin'),
                 'expected_usd' => (string) $invoice->expected_usd,
                 'rate_usd' => (string) $invoice->rate_usd,
                 'expires_at' => optional($invoice->expires_at)->toIso8601String(),
@@ -75,11 +86,11 @@ class InvoiceController extends Controller
                 'asset_key' => $invoice->asset_key,
                 'network_key' => $invoice->network_key,
                 'pay_address' => $invoice->pay_address,
-                'amount_coin' => (string) $invoice->amount_coin,
+                'amount_coin' => $invoice->formattedCoinAmount('amount_coin'),
                 'expected_usd' => (string) $invoice->expected_usd,
                 'rate_usd' => (string) $invoice->rate_usd,
-                'received_conf_coin' => (string) $invoice->received_conf_coin,
-                'received_all_coin' => (string) $invoice->received_all_coin,
+                'received_conf_coin' => $invoice->formattedCoinAmount('received_conf_coin'),
+                'received_all_coin' => $invoice->formattedCoinAmount('received_all_coin'),
                 'expires_at' => optional($invoice->expires_at)->toIso8601String(),
                 'fixated_at' => optional($invoice->fixated_at)->toIso8601String(),
                 'paid_at' => optional($invoice->paid_at)->toIso8601String(),

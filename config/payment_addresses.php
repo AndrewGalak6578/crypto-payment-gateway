@@ -1,5 +1,13 @@
 <?php
 
+$gasFundingReconciliationBackoff = array_values(array_filter(
+    array_map(
+        static fn (string $seconds): int => (int) trim($seconds),
+        explode(',', (string) env('PAYMENT_EVM_GAS_FUNDING_RECONCILIATION_BACKOFF_SECONDS', '15,60,300,900,3600')),
+    ),
+    static fn (int $seconds): bool => $seconds > 0,
+));
+
 return [
     'evm' => [
         'derivation_path_template' => env(
@@ -111,18 +119,26 @@ return [
          |
          | target_min_native_*: minimum native balance to keep on source.
          | safety_buffer_*: extra wei above estimated transfer gas cost.
-         | retry_delay_seconds: when payout retry job should be re-run.
-         | pending_cooldown_seconds: dedupe window for already submitted top-up.
+         | retry_delay_seconds: safe pre-broadcast account-lock retry delay.
+         | Reconciliation owns every broadcasted or ambiguous funding outcome.
          |
          */
         'gas_topup' => [
-            'enabled' => env('PAYMENT_EVM_GAS_TOPUP_ENABLED', true),
+            'enabled' => env('PAYMENT_EVM_GAS_TOPUP_ENABLED', false),
             'target_min_native_wei' => env('PAYMENT_EVM_GAS_TOPUP_TARGET_MIN_NATIVE_WEI'),
             'target_min_native_decimal' => env('PAYMENT_EVM_GAS_TOPUP_TARGET_MIN_NATIVE_DECIMAL', '0.0002'),
             'safety_buffer_wei' => env('PAYMENT_EVM_GAS_TOPUP_SAFETY_BUFFER_WEI'),
             'safety_buffer_decimal' => env('PAYMENT_EVM_GAS_TOPUP_SAFETY_BUFFER_DECIMAL', '0.00005'),
             'retry_delay_seconds' => (int) env('PAYMENT_EVM_GAS_TOPUP_RETRY_DELAY_SECONDS', 30),
             'pending_cooldown_seconds' => (int) env('PAYMENT_EVM_GAS_TOPUP_PENDING_COOLDOWN_SECONDS', 45),
+            'account_lock_seconds' => (int) env('PAYMENT_EVM_GAS_STATION_LOCK_SECONDS', 180),
+            'account_lock_wait_seconds' => (int) env('PAYMENT_EVM_GAS_STATION_LOCK_WAIT_SECONDS', 10),
+            'reconciliation_lease_seconds' => (int) env('PAYMENT_EVM_GAS_FUNDING_RECONCILIATION_LEASE_SECONDS', 120),
+            'continuation_stale_seconds' => (int) env('PAYMENT_EVM_GAS_FUNDING_CONTINUATION_STALE_SECONDS', 300),
+            'reconciliation_backoff_seconds' => $gasFundingReconciliationBackoff !== []
+                ? $gasFundingReconciliationBackoff
+                : [15, 60, 300, 900, 3600],
+            'nonce_scan_blocks' => (int) env('PAYMENT_EVM_GAS_FUNDING_NONCE_SCAN_BLOCKS', 64),
         ],
 
         /*

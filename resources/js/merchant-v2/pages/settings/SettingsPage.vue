@@ -296,7 +296,13 @@ const form = reactive({
     checkout_max_amount_usd: '',
 });
 
-const assetOptions = MERCHANT_ASSET_CATALOG.filter((asset) => asset.assetKey);
+const allAssetOptions = MERCHANT_ASSET_CATALOG.filter((asset) => asset.assetKey);
+const assetOptions = computed(() => {
+    const available = settingsPayload.value?.checkout?.available_assets;
+    if (!Array.isArray(available)) return allAssetOptions;
+
+    return allAssetOptions.filter((asset) => available.includes(asset.assetKey));
+});
 const canWriteSettings = computed(() => authStore.hasCapability('invoices.write'));
 const checkoutModeLabel = computed(() => (form.checkout_allowed_assets.length ? `${form.checkout_allowed_assets.length} allowed assets` : 'All supported assets'));
 const expirationLabel = computed(() => (form.checkout_expires_minutes ? `${form.checkout_expires_minutes} minutes` : 'Backend default'));

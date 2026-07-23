@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Api;
 
 use App\Jobs\MonitorInvoiceJob;
+use App\Models\AssetPolicy;
 use App\Services\CoinBasedLogic\CoinRate;
 use App\Services\CoinBasedLogic\MockRpc;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -134,6 +135,37 @@ final class InvoiceApiTest extends TestCase
             ->assertJsonPath('data.network_key', null)
             ->assertJsonPath('data.pay_address', null)
             ->assertJsonPath('data.amount_coin', '0.00000000');
+
+        Queue::assertNothingPushed();
+    }
+
+    public function test_create_invoice_rejects_asset_disabled_for_checkout_by_policy(): void
+    {
+        Queue::fake();
+
+        AssetPolicy::query()->create([
+            'asset_key' => 'btc',
+            'network_key' => 'bitcoin',
+            'asset_enabled' => true,
+            'checkout_enabled' => false,
+            'forwarding_enabled' => true,
+        ]);
+
+        $merchant = $this->createMerchant();
+        [, $plainToken] = $this->createApiKey($merchant, ['plain' => 'merchant_api_token_policy']);
+
+        $response = $this
+            ->postJson('/api/v1/invoices', [
+                'external_id' => 'ext-policy-blocked',
+                'amount_usd' => 20.00,
+                'coin' => 'btc',
+            ], [
+                'Authorization' => 'Bearer '.$plainToken,
+            ]);
+
+        $response->assertUnprocessable()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('errors.coin.0', 'Selected asset is not available for this checkout.');
 
         Queue::assertNothingPushed();
     }

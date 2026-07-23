@@ -25,6 +25,7 @@ class InvoiceCreator
         private readonly AssetRegistry $assets,
         private readonly ChainRegistry $chains,
         private readonly PaymentAddressAllocatorManager $allocators,
+        private readonly AssetPolicyResolver $assetPolicies,
     ) {}
 
     /**
@@ -62,6 +63,8 @@ class InvoiceCreator
         $metadata = is_array($data['metadata'] ?? null) ? $data['metadata'] : [];
 
         if (! array_key_exists('coin', $data) || $data['coin'] === null || $data['coin'] === '') {
+            $this->assetPolicies->assertCanCreateInvoice($merchant);
+
             return Invoice::create([
                 'merchant_id' => $merchant->id,
                 'public_id' => $publicId,
@@ -81,6 +84,8 @@ class InvoiceCreator
         }
 
         $assetKey = Coin::normalize($data['coin']);
+        $this->assetPolicies->assertCanCreateInvoice($merchant, $assetKey);
+
         $asset = $this->assets->get($assetKey);
         $networkKey = (string) $asset['network'];
         $rateUsd = $this->rates->usd($assetKey);

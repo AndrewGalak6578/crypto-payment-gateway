@@ -20,12 +20,10 @@ final class DashboardMetricsService
 {
     private const CACHE_TTL_SECONDS = 60;
 
-    public function __construct(private readonly AssetRegistry $assets)
-    {
-    }
+    public function __construct(private readonly AssetRegistry $assets) {}
 
     /**
-     * @param array<string, bool> $access
+     * @param  array<string, bool>  $access
      * @return array<string, mixed>
      */
     public function forMerchant(int $merchantId, array $access = []): array
@@ -264,7 +262,7 @@ final class DashboardMetricsService
     }
 
     /**
-     * @param Collection<int, Invoice> $paidCurrent
+     * @param  Collection<int, Invoice>  $paidCurrent
      * @return array<int, array<string, mixed>>
      */
     private function assetBreakdown(Collection $paidCurrent): array
@@ -369,10 +367,10 @@ final class DashboardMetricsService
                 'coin' => $invoice->coin ? strtoupper($invoice->coin) : null,
                 'asset_key' => $invoice->asset_key,
                 'network_key' => $invoice->network_key,
-                'amount_coin' => (string) $invoice->amount_coin,
+                'amount_coin' => $invoice->formattedCoinAmount('amount_coin'),
                 'expected_usd' => (string) $invoice->expected_usd,
-                'received_conf_coin' => (string) $invoice->received_conf_coin,
-                'received_all_coin' => (string) $invoice->received_all_coin,
+                'received_conf_coin' => $invoice->formattedCoinAmount('received_conf_coin'),
+                'received_all_coin' => $invoice->formattedCoinAmount('received_all_coin'),
                 'forward_status' => $invoice->forward_status,
                 'created_at' => optional($invoice->created_at)->toIso8601String(),
                 'paid_at' => optional($invoice->paid_at)->toIso8601String(),
@@ -406,7 +404,7 @@ final class DashboardMetricsService
     }
 
     /**
-     * @param Collection<int, Invoice> $invoices
+     * @param  Collection<int, Invoice>  $invoices
      */
     private function sumUsd(Collection $invoices): float
     {

@@ -21,22 +21,25 @@ final class FakeCoinRpc implements CoinRpc
         'all' => 0.0,
     ];
 
-    /** @var array<int, array{address: string, amount: float, fee_rate: float|null}> */
+    /** @var array<int, array{address: string, amount: float, fee_rate: float|null, reference: string|null}> */
     public array $sendCalls = [];
 
     public string $nextTxid = 'fake_txid_1';
 
-    /**
-     * @param string $label
-     */
+    public bool $throwAfterBroadcast = false;
+
+    /** @var array<string, array<string, mixed>> */
+    public array $walletTransactions = [];
+
+    /** @var array<int, array<string, mixed>> */
+    public array $sentTransactions = [];
+
     public function getNewAddress(string $label = ''): string
     {
-        return 'mock_addr_' . md5($label . microtime(true));
+        return 'mock_addr_'.md5($label.microtime(true));
     }
 
     /**
-     * @param string $address
-     * @param int $confirmedMinConf
      * @return array{confirmed: float, unconfirmed: float, all: float}
      */
     public function getReceivedTotals(string $address, int $confirmedMinConf): array
@@ -45,10 +48,6 @@ final class FakeCoinRpc implements CoinRpc
     }
 
     /**
-     * @param string $address
-     * @param int $minConf
-     * @param int $count
-     * @param string|null $label
      * @return array<int, array<string, mixed>>
      */
     public function getTransactionsByAddress(
@@ -60,28 +59,61 @@ final class FakeCoinRpc implements CoinRpc
         return $this->txs;
     }
 
-    /**
-     * @param string $address
-     * @param float $amount
-     * @param float|null $feeRate
-     * @return string
-     */
-    public function sendToAddress(string $address, float $amount, ?float $feeRate = null): string
-    {
+    public function sendToAddress(
+        string $address,
+        float $amount,
+        ?float $feeRate = null,
+        ?string $reference = null,
+    ): string {
         $this->sendCalls[] = [
             'address' => $address,
             'amount' => $amount,
             'fee_rate' => $feeRate,
+            'reference' => $reference,
         ];
+
+        $transaction = [
+            'txid' => $this->nextTxid,
+            'confirmations' => 0,
+            'comment' => $reference,
+            'details' => [[
+                'category' => 'send',
+                'address' => $address,
+                'amount' => -$amount,
+            ]],
+        ];
+        $this->walletTransactions[$this->nextTxid] = $transaction;
+        $this->sentTransactions[] = [
+            'txid' => $this->nextTxid,
+            'category' => 'send',
+            'address' => $address,
+            'amount' => -$amount,
+            'confirmations' => 0,
+            'comment' => $reference,
+        ];
+
+        if ($this->throwAfterBroadcast) {
+            throw new \RuntimeException('Simulated timeout after broadcast.');
+        }
 
         return $this->nextTxid;
     }
 
-    /**
-     * @return float
-     */
     public function getBalance(): float
     {
         return 1000.0;
+    }
+
+    public function getWalletTransaction(string $txid): ?array
+    {
+        return $this->walletTransactions[$txid] ?? null;
+    }
+
+    public function findSentTransactionsByReference(string $reference, int $count = 1000): array
+    {
+        return array_values(array_filter(
+            $this->sentTransactions,
+            static fn (array $transaction): bool => ($transaction['comment'] ?? null) === $reference,
+        ));
     }
 }

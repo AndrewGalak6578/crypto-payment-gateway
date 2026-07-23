@@ -25,6 +25,7 @@ final class InvoiceAssetSelector
         private readonly AssetRegistry $assets,
         private readonly ChainRegistry $chains,
         private readonly PaymentAddressAllocatorManager $allocators,
+        private readonly AssetPolicyResolver $assetPolicies,
     ) {}
 
     public function select(Invoice $invoice, string $assetKey): Invoice
@@ -59,6 +60,8 @@ final class InvoiceAssetSelector
             if (! $this->assets->exists($assetKey)) {
                 throw new DomainException('Unsupported payment asset.');
             }
+
+            $this->assetPolicies->assertCanCreateInvoice($locked->merchant, $assetKey);
 
             $asset = $this->assets->get($assetKey);
             $networkKey = (string) $asset['network'];

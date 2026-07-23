@@ -229,6 +229,11 @@ const fieldErrors = reactive({});
 const canCreateInvoices = computed(() => authStore.hasCapability('invoices.write'));
 const allAssetOptions = MERCHANT_ASSET_CATALOG.filter((asset) => asset.assetKey);
 const assetOptions = computed(() => {
+    const effectiveAllowed = checkoutDefaults.value?.effective_allowed_assets;
+    if (Array.isArray(effectiveAllowed)) {
+        return allAssetOptions.filter((asset) => effectiveAllowed.includes(asset.assetKey));
+    }
+
     const allowed = checkoutDefaults.value?.allowed_assets || [];
     if (!Array.isArray(allowed) || allowed.length === 0) return allAssetOptions;
     return allAssetOptions.filter((asset) => allowed.includes(asset.assetKey));
@@ -236,7 +241,7 @@ const assetOptions = computed(() => {
 
 const initialForm = () => ({
     payer_can_choose_asset: checkoutDefaults.value?.payer_can_choose_asset !== false,
-    coin: checkoutDefaults.value?.default_asset || assetOptions.value[0]?.assetKey || 'btc',
+    coin: checkoutDefaults.value?.default_asset || assetOptions.value[0]?.assetKey || '',
     amount_usd: '10.00',
     expires_minutes: checkoutDefaults.value?.expires_minutes || '',
     success_url: checkoutDefaults.value?.success_url || '',

@@ -44,3 +44,23 @@
 - Факт: EVM local/dev и UTXO testnet/local flows есть, но production custody/signing/compliance contour не является целью текущего MVP.
 - Риск: нельзя позиционировать проект как готовый regulated custody/payment gateway.
 - Статус: проект демонстрирует backend architecture и operational flows; production hardening отдельный этап.
+
+### 9) Нет operator workflow для release held/manual settlement
+- Факт: `held` и `manual` являются terminal для automatic retry, но авторизованного endpoint/command для release или регистрации external settlement пока нет.
+- Риск: ручная смена `forward_status` обходит audit/idempotency semantics и может привести к повторному движению средств.
+- Статус: нужен отдельный operator flow с invoice lock, actor/reason audit, policy re-resolution и атомарным выбором retry либо external completion.
+
+### 10) `max_gas_cost` пока не enforced
+- Факт: значение участвует в policy decision и ledger metadata, но EVM sender/gas sponsorship не проверяют его.
+- Риск: поле нельзя считать production spending limit; автоматический sweep может быть дороже настроенного значения.
+- Статус: требуется определить denomination, gas estimate interface и поведение при превышении лимита.
+
+### 11) Нет operator UI для quarantined settlement/gas-funding evidence
+- Факт: `SettlementAttemptReconciler` и `EvmGasFundingReconciler`, их jobs и Artisan commands автоматически проверяют tx identity, receipt/wallet evidence и confirmations. Inconclusive rows остаются `needs_reconciliation`.
+- Риск: оператор пока должен запускать commands и исследовать RPC/DB evidence вручную; нет безопасного UI для просмотра evidence, attach proven tx hash или audited disposition.
+- Статус: автоматический resend запрещён. Нужен отдельный авторизованный operator workflow, который не изменяет immutable accounting и не объявляет retry-safe без chain proof.
+
+### 12) Webhook transport остаётся at-least-once
+- Факт: `invoice.forwarded` delivery создаётся transactionally с settlement completion, имеет unique idempotency key и восстанавливается scheduler command. HTTP request может быть принят merchant endpoint до worker crash.
+- Риск: повторная HTTP delivery возможна после ambiguous transport failure.
+- Статус: merchant должен дедуплицировать по `X-Webhook-Delivery-Id`; exactly-once через внешний HTTP transport не обещается.

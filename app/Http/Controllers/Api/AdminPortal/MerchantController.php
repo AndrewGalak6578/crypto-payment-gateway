@@ -97,7 +97,7 @@ class MerchantController extends Controller
                 'external_id' => $invoice->external_id,
                 'status' => $invoice->status,
                 'coin' => $invoice->coin ? strtoupper($invoice->coin) : null,
-                'amount_coin' => (string) $invoice->amount_coin,
+                'amount_coin' => $invoice->formattedCoinAmount('amount_coin'),
                 'expected_usd' => (string) $invoice->expected_usd,
                 'created_at' => $invoice->created_at->toIso8601String(),
             ]);

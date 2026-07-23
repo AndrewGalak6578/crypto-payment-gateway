@@ -53,7 +53,7 @@
             "@php ./vendor/bin/phpunit tests/Feature/Api tests/Unit/Services tests/Unit/Webhooks"
         ],
         "test:integration": [
-            "RUN_REAL_RPC_TESTS=true COIN_RPC_MODE=real php ./vendor/bin/phpunit tests/Integration"
+            "./vendor/bin/sail exec -e RUN_REAL_RPC_TESTS=true -e COIN_RPC_MODE=real laravel.test php ./vendor/bin/phpunit tests/Integration"
         ],
         "test:all": [
             "@test:fast",

@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace App\Services\Evm;
@@ -7,6 +8,7 @@ use App\Contracts\EvmPayoutSenderInterface;
 use App\Contracts\EvmTransactionSignerInterface;
 use App\Data\EvmPayoutResult;
 use App\Data\EvmSweepSource;
+use App\Data\PreparedEvmPayout;
 use App\Models\Invoice;
 use App\Models\SuperWallet;
 use App\Support\Assets\AssetRegistry;
@@ -16,19 +18,17 @@ use RuntimeException;
 final readonly class EvmNativePayoutSender implements EvmPayoutSenderInterface
 {
     public function __construct(
-        private ChainRegistry                 $chains,
-        private AssetRegistry                 $assets,
+        private ChainRegistry $chains,
+        private AssetRegistry $assets,
         private EvmTransactionSignerInterface $signer,
-    )
-    {
-    }
+    ) {}
 
-    public function sendNative(
+    public function prepareNative(
         Invoice $invoice,
         EvmSweepSource $source,
         SuperWallet $destination,
         string $amountDecimal
-    ): EvmPayoutResult {
+    ): PreparedEvmPayout {
         $networkKey = $invoice->resolvedNetworkKey();
         $assetKey = $invoice->resolvedAssetKey();
 
@@ -57,6 +57,12 @@ final readonly class EvmNativePayoutSender implements EvmPayoutSenderInterface
         }
 
         $client = new EvmRpcClient($rpcUrl);
+        $chainId = $client->chainId();
+        if ((string) $chainId !== (string) ($chain['chain_id'] ?? '')) {
+            throw new RuntimeException(
+                "RPC chain ID [{$chainId}] does not match configured network [{$networkKey}]."
+            );
+        }
         $decimals = (int) ($this->assets->get($assetKey)['decimals'] ?? 18);
 
         $requestedAtomic = $client->decimalStringToAtomic($amountDecimal, $decimals);
@@ -107,35 +113,61 @@ final readonly class EvmNativePayoutSender implements EvmPayoutSenderInterface
             'gasPrice' => $client->decimalToHexQuantity($gasPriceWei),
         ];
 
-        $signed = $this->signer->signTransaction($networkKey, $source, $transaction);
+        return new PreparedEvmPayout(
+            networkKey: $networkKey,
+            assetKey: $assetKey,
+            source: $source,
+            destinationAddress: $destinationAddress,
+            amountDecimal: $finalAmountDecimal,
+            amountAtomic: $finalAtomic,
+            nonce: $nonce,
+            chainId: $chainId,
+            broadcastBlockNumber: $client->blockNumber(),
+            transaction: $transaction,
+            gasPriceWei: $gasPriceWei,
+            gasLimit: $gasLimit,
+            meta: [
+                'requested_amount_decimal' => $amountDecimal,
+                'adjusted_amount_decimal' => $finalAmountDecimal,
+                'source_balance_atomic' => $balanceAtomic,
+                'estimated_gas_cost_atomic' => $gasCostAtomic,
+                'source_key_ref' => $source->keyRef,
+                'source_derivation_path' => $source->derivationPath,
+                'source_derivation_index' => $source->derivationIndex,
+            ],
+        );
+    }
+
+    public function broadcastNative(PreparedEvmPayout $payout): EvmPayoutResult
+    {
+        $signed = $this->signer->signTransaction(
+            $payout->networkKey,
+            $payout->source,
+            $payout->transaction,
+        );
         $txHash = (string) ($signed['tx_hash'] ?? '');
 
-        if ($txHash === '') {
-            throw new RuntimeException('EVM signer returned empty tx hash.');
+        if (! preg_match('/^0x[a-f0-9]{64}$/', strtolower($txHash))) {
+            throw new RuntimeException('EVM signer returned an invalid native payout tx hash.');
         }
 
         return new EvmPayoutResult(
             txHash: $txHash,
-            fromAddress: $sourceAddress,
-            toAddress: $destinationAddress,
-            amountDecimal: $finalAmountDecimal,
-            nonce: $nonce,
-            gasPriceWei: $gasPriceWei,
-            gasLimit: $gasLimit,
-            maxFeePerGasWei: null,
-            maxPriorityFeePerGasWei: null,
+            fromAddress: strtolower($payout->source->address),
+            toAddress: $payout->destinationAddress,
+            amountDecimal: $payout->amountDecimal,
+            nonce: $payout->nonce,
+            gasPriceWei: $payout->gasPriceWei,
+            gasLimit: $payout->gasLimit,
+            maxFeePerGasWei: $payout->maxFeePerGasWei,
+            maxPriorityFeePerGasWei: $payout->maxPriorityFeePerGasWei,
             meta: array_merge(
                 [
-                    'network_key' => $networkKey,
-                    'asset_key' => $assetKey,
-                    'requested_amount_decimal' => $amountDecimal,
-                    'adjusted_amount_decimal' => $finalAmountDecimal,
-                    'source_balance_atomic' => $balanceAtomic,
-                    'estimated_gas_cost_atomic' => $gasCostAtomic,
-                    'source_key_ref' => $source->keyRef,
-                    'source_derivation_path' => $source->derivationPath,
-                    'source_derivation_index' => $source->derivationIndex,
+                    'network_key' => $payout->networkKey,
+                    'asset_key' => $payout->assetKey,
+                    'transaction_fingerprint' => $payout->fingerprint(),
                 ],
+                $payout->meta,
                 is_array($signed['meta'] ?? null) ? $signed['meta'] : []
             ),
         );

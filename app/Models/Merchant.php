@@ -32,13 +32,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $checkout_confirmation_display
  * @property float|null $checkout_min_amount_usd
  * @property float|null $checkout_max_amount_usd
- *
  * @property-read Collection<int, MerchantApiKey> $apiKeys
  * @property-read Collection<int, Invoice> $invoices
  * @property-read Collection<int, SuperWallet> $superWallets
-     * @property-read Collection<int, MerchantBalance> $balances
-     * @property-read Collection<int, MerchantUser> $users
-     * @property-read Collection<int, MerchantActivityLog> $activityLogs
+ * @property-read Collection<int, MerchantBalance> $balances
+ * @property-read Collection<int, MerchantUser> $users
+ * @property-read Collection<int, MerchantActivityLog> $activityLogs
+ * @property-read Collection<int, MerchantAssetPolicy> $assetPolicies
  */
 class Merchant extends Model
 {
@@ -113,5 +113,20 @@ class Merchant extends Model
     public function paymentAddresses(): HasMany
     {
         return $this->hasMany(PaymentAddress::class);
+    }
+
+    public function assetPolicies(): HasMany
+    {
+        return $this->hasMany(MerchantAssetPolicy::class);
+    }
+
+    public function settlementAttempts(): HasMany
+    {
+        return $this->hasMany(MerchantSettlementAttempt::class);
+    }
+
+    public function settlementEntries(): HasMany
+    {
+        return $this->hasMany(MerchantSettlementEntry::class);
     }
 }

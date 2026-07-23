@@ -8,10 +8,14 @@ use App\Contracts\EvmInvoiceMonitorInterface;
 use App\Jobs\ForwardInvoiceJob;
 use App\Models\Invoice;
 use App\Services\CoinBasedLogic\CoinRate;
+use App\Services\Settlement\SettlementAmountCalculator;
+use App\Services\Settlement\SettlementDecimal;
 use App\Services\Webhooks\EnqueueInvoiceWebhook;
 use App\Support\Assets\AssetRegistry;
 use App\Support\Chains\ChainRegistry;
 use App\Support\Coin;
+use Brick\Math\BigDecimal;
+use Brick\Math\RoundingMode;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -24,6 +28,8 @@ final class InvoiceStatusRefresher
     public function __construct(
         private CoinRate $rates,
         private EnqueueInvoiceWebhook $enqueueWebhook,
+        private readonly SettlementAmountCalculator $amounts,
+        private readonly SettlementDecimal $decimal,
         private readonly AssetRegistry $assets,
         private readonly ChainRegistry $chains,
         private readonly EvmInvoiceMonitorInterface $evmMonitor
@@ -99,7 +105,7 @@ final class InvoiceStatusRefresher
                 }
             }
 
-            if ($inv->status === 'pending' && $receivedAll > 0.0) {
+            if ($inv->status === 'pending' && BigDecimal::of($receivedAll)->compareTo(BigDecimal::zero()) > 0) {
                 $firstTime = $family === 'evm'
                     ? $firstSeenAt
                     : $this->firstSeenTime($txs);
@@ -115,13 +121,15 @@ final class InvoiceStatusRefresher
                     $inv->status = 'fixated';
                     $inv->fixated_at = $now;
 
-                    $rate = (float) $this->rates->usd($assetKey);
-                    $receivedUsd = $receivedAll * $rate;
-                    $slip = $receivedUsd - (float) $inv->expected_usd;
+                    $rate = BigDecimal::of((string) $this->rates->usd($assetKey));
+                    $receivedUsd = BigDecimal::of($receivedAll)
+                        ->multipliedBy($rate)
+                        ->toScale(2, RoundingMode::HALF_UP);
+                    $slip = $receivedUsd->minus(BigDecimal::of((string) $inv->expected_usd));
 
                     $meta = is_array($inv->metadata) ? $inv->metadata : (array) ($inv->metadata ?? []);
-                    $meta['slippage']['fixated_usd'] = $slip;
-                    $meta['slippage']['fixated_rate_usd'] = $rate;
+                    $meta['slippage']['fixated_usd'] = (string) $slip;
+                    $meta['slippage']['fixated_rate_usd'] = (string) $rate;
                     $inv->metadata = $meta;
 
                     $eventsToDispatch[] = 'invoice.fixated';
@@ -138,15 +146,17 @@ final class InvoiceStatusRefresher
                 $inv->paid_at = $inv->paid_at ?? $now;
 
                 if ($inv->paid_usd === null) {
-                    $rate = (float) $this->rates->usd($assetKey);
-                    $paidUsd = $receivedConf * $rate;
-                    $inv->paid_usd = $paidUsd;
+                    $rate = BigDecimal::of((string) $this->rates->usd($assetKey));
+                    $paidUsd = BigDecimal::of($receivedConf)
+                        ->multipliedBy($rate)
+                        ->toScale(2, RoundingMode::HALF_UP);
+                    $inv->paid_usd = (string) $paidUsd;
 
-                    $slip = $paidUsd - (float) $inv->expected_usd;
+                    $slip = $paidUsd->minus(BigDecimal::of((string) $inv->expected_usd));
 
                     $meta = is_array($inv->metadata) ? $inv->metadata : (array) ($inv->metadata ?? []);
-                    $meta['slippage']['paid_usd'] = $slip;
-                    $meta['slippage']['paid_rate_usd'] = $rate;
+                    $meta['slippage']['paid_usd'] = (string) $slip;
+                    $meta['slippage']['paid_rate_usd'] = (string) $rate;
                     $inv->metadata = $meta;
                 }
 
@@ -155,20 +165,41 @@ final class InvoiceStatusRefresher
                 $eventsToDispatch[] = 'invoice.paid';
             }
 
-            $confirmed = (float) ($inv->received_conf_coin ?? 0);
-            $forwarded = (float) ($inv->forwarded_coin ?? 0);
-            $scale = $this->assets->settlementScale($assetKey);
-            $epsilon = $this->assets->epsilon($assetKey);
-            $feePercent = (float) ($inv->merchant->fee_percent ?? 0.0);
-            // Forwarding target must be based on merchant net amount, not gross received amount.
-            $targetNet = $this->norm($confirmed - ($confirmed * ($feePercent / 100)), $scale);
-            $targetNet = max(0.0, $targetNet);
-            $remainingNet = $this->norm($targetNet - $forwarded, $scale);
+            $recordedForwarded = $this->amounts->recordedForwardedCoin($inv);
+            if (
+                $this->decimal->asset($recordedForwarded, $assetKey)
+                    ->compareTo($this->decimal->asset($inv->forwarded_coin, $assetKey)) > 0
+            ) {
+                $inv->forwarded_coin = $recordedForwarded;
+            }
 
             if (
                 $inv->status === 'paid'
-                && $remainingNet > $epsilon
-                && in_array($inv->forward_status, ['none', 'partial', 'failed'], true)
+                && $inv->settlement_snapshot_locked_at === null
+                && in_array($inv->forward_status, [
+                    Invoice::FORWARD_STATUS_NONE,
+                    Invoice::FORWARD_STATUS_PROCESSING,
+                    Invoice::FORWARD_STATUS_PARTIAL,
+                    Invoice::FORWARD_STATUS_FAILED,
+                ], true)
+            ) {
+                $inv->forward_status = Invoice::FORWARD_STATUS_NEEDS_RECONCILIATION;
+            }
+
+            if (
+                $inv->status === 'paid'
+                && $inv->forward_status === Invoice::FORWARD_STATUS_FAILED
+                && ! $inv->hasRetryableForwardStatus()
+            ) {
+                $inv->forward_status = Invoice::FORWARD_STATUS_NEEDS_RECONCILIATION;
+            }
+
+            $remainingNet = $this->amounts->remainingPayoutCoin($inv);
+
+            if (
+                $inv->status === 'paid'
+                && BigDecimal::of($remainingNet)->compareTo(BigDecimal::zero()) > 0
+                && $inv->hasRetryableForwardStatus()
                 && $inv->forward_attempt_uuid === null
             ) {
                 $shouldDispatchForward = true;
@@ -194,46 +225,52 @@ final class InvoiceStatusRefresher
      * Checks whether confirmed amount satisfies paid threshold.
      *
      * @param  Invoice  $inv  Invoice snapshot under lock.
-     * @param  float  $receivedConf  Confirmed amount on chain.
+     * @param  string  $receivedConf  Confirmed amount on chain.
      */
-    private function isPaid(Invoice $inv, float $receivedConf): bool
+    private function isPaid(Invoice $inv, string $receivedConf): bool
     {
-        $pct = (float) config('payments.slippage.paid_coin_percent', 0.5);
-        $expected = (float) $inv->amount_coin;
+        $pct = BigDecimal::of((string) config('payments.slippage.paid_coin_percent', '0.5'));
+        $multiplier = BigDecimal::one()
+            ->minus($pct->dividedBy('100', 18, RoundingMode::HALF_UP));
+        $need = BigDecimal::of((string) $inv->amount_coin)->multipliedBy(
+            $multiplier->compareTo(BigDecimal::zero()) > 0 ? $multiplier : BigDecimal::zero(),
+        );
 
-        // need >= expected * (1 - pct/100)
-        $need = $expected * max(0.0, (1.0 - $pct / 100.0));
-
-        // micro epsilon against float whitenoise
-        return $receivedConf + 1e-12 >= $need;
+        return BigDecimal::of($receivedConf)->compareTo($need) >= 0;
     }
 
-    private function applySettlementSnapshot(Invoice $inv, float $receivedConf, string $assetKey): void
+    private function applySettlementSnapshot(Invoice $inv, string $receivedConf, string $assetKey): void
     {
-        $scale = $this->assets->settlementScale($assetKey);
-        $grossCoin = $this->norm($receivedConf, $scale);
-        $feePercent = (float) ($inv->merchant->fee_percent ?? 0.0);
-        $feeCoin = $this->norm($grossCoin * ($feePercent / 100), $scale);
-        $payoutCoin = $this->norm($grossCoin - $feeCoin, $scale);
-        $paidUsd = (float) ($inv->paid_usd ?? 0);
-        $feeUsd = round($paidUsd * ($feePercent / 100), 2);
-        $payoutUsd = round($paidUsd - $feeUsd, 2);
+        if ($inv->settlement_snapshot_locked_at !== null) {
+            return;
+        }
+
+        $grossCoin = $this->decimal->asset($receivedConf, $assetKey);
+        $feePercent = (string) ($inv->merchant->getRawOriginal('fee_percent') ?? '0');
+        $feeCoin = $this->decimal->percentage($grossCoin, $feePercent, $assetKey);
+        $payoutCoin = $this->decimal->positiveOrZero($grossCoin->minus($feeCoin), $assetKey);
+        $paidUsd = BigDecimal::of((string) ($inv->paid_usd ?? '0'));
+        $feeUsd = $paidUsd->multipliedBy(BigDecimal::of($feePercent))
+            ->dividedBy('100', 2, RoundingMode::HALF_UP);
+        $payoutUsd = $paidUsd->minus($feeUsd)->toScale(2, RoundingMode::HALF_UP);
 
         if ($inv->fee_coin === null) {
-            $inv->fee_coin = $feeCoin;
+            $inv->fee_coin = (string) $feeCoin;
         }
 
         if ($inv->merchant_payout_coin === null) {
-            $inv->merchant_payout_coin = $payoutCoin;
+            $inv->merchant_payout_coin = (string) $payoutCoin;
         }
 
         if ($inv->fee_usd === null) {
-            $inv->fee_usd = $feeUsd;
+            $inv->fee_usd = (string) $feeUsd;
         }
 
         if ($inv->merchant_payout_usd === null) {
-            $inv->merchant_payout_usd = $payoutUsd;
+            $inv->merchant_payout_usd = (string) $payoutUsd;
         }
+
+        $inv->settlement_snapshot_locked_at = now('UTC');
     }
 
     /**
@@ -275,17 +312,6 @@ final class InvoiceStatusRefresher
     }
 
     /**
-     * Rounds value to configured coin precision.
-     *
-     * @param  float  $value  Value to normalize.
-     * @param  int  $scale  Number of decimal places for target coin.
-     */
-    private function norm(float $value, int $scale): float
-    {
-        return round($value, $scale);
-    }
-
-    /**
      * Collects UTXO chains state
      */
     private function collectUtxoState(Invoice $invoice, int $confirmations): array
@@ -299,8 +325,8 @@ final class InvoiceStatusRefresher
 
         return [
             'txs' => $txs,
-            'received_all' => (float) ($totals['all'] ?? 0.0),
-            'received_confirmed' => (float) ($totals['confirmed'] ?? 0.0),
+            'received_all' => (string) ($totals['all'] ?? '0'),
+            'received_confirmed' => (string) ($totals['confirmed'] ?? '0'),
         ];
     }
 
@@ -310,8 +336,8 @@ final class InvoiceStatusRefresher
 
         return [
             'txs' => $result->transactions,
-            'received_all' => (float) $result->receivedAllDecimal,
-            'received_confirmed' => (float) $result->receivedConfirmedDecimal,
+            'received_all' => $result->receivedAllDecimal,
+            'received_confirmed' => $result->receivedConfirmedDecimal,
             'first_txid' => $result->firstTxHash,
             'first_amount' => $result->firstAmountDecimal,
             'first_seen_at' => $result->firstSeenAt,

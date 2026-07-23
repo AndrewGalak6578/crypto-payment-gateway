@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace App\Services\CoinBasedLogic;
@@ -10,10 +11,9 @@ use Illuminate\Support\Str;
  */
 class MockRpc implements CoinRpc
 {
-
     public function getNewAddress(string $label = ''): string
     {
-        return 'mock_' . Str::lower(Str::random(30));
+        return 'mock_'.Str::lower(Str::random(30));
     }
 
     public function getReceivedTotals(string $address, int $confirmedMinConf): array
@@ -29,13 +29,27 @@ class MockRpc implements CoinRpc
         return [];
     }
 
-    public function sendToAddress(string $address, float $amount, ?float $feeRate = null): string
-    {
-        return 'mock_' . Str::lower(Str::random(24));
+    public function sendToAddress(
+        string $address,
+        float $amount,
+        ?float $feeRate = null,
+        ?string $reference = null,
+    ): string {
+        return 'mock_'.Str::lower(Str::random(24));
     }
 
     public function getBalance(): float
     {
         return 0.0;
+    }
+
+    public function getWalletTransaction(string $txid): ?array
+    {
+        return null;
+    }
+
+    public function findSentTransactionsByReference(string $reference, int $count = 1000): array
+    {
+        return [];
     }
 }

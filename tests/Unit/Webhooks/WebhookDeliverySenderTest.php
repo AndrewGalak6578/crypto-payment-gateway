@@ -15,8 +15,8 @@ use Tests\TestCase;
 
 final class WebhookDeliverySenderTest extends TestCase
 {
-    use RefreshDatabase;
     use BuildsDomainData;
+    use RefreshDatabase;
 
     public function test_sender_marks_delivery_as_delivered_on_successful_http_response(): void
     {
@@ -91,5 +91,33 @@ final class WebhookDeliverySenderTest extends TestCase
         self::assertSame('failed', $afterSecondFail->status);
         self::assertSame(2, $afterSecondFail->attempts);
         self::assertNull($afterSecondFail->next_retry_at);
+    }
+
+    public function test_duplicate_jobs_skip_fresh_delivering_delivery_without_http_request(): void
+    {
+        Queue::fake();
+        Http::fake(['*' => Http::response(['ok' => true], 200)]);
+
+        $merchant = $this->createMerchant();
+        $invoice = $this->createInvoice($merchant, ['status' => 'paid']);
+        $payload = ['event' => 'invoice.paid', 'invoice' => ['id' => $invoice->id]];
+        $signature = app(WebhookSignature::class)->sign(json_encode($payload), (string) $merchant->webhook_secret);
+        $delivery = WebhookDelivery::query()->create([
+            'invoice_id' => $invoice->id,
+            'event' => 'invoice.paid',
+            'url' => (string) $merchant->webhook_url,
+            'payload' => $payload,
+            'signature' => $signature,
+            'attempts' => 0,
+            'status' => 'delivering',
+        ]);
+
+        $sender = app(WebhookDeliverySender::class);
+        $sender->send($delivery->id);
+        $sender->send($delivery->id);
+
+        Http::assertNothingSent();
+        self::assertSame('delivering', $delivery->fresh()->status);
+        self::assertSame(0, $delivery->fresh()->attempts);
     }
 }

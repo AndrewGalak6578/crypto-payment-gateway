@@ -13,6 +13,7 @@ use App\Services\InvoiceCreator;
 use App\Services\InvoiceStatusRefresher;
 use App\Services\MerchantActivityLogger;
 use App\Services\MerchantPortalAccess;
+use DomainException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -32,7 +33,17 @@ class InvoiceController extends Controller
             return $guard;
         }
 
-        $invoice = $creator->create($merchant, $data);
+        try {
+            $invoice = $creator->create($merchant, $data);
+        } catch (DomainException $exception) {
+            return response()->json([
+                'success' => false,
+                'message' => $exception->getMessage(),
+                'errors' => [
+                    'coin' => [$exception->getMessage()],
+                ],
+            ], 422);
+        }
 
         $activity->log($request, 'payments', 'invoice.created', [
             'public_id' => $invoice->public_id,
@@ -74,10 +85,10 @@ class InvoiceController extends Controller
                 'coin' => $invoice->coin ? strtoupper($invoice->coin) : null,
                 'asset_key' => $invoice->asset_key,
                 'network_key' => $invoice->network_key,
-                'amount_coin' => (string) $invoice->amount_coin,
+                'amount_coin' => $invoice->formattedCoinAmount('amount_coin'),
                 'expected_usd' => (string) $invoice->expected_usd,
-                'received_conf_coin' => (string) $invoice->received_conf_coin,
-                'received_all_coin' => (string) $invoice->received_all_coin,
+                'received_conf_coin' => $invoice->formattedCoinAmount('received_conf_coin'),
+                'received_all_coin' => $invoice->formattedCoinAmount('received_all_coin'),
                 'forward_status' => $invoice->forward_status,
                 'created_at' => $invoice->created_at->toIso8601String(),
                 'hosted_url' => $this->hostedUrl($invoice),
@@ -164,8 +175,8 @@ class InvoiceController extends Controller
         $activity->log($request, 'payments', 'invoice.refreshed', [
             'public_id' => $invoice->public_id,
             'status' => $invoice->status,
-            'received_all_coin' => (string) $invoice->received_all_coin,
-            'received_conf_coin' => (string) $invoice->received_conf_coin,
+            'received_all_coin' => $invoice->formattedCoinAmount('received_all_coin'),
+            'received_conf_coin' => $invoice->formattedCoinAmount('received_conf_coin'),
         ], [
             'type' => 'action',
             'target_type' => Invoice::class,
@@ -196,7 +207,7 @@ class InvoiceController extends Controller
             'asset_key' => $invoice->asset_key,
             'network_key' => $invoice->network_key,
             'pay_address' => $invoice->pay_address,
-            'amount_coin' => (string) $invoice->amount_coin,
+            'amount_coin' => $invoice->formattedCoinAmount('amount_coin'),
             'expected_usd' => (string) $invoice->expected_usd,
             'rate_usd' => (string) $invoice->rate_usd,
             'expires_at' => optional($invoice->expires_at)->toIso8601String(),
@@ -286,22 +297,22 @@ class InvoiceController extends Controller
             'asset_key' => $invoice->asset_key,
             'network_key' => $invoice->network_key,
             'pay_address' => $invoice->pay_address,
-            'amount_coin' => (string) $invoice->amount_coin,
+            'amount_coin' => $invoice->formattedCoinAmount('amount_coin'),
             'expected_usd' => (string) $invoice->expected_usd,
             'rate_usd' => (string) $invoice->rate_usd,
-            'received_conf_coin' => (string) $invoice->received_conf_coin,
-            'received_all_coin' => (string) $invoice->received_all_coin,
+            'received_conf_coin' => $invoice->formattedCoinAmount('received_conf_coin'),
+            'received_all_coin' => $invoice->formattedCoinAmount('received_all_coin'),
             'paid_usd' => $invoice->paid_usd !== null ? (string) $invoice->paid_usd : null,
-            'fee_coin' => $invoice->fee_coin !== null ? (string) $invoice->fee_coin : null,
-            'merchant_payout_coin' => $invoice->merchant_payout_coin !== null ? (string) $invoice->merchant_payout_coin : null,
+            'fee_coin' => $invoice->formattedCoinAmount('fee_coin'),
+            'merchant_payout_coin' => $invoice->formattedCoinAmount('merchant_payout_coin'),
             'fee_usd' => $invoice->fee_usd !== null ? (string) $invoice->fee_usd : null,
             'merchant_payout_usd' => $invoice->merchant_payout_usd !== null ? (string) $invoice->merchant_payout_usd : null,
             'forward_status' => $invoice->forward_status,
-            'forwarded_coin' => $invoice->forwarded_coin !== null ? (string) $invoice->forwarded_coin : null,
-            'forwarding_coin' => $invoice->forwarding_coin !== null ? (string) $invoice->forwarding_coin : null,
+            'forwarded_coin' => $invoice->formattedCoinAmount('forwarded_coin'),
+            'forwarding_coin' => $invoice->formattedCoinAmount('forwarding_coin'),
             'forward_txids' => $invoice->forward_txids ?? [],
             'first_txid' => $invoice->first_txid,
-            'first_amount_coin' => $invoice->first_amount_coin !== null ? (string) $invoice->first_amount_coin : null,
+            'first_amount_coin' => $invoice->formattedCoinAmount('first_amount_coin'),
             'expires_at' => optional($invoice->expires_at)->toIso8601String(),
             'fixated_at' => optional($invoice->fixated_at)->toIso8601String(),
             'paid_at' => optional($invoice->paid_at)->toIso8601String(),
@@ -339,6 +350,7 @@ class InvoiceController extends Controller
 
         if (ctype_digit($identifier)) {
             $query->where('id', (int) $identifier);
+
             return;
         }
 
@@ -401,6 +413,10 @@ class InvoiceController extends Controller
     {
         $perPage = (int) $request->query('per_page', 15);
 
-        return in_array($perPage, [15, 25, 50, 100], true) ? $perPage : 15;
+        if ($perPage <= 0) {
+            return 15;
+        }
+
+        return min($perPage, 100);
     }
 }

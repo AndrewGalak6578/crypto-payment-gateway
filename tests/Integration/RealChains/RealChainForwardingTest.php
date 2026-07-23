@@ -6,24 +6,25 @@ namespace Tests\Integration\RealChains;
 
 use App\Models\Invoice;
 use App\Models\MerchantBalance;
+use App\Models\MerchantSettlementAttempt;
 use App\Models\SuperWallet;
 use App\Services\CoinBasedLogic\CoinRate;
 use App\Services\InvoiceForwarder;
 use App\Services\InvoiceStatusRefresher;
+use App\Services\Settlement\SettlementAttemptReconciler;
 use App\Support\Coin;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\BuildsDomainData;
 use Tests\TestCase;
 
 final class RealChainForwardingTest extends TestCase
 {
-    use RefreshDatabase;
     use BuildsDomainData;
+    use RefreshDatabase;
 
-    /**
-     * @dataProvider coinProvider
-     */
-    public function test_paid_invoice_is_forwarded_on_chain_as_net_amount(string $coin): void
+    #[DataProvider('coinProvider')]
+    public function test_paid_invoice_broadcasts_net_amount_without_completing_before_confirmation(string $coin): void
     {
         $this->skipUnlessRealRpcEnabled();
 
@@ -48,14 +49,14 @@ final class RealChainForwardingTest extends TestCase
             'webhook_secret' => null,
         ]);
 
-        $destination = $rpc->getNewAddress('dest:' . $coin . ':' . uniqid('', true));
+        $destination = $rpc->getNewAddress('dest:'.$coin.':'.uniqid('', true));
 
         SuperWallet::query()->updateOrCreate(
             ['merchant_id' => null, 'coin' => $coin],
             ['wallet' => $destination, 'fee_rate' => null]
         );
 
-        $payAddress = $rpc->getNewAddress('inv:' . $coin . ':' . uniqid('', true));
+        $payAddress = $rpc->getNewAddress('inv:'.$coin.':'.uniqid('', true));
         $amount = match ($coin) {
             'ltc' => 0.002, // after 10% fee => 0.0018, above min_coin.ltc=0.001
             'dash' => 0.02,
@@ -80,17 +81,37 @@ final class RealChainForwardingTest extends TestCase
         $fresh = $fresh->fresh();
 
         self::assertSame('paid', $fresh->status);
-        self::assertSame('done', $fresh->forward_status);
-        self::assertNotNull($fresh->last_forwarded_at);
-        self::assertIsArray($fresh->forward_txids);
-        self::assertNotEmpty($fresh->forward_txids);
+        self::assertSame(Invoice::FORWARD_STATUS_PROCESSING, $fresh->forward_status);
+        self::assertNull($fresh->last_forwarded_at);
+        self::assertNull($fresh->forward_txids);
+
+        $attempt = MerchantSettlementAttempt::query()
+            ->where('invoice_id', $invoice->id)
+            ->sole();
+        self::assertSame(MerchantSettlementAttempt::STATE_BROADCASTED, $attempt->state);
+        self::assertNotNull($attempt->txid);
+        self::assertDatabaseMissing('merchant_settlement_entries', ['invoice_id' => $invoice->id]);
 
         $scale = $coin === 'dash' ? 3 : 8;
         $expectedNet = round($amount * 0.9, $scale);
-        self::assertEqualsWithDelta($expectedNet, (float) $fresh->forwarded_coin, 1e-8);
+        self::assertEqualsWithDelta($expectedNet, (float) $attempt->amount_coin, 1e-8);
 
         $destTotals = $rpc->getReceivedTotals($destination, 0);
         self::assertGreaterThanOrEqual($expectedNet, (float) ($destTotals['all'] ?? 0.0));
+
+        $reconciler = app(SettlementAttemptReconciler::class);
+        for ($i = 0; $i < 20 && $attempt->fresh()->state !== MerchantSettlementAttempt::STATE_COMPLETED; $i++) {
+            $reconciler->reconcile($attempt->id, true);
+            usleep(500000);
+        }
+
+        self::assertSame(MerchantSettlementAttempt::STATE_COMPLETED, $attempt->fresh()->state);
+        self::assertSame(Invoice::FORWARD_STATUS_DONE, $invoice->fresh()->forward_status);
+        self::assertDatabaseHas('merchant_settlement_entries', [
+            'invoice_id' => $invoice->id,
+            'settlement_attempt_id' => $attempt->id,
+            'status' => 'completed',
+        ]);
     }
 
     public function test_paid_invoice_is_credited_to_merchant_balance_when_wallet_missing(): void
@@ -120,7 +141,7 @@ final class RealChainForwardingTest extends TestCase
             'webhook_secret' => null,
         ]);
 
-        $payAddress = $rpc->getNewAddress('inv:fallback:' . uniqid('', true));
+        $payAddress = $rpc->getNewAddress('inv:fallback:'.uniqid('', true));
         $amount = 0.001;
 
         $invoice = $this->createInvoice($merchant, [

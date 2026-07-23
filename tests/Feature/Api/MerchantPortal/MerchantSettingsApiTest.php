@@ -1,8 +1,10 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Tests\Feature\Api\MerchantPortal;
 
+use App\Models\AssetPolicy;
 use App\Models\Invoice;
 use App\Models\Merchant;
 use App\Models\MerchantUser;
@@ -126,6 +128,45 @@ final class MerchantSettingsApiTest extends TestCase
             'external_id' => 'below-minimum',
         ])->assertStatus(422)
             ->assertJsonPath('errors.amount_usd.0', 'Amount is below the merchant minimum.');
+    }
+
+    public function test_checkout_settings_reject_policy_blocked_assets(): void
+    {
+        AssetPolicy::query()->create([
+            'asset_key' => 'dash',
+            'network_key' => 'dash',
+            'asset_enabled' => true,
+            'checkout_enabled' => false,
+            'forwarding_enabled' => true,
+        ]);
+
+        $merchant = $this->createMerchant();
+        $owner = $this->createMerchantUser($merchant, 'merchant.owner', 'owner-settings-policy@example.test');
+
+        $this->actingAs($owner, 'merchant');
+
+        $response = $this->putJson('/api/merchant/settings', [
+            'checkout_display_name' => 'Acme checkout',
+            'checkout_support_email' => null,
+            'checkout_brand_color' => '#16a34a',
+            'checkout_expires_minutes' => 45,
+            'checkout_payer_can_choose_asset' => true,
+            'checkout_default_asset' => null,
+            'checkout_allowed_assets' => ['btc', 'dash'],
+            'checkout_success_url' => null,
+            'checkout_cancel_url' => null,
+            'checkout_auto_redirect' => true,
+            'checkout_redirect_delay_seconds' => 7,
+            'checkout_show_invoice_id' => true,
+            'checkout_show_support_email' => true,
+            'checkout_partial_payment_policy' => 'allow_top_up',
+            'checkout_confirmation_display' => 'simple',
+            'checkout_min_amount_usd' => 5,
+            'checkout_max_amount_usd' => 500,
+        ]);
+
+        $response->assertUnprocessable()
+            ->assertJsonValidationErrors('checkout_allowed_assets.1');
     }
 
     private function createMerchant(array $overrides = []): Merchant

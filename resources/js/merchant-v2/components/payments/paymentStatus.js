@@ -11,6 +11,17 @@ export const paymentStatusMap = {
     created: { label: 'Created', tone: 'neutral' },
 };
 
+export const forwardStatusMap = {
+    none: { label: 'Awaiting settlement', tone: 'warning' },
+    processing: { label: 'Processing', tone: 'info' },
+    partial: { label: 'Partially settled', tone: 'warning' },
+    done: { label: 'Settled', tone: 'success' },
+    failed: { label: 'Settlement failed', tone: 'danger' },
+    held: { label: 'Held by policy', tone: 'warning' },
+    manual: { label: 'Manual settlement', tone: 'warning' },
+    needs_reconciliation: { label: 'Reconciliation required', tone: 'danger' },
+};
+
 export function normalizePaymentStatus(payment = {}) {
     const status = String(payment.status || '').trim().toLowerCase();
     const required = Number.parseFloat(payment.amount_coin || 0);
@@ -36,6 +47,11 @@ export function normalizePaymentStatus(payment = {}) {
 export function paymentStatusMeta(payment = {}) {
     const normalized = normalizePaymentStatus(payment);
     return paymentStatusMap[normalized] || { label: normalized, tone: 'neutral' };
+}
+
+export function forwardStatusMeta(payment = {}) {
+    const status = String(payment.forward_status || '').trim().toLowerCase();
+    return forwardStatusMap[status] || { label: status || 'Unknown', tone: 'neutral' };
 }
 
 export function paymentNextAction(payment = {}) {

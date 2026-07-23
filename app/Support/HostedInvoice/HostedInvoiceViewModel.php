@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Support\HostedInvoice;
 
 use App\Models\Invoice;
+use App\Services\AssetPolicyResolver;
 use App\Support\Assets\AssetRegistry;
 use App\Support\Chains\ChainRegistry;
 use RuntimeException;
@@ -32,13 +33,14 @@ final readonly class HostedInvoiceViewModel
         Invoice $invoice,
         AssetRegistry $assets,
         ChainRegistry $chains,
+        AssetPolicyResolver $assetPolicies,
         string $statusUrl,
         string $selectAssetUrl,
         string $paymentUri
     ): self {
         return new self(
             invoice: $invoice,
-            assets: self::availableAssets($invoice, $assets),
+            assets: self::availableAssets($invoice, $assets, $assetPolicies),
             invoiceData: self::invoiceData($invoice, $assets, $chains, $paymentUri),
             redirects: self::redirects($invoice),
             settings: self::settings($invoice),
@@ -51,12 +53,13 @@ final readonly class HostedInvoiceViewModel
     /**
      * @return array<int, array<string, string>>
      */
-    private static function availableAssets(Invoice $invoice, AssetRegistry $assets): array
+    private static function availableAssets(Invoice $invoice, AssetRegistry $assets, AssetPolicyResolver $assetPolicies): array
     {
-        $allowedAssets = $invoice->merchant?->checkout_allowed_assets ?? [];
+        $availableAssets = $invoice->merchant
+            ? $assetPolicies->allowedCheckoutAssets($invoice->merchant)
+            : $assets->enabled();
 
-        return collect($assets->enabled())
-            ->when($allowedAssets !== [], fn ($collection) => $collection->only($allowedAssets))
+        return collect($availableAssets)
             ->map(fn (array $asset, string $key): array => [
                 'key' => $key,
                 'symbol' => (string) ($asset['symbol'] ?? strtoupper($key)),
@@ -105,11 +108,11 @@ final readonly class HostedInvoiceViewModel
             'network_label' => self::networkLabel((string) $invoice->network_key),
             'payment_mode' => self::paymentMode($invoice, $assets, $chains),
             'pay_address' => $invoice->pay_address,
-            'amount_coin' => (string) $invoice->amount_coin,
+            'amount_coin' => $invoice->formattedCoinAmount('amount_coin'),
             'expected_usd' => (string) $invoice->expected_usd,
             'rate_usd' => (string) $invoice->rate_usd,
-            'received_conf_coin' => (string) $invoice->received_conf_coin,
-            'received_all_coin' => (string) $invoice->received_all_coin,
+            'received_conf_coin' => $invoice->formattedCoinAmount('received_conf_coin'),
+            'received_all_coin' => $invoice->formattedCoinAmount('received_all_coin'),
             'forward_status' => $invoice->forward_status,
             'expires_at' => optional($invoice->expires_at)->toIso8601String(),
             'fixated_at' => optional($invoice->fixated_at)->toIso8601String(),

@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace App\Services\Webhooks;
@@ -11,8 +12,7 @@ use App\Models\Invoice;
 final class InvoiceWebhookPayloadFactory
 {
     /**
-     * @param non-empty-string $event
-     * @param Invoice $invoice
+     * @param  non-empty-string  $event
      * @return array{
      *     event: string,
      *     sent_at: string,
@@ -31,20 +31,20 @@ final class InvoiceWebhookPayloadFactory
                 'status' => $invoice->status,
                 'coin' => $invoice->coin,
                 'pay_address' => $invoice->pay_address,
-                'amount_coin' => (string) $invoice->amount_coin,
+                'amount_coin' => $invoice->formattedCoinAmount('amount_coin'),
                 'expected_usd' => (string) $invoice->expected_usd,
                 'rate_usd' => (string) $invoice->rate_usd,
-                'received_conf_coin' => (string) $invoice->received_conf_coin,
-                'received_all_coin' => (string) $invoice->received_all_coin,
+                'received_conf_coin' => $invoice->formattedCoinAmount('received_conf_coin'),
+                'received_all_coin' => $invoice->formattedCoinAmount('received_all_coin'),
                 'forward_status' => $invoice->forward_status,
-                'forwarded_coin' => (string) $invoice->forwarded_coin,
+                'forwarded_coin' => $invoice->formattedCoinAmount('forwarded_coin'),
                 'forward_txids' => $invoice->forward_txids ?? [],
                 'expires_at' => optional($invoice->expires_at)->toIso8601String(),
                 'fixated_at' => optional($invoice->fixated_at)->toIso8601String(),
                 'paid_at' => optional($invoice->paid_at)->toIso8601String(),
                 'last_forwarded_at' => optional($invoice->last_forwarded_at)->toIso8601String(),
                 'metadata' => $invoice->metadata ?? [],
-            ]
+            ],
         ];
     }
 }

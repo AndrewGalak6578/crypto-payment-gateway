@@ -1,118 +1,97 @@
 <?php
+
 declare(strict_types=1);
 
 namespace App\Services\Settlement;
 
 use App\Models\Invoice;
 use App\Models\MerchantBalance;
+use App\Services\Webhooks\EnqueueInvoiceWebhook;
+use Brick\Math\BigDecimal;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
-/**
- * Credits merchant internal balance when on-chain forwarding wallet is unavailable.
- */
-final class MerchantBalanceCreditor
+final readonly class MerchantBalanceCreditor
 {
     public function __construct(
-        private readonly MerchantSettlementLedger $settlementLedger,
-    ) {
-    }
+        private MerchantSettlementLedger $settlementLedger,
+        private SettlementAmountCalculator $amounts,
+        private SettlementDecimal $decimal,
+        private EnqueueInvoiceWebhook $enqueueWebhook,
+    ) {}
 
-    /**
-     * Idempotently books fee and merchant payout for a paid invoice.
-     *
-     * @param int $invoiceId Internal invoice identifier.
-     * @throws \Throwable
-     */
-    public function credit(int $invoiceId): void
+    public function credit(int $invoiceId, string $reason): void
     {
-        DB::transaction(function () use ($invoiceId): void {
+        DB::transaction(function () use ($invoiceId, $reason): void {
             /** @var Invoice $invoice */
             $invoice = Invoice::query()
                 ->with('merchant')
                 ->lockForUpdate()
                 ->findOrFail($invoiceId);
 
-            if ($invoice->status !== 'paid') {
+            if ($invoice->status !== 'paid' || ! $invoice->hasRetryableForwardStatus()) {
                 return;
             }
 
-            if ($invoice->forward_status === 'done') {
-                return;
+            if (
+                $invoice->settlement_snapshot_locked_at === null
+                || $invoice->fee_coin === null
+                || $invoice->merchant_payout_coin === null
+            ) {
+                throw new RuntimeException(
+                    "Invoice [{$invoice->id}] must have a complete locked settlement snapshot before internal credit."
+                );
             }
 
-            $scale = $this->scale($invoice->coin);
+            $assetKey = $invoice->resolvedAssetKey();
+            $feeCoin = $this->decimal->format($invoice->fee_coin, $assetKey);
+            $forwardedCoin = $this->amounts->recordedForwardedCoin($invoice);
+            $remainingCoin = $this->amounts->remainingPayoutCoin($invoice);
+            $invoice->forwarded_coin = $forwardedCoin;
 
-            $grossCoin = $this->norm((float)($invoice->received_conf_coin ?? 0), $scale);
-            $feePercent = (float)($invoice->merchant->fee_percent ?? 0.0);
+            if (BigDecimal::of($remainingCoin)->isZero()) {
+                $invoice->forward_status = Invoice::FORWARD_STATUS_DONE;
+                $invoice->save();
+                $this->enqueueForwardedWebhook($invoice);
 
-            $feeCoin = $invoice->fee_coin !== null
-                ? (float) $invoice->fee_coin
-                : $this->norm($grossCoin * ($feePercent / 100), $scale);
-            $payoutCoin = $invoice->merchant_payout_coin !== null
-                ? (float) $invoice->merchant_payout_coin
-                : $this->norm($grossCoin - $feeCoin, $scale);
-
-            $rateUsd = (float)($invoice->rate_usd ?? 0.0);
-            $feeUsd = $invoice->fee_usd !== null
-                ? (float) $invoice->fee_usd
-                : round($feeCoin * $rateUsd, 2);
-            $payoutUsd = $invoice->merchant_payout_usd !== null
-                ? (float) $invoice->merchant_payout_usd
-                : round($payoutCoin * $rateUsd, 2);
+                return;
+            }
 
             /** @var MerchantBalance $balance */
             $balance = MerchantBalance::query()
                 ->lockForUpdate()
                 ->firstOrCreate(
-                    [
-                        'merchant_id' => $invoice->merchant_id,
-                        'coin' => $invoice->coin,
-                    ],
-                    [
-                        'amount' => 0
-                    ]
+                    ['merchant_id' => $invoice->merchant_id, 'coin' => $assetKey],
+                    ['amount' => '0'],
                 );
 
-            $balance->amount = $this->norm((float) $balance->amount + $payoutCoin, $scale);
+            $balance->amount = (string) $this->decimal->asset($balance->amount, $assetKey)
+                ->plus($this->decimal->asset($remainingCoin, $assetKey));
             $balance->save();
 
-            $invoice->fee_coin = $feeCoin;
-            $invoice->merchant_payout_coin = $payoutCoin;
-            $invoice->fee_usd = $feeUsd;
-            $invoice->merchant_payout_usd = $payoutUsd;
-            $invoice->forward_status = 'done';
+            $invoice->forward_status = Invoice::FORWARD_STATUS_DONE;
             $invoice->save();
 
+            $rate = BigDecimal::of((string) ($invoice->rate_usd ?? '0'));
             $this->settlementLedger->recordInternalCredit(
                 invoice: $invoice,
-                amount: $payoutCoin,
+                amount: $remainingCoin,
                 feeCoin: $feeCoin,
-                amountUsd: $payoutUsd,
+                amountUsd: $rate->compareTo(BigDecimal::zero()) > 0
+                    ? $this->decimal->usd($remainingCoin, $rate)
+                    : null,
+                reason: $reason,
             );
+            $this->enqueueForwardedWebhook($invoice);
         });
     }
 
-    /**
-     * Returns decimal precision for coin-level rounding.
-     *
-     * @param string $coin Normalized coin symbol.
-     */
-    private function scale(string $coin): int
+    private function enqueueForwardedWebhook(Invoice $invoice): void
     {
-        return match ($coin) {
-            'dash' => 3,
-            default => 8,
-        };
-    }
-
-    /**
-     * Rounds value to configured coin precision.
-     *
-     * @param float $value Value to normalize.
-     * @param int $scale Number of decimal places for target coin.
-     */
-    private function norm(float $value, int $scale): float
-    {
-        return round($value, $scale);
+        $this->enqueueWebhook->enqueue(
+            'invoice.forwarded',
+            $invoice,
+            "invoice:{$invoice->id}:event:invoice.forwarded",
+        );
     }
 }

@@ -15,11 +15,13 @@ class AbstractJsonRpcCoin implements CoinRpc
     public function __construct(string $baseUri, ?array $auth = null, int $timeout = 5)
     {
         $options = [
-            'base_uri' => rtrim($baseUri, '/') . '/',
-            'timeout' => $timeout
+            'base_uri' => rtrim($baseUri, '/').'/',
+            'timeout' => $timeout,
         ];
 
-        if ($auth) $options['auth'] = $auth;
+        if ($auth) {
+            $options['auth'] = $auth;
+        }
 
         $this->http = new Client($options);
     }
@@ -27,8 +29,8 @@ class AbstractJsonRpcCoin implements CoinRpc
     /**
      * Performs JSON-RPC request and returns "result" value.
      *
-     * @param string $method JSON-RPC method.
-     * @param array<int, mixed> $params JSON-RPC params list.
+     * @param  string  $method  JSON-RPC method.
+     * @param  array<int, mixed>  $params  JSON-RPC params list.
      * @return mixed
      */
     protected function call(string $method, array $params = [])
@@ -43,24 +45,24 @@ class AbstractJsonRpcCoin implements CoinRpc
                 ],
             ]);
         } catch (\Throwable $e) {
-            Log::error(static::class . ' HTTP RPC exception', [
+            Log::error(static::class.' HTTP RPC exception', [
                 'method' => $method,
                 'params' => $params,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
 
             throw $e;
         }
 
-        $raw = (string)$resp->getBody();
+        $raw = (string) $resp->getBody();
         $body = json_decode($raw, true);
 
-        if (!is_array($body)) {
-            throw new \RuntimeException(static::class . ' RPC invalid JSON response');
+        if (! is_array($body)) {
+            throw new \RuntimeException(static::class.' RPC invalid JSON response');
         }
 
-        if (!empty($body['error'])) {
-            throw new \RuntimeException(static::class . ' RPC error: ' . json_encode($body['error']));
+        if (! empty($body['error'])) {
+            throw new \RuntimeException(static::class.' RPC error: '.json_encode($body['error']));
         }
 
         return $body['result'];
@@ -68,13 +70,13 @@ class AbstractJsonRpcCoin implements CoinRpc
 
     public function getNewAddress(string $label = ''): string
     {
-        return (string)$this->call('getnewaddress', [$label]);
+        return (string) $this->call('getnewaddress', [$label]);
     }
 
     public function getReceivedTotals(string $address, int $confirmedMinConf): array
     {
-        $all = (float)$this->call('getreceivedbyaddress', [$address, 0]);
-        $conf = (float)$this->call('getreceivedbyaddress', [$address, $confirmedMinConf]);
+        $all = (float) $this->call('getreceivedbyaddress', [$address, 0]);
+        $conf = (float) $this->call('getreceivedbyaddress', [$address, $confirmedMinConf]);
         $unconf = max(0.0, $all - $conf);
 
         return ['confirmed' => $conf, 'unconfirmed' => $unconf, 'all' => $all];
@@ -85,34 +87,72 @@ class AbstractJsonRpcCoin implements CoinRpc
      */
     public function getTransactionsByAddress(string $address, int $minConf = 1, int $count = 1000, ?string $label = null): array
     {
-        $all = (array)$this->call('listtransactions', ['*', $count, 0, true]);
+        $all = (array) $this->call('listtransactions', ['*', $count, 0, true]);
 
         return array_values(array_filter($all, function ($tx) use ($address, $minConf, $label) {
-            if (($tx['category'] ?? '') !== 'receive') return false;
-            if ((int)($tx['confirmations'] ?? -1) < $minConf) return false;
+            if (($tx['category'] ?? '') !== 'receive') {
+                return false;
+            }
+            if ((int) ($tx['confirmations'] ?? -1) < $minConf) {
+                return false;
+            }
 
             $addrOk = isset($tx['address']) && $tx['address'] === $address;
-            $labelOk = $label !== null && isset($tx['label']) && (string)$tx['label'] === (string)$label;
+            $labelOk = $label !== null && isset($tx['label']) && (string) $tx['label'] === (string) $label;
 
             return $addrOk || $labelOk;
         }));
     }
 
-    public function sendToAddress(string $address, float $amount, ?float $feeRate = null): string
-    {
+    public function sendToAddress(
+        string $address,
+        float $amount,
+        ?float $feeRate = null,
+        ?string $reference = null,
+    ): string {
         if ($feeRate !== null) {
-            return (string)$this->call('sendtoaddress', [
+            return (string) $this->call('sendtoaddress', [
                 $address, $amount,
-                null, null, false, null, null, null, null,
-                $feeRate
+                $reference, null, false, null, null, null, null,
+                $feeRate,
             ]);
         }
 
-        return (string)$this->call('sendtoaddress', [$address, $amount]);
+        return (string) $this->call('sendtoaddress', array_filter(
+            [$address, $amount, $reference],
+            static fn (mixed $value): bool => $value !== null,
+        ));
     }
 
     public function getBalance(): float
     {
-        return (float)$this->call('getbalance');
+        return (float) $this->call('getbalance');
+    }
+
+    public function getWalletTransaction(string $txid): ?array
+    {
+        try {
+            $result = $this->call('gettransaction', [$txid, true]);
+        } catch (\RuntimeException $e) {
+            if (str_contains(strtolower($e->getMessage()), 'invalid or non-wallet transaction')) {
+                return null;
+            }
+
+            throw $e;
+        }
+
+        return is_array($result) ? $result : null;
+    }
+
+    public function findSentTransactionsByReference(string $reference, int $count = 1000): array
+    {
+        $all = (array) $this->call('listtransactions', ['*', $count, 0, true]);
+
+        return array_values(array_filter(
+            $all,
+            static fn (mixed $tx): bool => is_array($tx)
+                && ($tx['category'] ?? '') === 'send'
+                && (string) ($tx['comment'] ?? '') === $reference,
+        ));
     }
 }

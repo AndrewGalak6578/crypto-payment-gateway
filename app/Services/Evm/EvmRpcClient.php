@@ -1,15 +1,16 @@
 <?php
+
 declare(strict_types=1);
 
 namespace App\Services\Evm;
 
+use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
-use GuzzleHttp\Client;
 use Throwable;
 
-final class EvmRpcClient
+class EvmRpcClient
 {
     private Client $http;
 
@@ -22,8 +23,8 @@ final class EvmRpcClient
         }
 
         $this->http = new Client([
-            'base_uri' => rtrim($rpcUrl, '/') . '/',
-            'timeout' => $timeout
+            'base_uri' => rtrim($rpcUrl, '/').'/',
+            'timeout' => $timeout,
         ]);
     }
 
@@ -40,26 +41,26 @@ final class EvmRpcClient
                     'id' => 'laravel-evm',
                     'method' => $method,
                     'params' => $params,
-                ]
+                ],
             ]);
         } catch (Throwable $e) {
             Log::error('EVM RPC HTTP exception', [
                 'method' => $method,
                 'params' => $params,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
 
             throw $e;
         }
 
-        $payload = json_decode((string)$response->getBody(), true);
+        $payload = json_decode((string) $response->getBody(), true);
 
-        if (!is_array($payload)) {
+        if (! is_array($payload)) {
             throw new RuntimeException('EVM RPC invalid JSON response');
         }
 
-        if (!empty($payload['error'])) {
-            throw new RuntimeException('EVM RPC error: ' . json_encode($payload['error']));
+        if (! empty($payload['error'])) {
+            throw new RuntimeException('EVM RPC error: '.json_encode($payload['error']));
         }
 
         return $payload['result'] ?? null;
@@ -69,6 +70,7 @@ final class EvmRpcClient
     {
         return (string) $this->call('eth_call', [$transaction, $block]);
     }
+
     /**
      * @throws GuzzleException
      * @throws Throwable
@@ -144,7 +146,7 @@ final class EvmRpcClient
     {
         $result = $this->call('eth_getLogs', [$filter]);
 
-        if (!is_array($result)) {
+        if (! is_array($result)) {
             return [];
         }
 
@@ -190,7 +192,7 @@ final class EvmRpcClient
     {
         $toAddress = strtolower(trim($toAddress));
 
-        if (!preg_match('/^0x[a-f0-9]{40}$/', $toAddress)) {
+        if (! preg_match('/^0x[a-f0-9]{40}$/', $toAddress)) {
             throw new RuntimeException("Invalid ERC-20 transfer recipient address [{$toAddress}].");
         }
 
@@ -198,7 +200,7 @@ final class EvmRpcClient
         $addressWord = str_pad(substr($toAddress, 2), 64, '0', STR_PAD_LEFT);
         $amountWord = str_pad(ltrim($this->decimalToHexWithoutPrefix($amountAtomic), '0'), 64, '0', STR_PAD_LEFT);
 
-        return '0x' . $selector . $addressWord . $amountWord;
+        return '0x'.$selector.$addressWord.$amountWord;
     }
 
     public function isTruthyErc20CallResult(string $result): bool
@@ -235,7 +237,7 @@ final class EvmRpcClient
 
         while ($value !== '0') {
             [$value, $remainder] = $this->decimalDivmod($value, 16);
-            $hex = dechex($remainder) . $hex;
+            $hex = dechex($remainder).$hex;
         }
 
         return $hex === '' ? '0' : $hex;
@@ -258,7 +260,7 @@ final class EvmRpcClient
             return '0x0';
         }
 
-        return '0x' . dechex($value);
+        return '0x'.dechex($value);
     }
 
     public function hexToNullableInt(?string $value): ?int
@@ -303,7 +305,7 @@ final class EvmRpcClient
             return $integer;
         }
 
-        return $integer . '.' . $fraction;
+        return $integer.'.'.$fraction;
     }
 
     public function hexToDecimalValueString(string $hex, int $decimals = 18): string
@@ -335,6 +337,11 @@ final class EvmRpcClient
         return ltrim($decimal, '0') ?: '0';
     }
 
+    public function hexToDecimalStringValue(string $hex): string
+    {
+        return $this->hexToDecimalString($hex);
+    }
+
     private function decimalMultiply(string $number, int $multiplier): string
     {
         $carry = 0;
@@ -342,12 +349,12 @@ final class EvmRpcClient
 
         for ($i = strlen($number) - 1; $i >= 0; $i--) {
             $product = ((int) $number[$i] * $multiplier) + $carry;
-            $result = ($product % 10) . $result;
+            $result = ($product % 10).$result;
             $carry = intdiv($product, 10);
         }
 
         while ($carry > 0) {
-            $result = ($carry % 10) . $result;
+            $result = ($carry % 10).$result;
             $carry = intdiv($carry, 10);
         }
 
@@ -361,12 +368,12 @@ final class EvmRpcClient
 
         for ($i = strlen($number) - 1; $i >= 0; $i--) {
             $sum = (int) $number[$i] + $carry;
-            $result = ($sum % 10) . $result;
+            $result = ($sum % 10).$result;
             $carry = intdiv($sum, 10);
         }
 
         while ($carry > 0) {
-            $result = ($carry % 10) . $result;
+            $result = ($carry % 10).$result;
             $carry = intdiv($carry, 10);
         }
 
@@ -390,10 +397,10 @@ final class EvmRpcClient
 
         while ($value !== '0') {
             [$value, $remainder] = $this->decimalDivmod($value, 16);
-            $hex = dechex($remainder) . $hex;
+            $hex = dechex($remainder).$hex;
         }
 
-        return '0x' . $hex;
+        return '0x'.$hex;
     }
 
     public function decimalStringToAtomic(string $amountDecimal, int $decimals = 18): string
@@ -404,8 +411,8 @@ final class EvmRpcClient
             return '0';
         }
 
-        if (!str_contains($amountDecimal, '.')) {
-            return $amountDecimal . str_repeat('0', $decimals);
+        if (! str_contains($amountDecimal, '.')) {
+            return $amountDecimal.str_repeat('0', $decimals);
         }
 
         [$integer, $fraction] = explode('.', $amountDecimal, 2);
@@ -419,9 +426,9 @@ final class EvmRpcClient
 
         $fraction = str_pad($fraction, $decimals, '0', STR_PAD_RIGHT);
 
-        $result = ltrim($integer . $fraction, '0');
+        $result = ltrim($integer.$fraction, '0');
 
-        return  $result === '' ? '0' : $result;
+        return $result === '' ? '0' : $result;
     }
 
     private function decimalDivmod(string $number, int $divisor): array
@@ -450,7 +457,7 @@ final class EvmRpcClient
         $left = ltrim($left, '0');
         $right = ltrim($right, '0');
 
-        $left = $right === '' ? '0' : $left;
+        $left = $left === '' ? '0' : $left;
         $right = $right === '' ? '0' : $right;
 
         $carry = 0;
@@ -464,7 +471,7 @@ final class EvmRpcClient
             $b = $j >= 0 ? (int) $right[$j] : 0;
             $sum = $a + $b + $carry;
 
-            $result = ($sum % 10) . $result;
+            $result = ($sum % 10).$result;
             $carry = intdiv($sum, 10);
 
             $i--;
@@ -503,7 +510,7 @@ final class EvmRpcClient
                 $borrow = 0;
             }
 
-            $result = (string) ($a - $b) . $result;
+            $result = (string) ($a - $b).$result;
 
             $i--;
             $j--;

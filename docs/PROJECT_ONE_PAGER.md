@@ -42,7 +42,8 @@ Core status path:
 4. `paid` -> confirmed amount crosses paid threshold
 5. settlement:
    - `forwarded` on-chain to destination wallet, or
-   - internal merchant balance fallback (`merchant_balances`)
+   - internal merchant balance fallback (`merchant_balances`), or
+   - explicit non-retryable `held` / `manual` state with a deferred policy ledger entry
 6. webhook delivery:
    - lifecycle events are enqueued
    - async sender performs signed HTTP delivery
@@ -63,7 +64,14 @@ Core status path:
 - settlement ledger entries with backfill command for older invoice forwarding summaries
 - merchant activity logging with sensitive metadata scrubbing
 - EVM address allocation through derivation strategy
-- ERC-20 gas sponsorship flow to unblock token payout from deposit addresses
+- asset policy resolution for checkout availability, forwarding gates, and merchant-specific blocks
+- ERC-20 gas sponsorship flow to unblock token payout from deposit addresses when settlement policy allows an automatic sweep
+- explicit forwarding states distinguish retryable failures from policy-held and manual settlements
+- durable settlement attempts separate reservation, broadcast ambiguity, chain confirmation, and accounting completion
+- automatic EVM/UTXO reconciliation verifies transaction identity before completion or retry-safe failure
+- automatic EVM gas-funding reconciliation verifies source/nonce/value/receipt and serializes gas-station nonces
+- transactional idempotent `invoice.forwarded` outbox with periodic pending-delivery recovery
+- exact asset-scale settlement arithmetic uses decimal strings and `Brick\Math\BigDecimal`
 
 ## Why this matters for fintech / banking-style systems
 - Reliability: asynchronous jobs isolate long-running settlement work from API response path.
@@ -83,7 +91,11 @@ Core status path:
 - Team management and teammate audit dossiers.
 
 ## Known constraints / next steps
+- Global/merchant policy administration and an authorized, audited hold-release command are not implemented; `held` and `manual` invoices are intentionally terminal for automatic retry.
+- `max_gas_cost` is decision/ledger metadata only and is not enforced by EVM gas estimation or sponsorship yet.
+- Durable settlement attempts quarantine every error after `broadcasting`; `held`, `manual`, and `needs_reconciliation` never auto-retry while the invoice remains `paid`.
+- Payout and gas-funding reconciliation jobs/commands are implemented. Admin UI and authorized held/manual or quarantined-evidence disposition remain missing; those records must never be released by editing status fields.
 - EVM paths are implemented for `evm_local` and should be treated as MVP/local-first integration until environment-specific custody/signing setup is finalized.
 - Test webhook endpoints still exist in API routes and should be environment-controlled.
-- Legacy `coin` compatibility still exists alongside `asset_key/network_key`; backfill discipline remains important.
+- Legacy `coin` compatibility still exists alongside `asset_key/network_key`; settlement-ledger dry-run/backfill output must be reviewed before workers are enabled on upgraded databases.
 - There is no browser E2E suite yet; portal regression coverage is a mix of PHPUnit API tests, Vite build, and manual smoke.

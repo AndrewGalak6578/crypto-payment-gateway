@@ -13,6 +13,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $merchant_id
  * @property int|null $invoice_id
  * @property string $event
+ * @property string|null $idempotency_key
  * @property string $url
  * @property array $payload
  * @property string $signature
@@ -23,7 +24,6 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $delivered_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
- *
  * @property-read Invoice $invoice
  * @property-read Merchant|null $merchant
  */
@@ -33,6 +33,7 @@ class WebhookDelivery extends Model
         'merchant_id',
         'invoice_id',
         'event',
+        'idempotency_key',
         'url',
         'payload',
         'signature',

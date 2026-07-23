@@ -29,7 +29,7 @@ Settings are stored on the `merchants` table and are applied by Merchant Portal 
 
 If an invoice is created without a fixed asset, the hosted checkout starts in an asset-selection state.
 
-The payer can choose only assets allowed by merchant settings:
+The payer can choose only assets allowed by merchant settings and platform asset policy:
 
 ```json
 {
@@ -37,7 +37,7 @@ The payer can choose only assets allowed by merchant settings:
 }
 ```
 
-If the allowed asset list is empty, all supported checkout assets from the asset catalog may be shown.
+If the allowed asset list is empty, all supported checkout assets that remain enabled by platform and merchant policy may be shown.
 
 After the payer selects an asset, the backend creates or resolves the payment instructions, and the checkout switches to the payment state with QR/address/amount.
 

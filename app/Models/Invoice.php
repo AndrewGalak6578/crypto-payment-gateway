@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Support\Assets\AssetRegistry;
+use Brick\Math\BigDecimal;
+use Brick\Math\RoundingMode;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -24,30 +26,31 @@ use RuntimeException;
  * @property string $asset_key
  * @property string $network_key
  * @property string|null $pay_address
- * @property float|null $amount_coin
- * @property float|null $expected_usd
- * @property float|null $rate_usd
+ * @property string|null $amount_coin
+ * @property string|null $expected_usd
+ * @property string|null $rate_usd
  * @property Carbon|null $expires_at
  * @property Carbon|null $fixated_at
  * @property Carbon|null $paid_at
  * @property Carbon|null $monitor_until
  * @property string|null $first_txid
- * @property float|null $first_amount_coin
- * @property float|null $received_conf_coin
- * @property float|null $received_all_coin
- * @property float|null $paid_usd
- * @property float|null $fee_coin
- * @property float|null $merchant_payout_coin
- * @property float|null $fee_usd
- * @property float|null $merchant_payout_usd
- * @property string|null $forward_status
+ * @property string|null $first_amount_coin
+ * @property string|null $received_conf_coin
+ * @property string|null $received_all_coin
+ * @property string|null $paid_usd
+ * @property string|null $fee_coin
+ * @property string|null $merchant_payout_coin
+ * @property Carbon|null $settlement_snapshot_locked_at
+ * @property string|null $fee_usd
+ * @property string|null $merchant_payout_usd
+ * @property string|null $forward_status One of the values in Invoice::FORWARD_STATUSES.
  * @property string|null $forward_attempt_uuid
  * @property array|null $metadata
  * @property array|null $forward_txids
  * @property Carbon|null $last_forwarded_at
  * @property Carbon|null $forwarding_started_at
- * @property float|null $forwarded_coin
- * @property float|null $forwarding_coin
+ * @property string|null $forwarded_coin
+ * @property string|null $forwarding_coin
  * @property-read HasMany<EvmGasFunding> $evmGasFundings
  * @property-read Merchant $merchant
  * @property-read PaymentAddress $paymentAddress
@@ -56,6 +59,40 @@ use RuntimeException;
 class Invoice extends Model
 {
     protected $table = 'invoices';
+
+    public const FORWARD_STATUS_NONE = 'none';
+
+    public const FORWARD_STATUS_PROCESSING = 'processing';
+
+    public const FORWARD_STATUS_PARTIAL = 'partial';
+
+    public const FORWARD_STATUS_DONE = 'done';
+
+    public const FORWARD_STATUS_FAILED = 'failed';
+
+    public const FORWARD_STATUS_HELD = 'held';
+
+    public const FORWARD_STATUS_MANUAL = 'manual';
+
+    public const FORWARD_STATUS_NEEDS_RECONCILIATION = 'needs_reconciliation';
+
+    public const FORWARD_STATUSES = [
+        self::FORWARD_STATUS_NONE,
+        self::FORWARD_STATUS_PROCESSING,
+        self::FORWARD_STATUS_PARTIAL,
+        self::FORWARD_STATUS_DONE,
+        self::FORWARD_STATUS_FAILED,
+        self::FORWARD_STATUS_HELD,
+        self::FORWARD_STATUS_MANUAL,
+        self::FORWARD_STATUS_NEEDS_RECONCILIATION,
+    ];
+
+    /** Statuses that may be retried automatically by invoice refresh. */
+    public const FORWARD_RETRYABLE_STATUSES = [
+        self::FORWARD_STATUS_NONE,
+        self::FORWARD_STATUS_PARTIAL,
+        self::FORWARD_STATUS_FAILED,
+    ];
 
     protected $fillable = [
         'merchant_id', 'public_id', 'external_id',
@@ -69,7 +106,8 @@ class Invoice extends Model
         'forward_status', 'metadata', 'forwarded_coin',
         'forward_txids', 'last_forwarded_at',
         'forward_attempt_uuid', 'forwarding_coin',
-        'forwarding_started_at', 'fee_coin', 'merchant_payout_coin'
+        'forwarding_started_at', 'fee_coin', 'merchant_payout_coin',
+        'settlement_snapshot_locked_at',
     ];
 
     /**
@@ -86,10 +124,20 @@ class Invoice extends Model
             'forwarding_started_at' => 'datetime',
             'metadata' => 'array',
             'forward_txids' => 'array',
-            'forwarded_coin' => 'decimal:8',
-            'forwarding_coin' => 'decimal:8',
+            'amount_coin' => 'decimal:18',
+            'first_amount_coin' => 'decimal:18',
+            'received_conf_coin' => 'decimal:18',
+            'received_all_coin' => 'decimal:18',
+            'forwarded_coin' => 'decimal:18',
+            'forwarding_coin' => 'decimal:18',
             'fee_coin' => 'decimal:18',
             'merchant_payout_coin' => 'decimal:18',
+            'expected_usd' => 'decimal:2',
+            'rate_usd' => 'decimal:8',
+            'paid_usd' => 'decimal:2',
+            'fee_usd' => 'decimal:2',
+            'merchant_payout_usd' => 'decimal:2',
+            'settlement_snapshot_locked_at' => 'datetime',
         ];
     }
 
@@ -144,7 +192,7 @@ class Invoice extends Model
         $this->asset_key = $assetKey;
         $this->network_key = (string) $asset['network'];
 
-        if (!$this->coin) {
+        if (! $this->coin) {
             $this->coin = $assetKey;
         }
     }
@@ -152,5 +200,57 @@ class Invoice extends Model
     public function paymentAddress(): HasOne
     {
         return $this->hasOne(PaymentAddress::class);
+    }
+
+    public function settlementAttempts(): HasMany
+    {
+        return $this->hasMany(MerchantSettlementAttempt::class);
+    }
+
+    public function settlementEntries(): HasMany
+    {
+        return $this->hasMany(MerchantSettlementEntry::class);
+    }
+
+    public function hasRetryableForwardStatus(): bool
+    {
+        if (in_array($this->forward_status, [
+            self::FORWARD_STATUS_NONE,
+            self::FORWARD_STATUS_PARTIAL,
+        ], true)) {
+            return true;
+        }
+
+        if ($this->forward_status !== self::FORWARD_STATUS_FAILED) {
+            return false;
+        }
+
+        $latestAttempt = $this->settlementAttempts()
+            ->latest('id')
+            ->first();
+
+        return $latestAttempt?->state === MerchantSettlementAttempt::STATE_FAILED
+            && $latestAttempt->retry_safe;
+    }
+
+    public function formattedCoinAmount(string $attribute): ?string
+    {
+        $value = $this->getAttribute($attribute);
+        if ($value === null) {
+            return null;
+        }
+
+        $scale = 8;
+
+        try {
+            $scale = app(AssetRegistry::class)->settlementScale($this->resolvedAssetKey());
+        } catch (RuntimeException) {
+            // Asset-less checkout invoices retain the legacy eight-decimal API shape.
+        }
+
+        return (string) BigDecimal::of((string) $value)->toScale(
+            $scale,
+            RoundingMode::HALF_UP,
+        );
     }
 }

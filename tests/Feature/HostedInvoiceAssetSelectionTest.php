@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Jobs\MonitorInvoiceJob;
+use App\Models\AssetPolicy;
 use App\Models\PaymentAddress;
 use App\Services\CoinBasedLogic\CoinRate;
 use App\Services\CoinBasedLogic\MockRpc;
@@ -178,6 +179,54 @@ final class HostedInvoiceAssetSelectionTest extends TestCase
         self::assertSame('awaiting_asset', $fresh->status);
         self::assertNull($fresh->coin);
         self::assertNull($fresh->asset_key);
+        Queue::assertNothingPushed();
+    }
+
+    public function test_policy_blocked_asset_is_not_offered_and_cannot_be_selected(): void
+    {
+        Queue::fake();
+
+        AssetPolicy::query()->create([
+            'asset_key' => 'btc',
+            'network_key' => 'bitcoin',
+            'asset_enabled' => true,
+            'checkout_enabled' => false,
+            'forwarding_enabled' => true,
+        ]);
+
+        $merchant = $this->createMerchant([
+            'checkout_allowed_assets' => ['btc', 'ltc'],
+        ]);
+        $invoice = $this->createInvoice($merchant, [
+            'status' => 'awaiting_asset',
+            'coin' => null,
+            'asset_key' => null,
+            'network_key' => null,
+            'pay_address' => null,
+            'amount_coin' => 0,
+            'expected_usd' => 100.00,
+            'rate_usd' => 0,
+            'monitor_until' => null,
+        ]);
+
+        $this->get('/i/'.$invoice->public_id)
+            ->assertOk()
+            ->assertDontSee('data-select-asset="btc"', false)
+            ->assertSee('data-select-asset="ltc"', false);
+
+        $response = $this
+            ->withSession(['_token' => 'select-token'])
+            ->postJson('/i/'.$invoice->public_id.'/select-asset', [
+                'asset_key' => 'btc',
+            ], [
+                'X-CSRF-TOKEN' => 'select-token',
+            ]);
+
+        $response->assertStatus(409)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Selected asset is not available for this checkout.');
+
+        self::assertSame('awaiting_asset', $invoice->fresh()->status);
         Queue::assertNothingPushed();
     }
 }

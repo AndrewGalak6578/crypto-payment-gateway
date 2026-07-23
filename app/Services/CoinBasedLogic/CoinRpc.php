@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace App\Services\CoinBasedLogic;
@@ -30,7 +31,26 @@ interface CoinRpc
     /**
      * Sends amount to destination address and returns transfer txid.
      */
-    public function sendToAddress(string $address, float $amount, ?float $feeRate = null): string;
+    public function sendToAddress(
+        string $address,
+        float $amount,
+        ?float $feeRate = null,
+        ?string $reference = null,
+    ): string;
+
+    /**
+     * Returns a wallet-owned transaction or null when the wallet has no record.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function getWalletTransaction(string $txid): ?array;
+
+    /**
+     * Returns wallet send history entries carrying the unique settlement reference.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function findSentTransactionsByReference(string $reference, int $count = 1000): array;
 
     /**
      * Returns wallet available balance.

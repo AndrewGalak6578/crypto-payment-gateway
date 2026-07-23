@@ -428,6 +428,7 @@ const explorerTxUrl = (networkKey, txid) => {
 const activityTitle = (entry) => {
     if (entry.type === 'internal_credit') return 'Credited to internal balance';
     if (entry.status === 'failed') return 'Forwarding failed';
+    if (entry.type === 'forward_held') return 'Settlement held by policy';
     if (entry.status === 'deferred') return 'Forwarding deferred';
     if (entry.status === 'pending') return 'Forwarding pending';
     return 'Forwarded to destination';

@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\MerchantPortal;
@@ -6,8 +7,8 @@ namespace App\Http\Controllers\Api\MerchantPortal;
 use App\Http\Controllers\Controller;
 use App\Models\Merchant;
 use App\Models\MerchantUser;
+use App\Services\AssetPolicyResolver;
 use App\Services\MerchantActivityLogger;
-use App\Support\Assets\AssetRegistry;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -24,9 +25,10 @@ class SettingsController extends Controller
         ]);
     }
 
-    public function update(Request $request, AssetRegistry $assets, MerchantActivityLogger $activity): JsonResponse
+    public function update(Request $request, AssetPolicyResolver $assetPolicies, MerchantActivityLogger $activity): JsonResponse
     {
         $merchant = $this->currentMerchant($request);
+        $configurableAssetKeys = $assetPolicies->configurableCheckoutAssetKeys($merchant);
 
         $data = $request->validate([
             'checkout_display_name' => ['nullable', 'string', 'max:120'],
@@ -34,9 +36,9 @@ class SettingsController extends Controller
             'checkout_brand_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'checkout_expires_minutes' => ['nullable', 'integer', 'min:1', 'max:240'],
             'checkout_payer_can_choose_asset' => ['required', 'boolean'],
-            'checkout_default_asset' => ['nullable', 'string', Rule::in($assets->keys())],
+            'checkout_default_asset' => ['nullable', 'string', Rule::in($configurableAssetKeys)],
             'checkout_allowed_assets' => ['nullable', 'array'],
-            'checkout_allowed_assets.*' => ['string', Rule::in($assets->keys())],
+            'checkout_allowed_assets.*' => ['string', Rule::in($configurableAssetKeys)],
             'checkout_success_url' => ['nullable', 'url', 'max:2048'],
             'checkout_cancel_url' => ['nullable', 'url', 'max:2048'],
             'checkout_auto_redirect' => ['required', 'boolean'],
@@ -121,6 +123,18 @@ class SettingsController extends Controller
 
     private function payload(Merchant $merchant): array
     {
+        $assetPolicies = app(AssetPolicyResolver::class);
+        $availableAssetKeys = $assetPolicies->configurableCheckoutAssetKeys($merchant);
+        $configuredAllowedAssets = $merchant->checkout_allowed_assets ?? [];
+        $visibleAllowedAssets = $configuredAllowedAssets === []
+            ? []
+            : array_values(array_intersect($configuredAllowedAssets, $availableAssetKeys));
+        $effectiveAllowedAssets = $assetPolicies->allowedCheckoutAssetKeys($merchant);
+        $defaultAsset = is_string($merchant->checkout_default_asset)
+            && in_array($merchant->checkout_default_asset, $availableAssetKeys, true)
+                ? $merchant->checkout_default_asset
+                : null;
+
         return [
             'profile' => [
                 'id' => $merchant->id,
@@ -136,8 +150,10 @@ class SettingsController extends Controller
                 'brand_color' => $merchant->checkout_brand_color,
                 'expires_minutes' => $merchant->checkout_expires_minutes,
                 'payer_can_choose_asset' => $merchant->checkout_payer_can_choose_asset,
-                'default_asset' => $merchant->checkout_default_asset,
-                'allowed_assets' => $merchant->checkout_allowed_assets ?? [],
+                'default_asset' => $defaultAsset,
+                'allowed_assets' => $visibleAllowedAssets,
+                'available_assets' => $availableAssetKeys,
+                'effective_allowed_assets' => $effectiveAllowedAssets,
                 'success_url' => $merchant->checkout_success_url,
                 'cancel_url' => $merchant->checkout_cancel_url,
                 'auto_redirect' => $merchant->checkout_auto_redirect,

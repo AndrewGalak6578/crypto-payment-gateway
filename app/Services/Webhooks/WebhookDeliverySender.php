@@ -37,11 +37,8 @@ final class WebhookDeliverySender
                 return null;
             }
 
-            if ($delivery->status === 'delivered') {
-                return null;
-            }
-
-            if ($delivery->status === 'failed') {
+            // Only the recovery command may turn a stale delivering lease back into pending.
+            if ($delivery->status !== 'pending') {
                 return null;
             }
 

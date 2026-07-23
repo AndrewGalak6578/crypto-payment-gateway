@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace App\Services\Evm;
@@ -15,8 +16,7 @@ class EvmChainDriver implements CoinRpc
     public function __construct(
         private readonly ChainRegistry $chains,
         private readonly string $networkKey = 'evm_local'
-    )
-    {
+    ) {
         $chain = $this->chains->get($this->networkKey);
 
         if (($chain['family'] ?? null) !== 'evm' || ($chain['driver'] ?? null) !== 'evm') {
@@ -83,8 +83,12 @@ class EvmChainDriver implements CoinRpc
         );
     }
 
-    public function sendToAddress(string $address, float $amount, ?float $feeRate = null): string
-    {
+    public function sendToAddress(
+        string $address,
+        float $amount,
+        ?float $feeRate = null,
+        ?string $reference = null,
+    ): string {
         throw new BadMethodCallException(
             'EVM sendToAddress() is not implemented yet. Next step is EVM settlement flow.'
         );
@@ -95,5 +99,15 @@ class EvmChainDriver implements CoinRpc
         throw new BadMethodCallException(
             'EVM getBalance() without explicit wallet context is not supported.'
         );
+    }
+
+    public function getWalletTransaction(string $txid): ?array
+    {
+        return null;
+    }
+
+    public function findSentTransactionsByReference(string $reference, int $count = 1000): array
+    {
+        return [];
     }
 }

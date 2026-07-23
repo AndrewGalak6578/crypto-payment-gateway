@@ -220,7 +220,7 @@
                         <div class="detail-list detail-list-compact">
                             <div class="detail-row">
                                 <span class="detail-label">Forward status</span>
-                                <span class="detail-value">{{ payment.forward_status || '—' }}</span>
+                                <span class="status-badge" :class="`status-${settlementStatus.tone}`">{{ settlementStatus.label }}</span>
                             </div>
                             <div class="detail-row">
                                 <span class="detail-label">Forwarded</span>
@@ -255,7 +255,7 @@ import { displayAssetNetwork } from '../../../utils/assetDisplay';
 import AssetLogo from '../../components/payments/AssetLogo.vue';
 import PaymentLifecycle from '../../components/payments/PaymentLifecycle.vue';
 import PaymentStatusBadge from '../../components/payments/PaymentStatusBadge.vue';
-import { paymentNextAction } from '../../components/payments/paymentStatus';
+import { forwardStatusMeta, paymentNextAction } from '../../components/payments/paymentStatus';
 
 const props = defineProps({
     paymentId: {
@@ -304,6 +304,7 @@ const webhookPayloadPreview = computed(() => {
 });
 const metadataEntries = computed(() => Object.entries(payment.value.metadata || {}));
 const nextAction = computed(() => paymentNextAction(payment.value));
+const settlementStatus = computed(() => forwardStatusMeta(payment.value));
 const formatDate = (value) => (value ? new Date(value).toLocaleString() : '—');
 const compactDate = (value) => {
     if (!value) return '—';

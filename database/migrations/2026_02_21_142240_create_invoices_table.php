@@ -50,7 +50,8 @@ return new class extends Migration
             $table->decimal('fee_usd', 16, 2)->nullable();
             $table->decimal('merchant_payout_usd', 16, 2)->nullable();
 
-            $table->string('forward_status', 20)->default('none'); // none|partial|done|failed
+            // Accepted values are centralized in Invoice::FORWARD_STATUSES.
+            $table->string('forward_status', 20)->default('none');
 
             $table->json('metadata')->nullable();
 

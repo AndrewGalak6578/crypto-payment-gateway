@@ -145,6 +145,7 @@ final readonly class MerchantSettlementLedger
                     'max_gas_cost' => $decision->maxGasCost,
                     'remaining_amount' => $decision->remainingAmount,
                     'forwarding_allowed' => $decision->forwardingAllowed,
+                    'policy_snapshot' => $decision->policySnapshot,
                 ],
                 'occurred_at' => $existing?->occurred_at ?? now('UTC'),
             ],

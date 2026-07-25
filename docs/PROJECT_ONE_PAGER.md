@@ -17,12 +17,12 @@ The system closes the invoice-to-settlement loop for merchants that want to bill
 4. Invoice status advances by chain evidence.
 5. Merchant net amount is settled after merchant fee deduction:
    - forwarded to configured destination wallet, or
-   - credited to internal merchant balance if wallet is missing.
+   - held when a merchant-owned destination wallet is missing, or credited internally only under explicit admin custodial policy.
 6. Merchant receives signed webhooks for lifecycle events.
 7. Merchant users can inspect payments, settlements, webhook deliveries, and teammate audit activity in the portal.
 
 ## Roles and interaction surfaces
-- Merchant (API + Portal): invoice creation, payment tracking, checkout settings, destination wallets, balances, settlement ledger, API keys, webhook settings, webhook delivery history, team management, teammate dossiers.
+- Merchant (API + Portal): invoice creation, payment tracking, checkout settings, per-asset settlement rules, destination wallets, balances, settlement ledger, API keys, webhook settings, webhook delivery history, team management, teammate dossiers.
 - Admin (Admin Portal): merchant management, merchant users and roles, wallet governance, invoice operations, webhook delivery operations.
 - Customer (Hosted Checkout): public checkout page with asset selection, payment instructions, QR/address copy actions, status polling, partial-payment guidance, confirmation state, and expired-state safety behavior.
 
@@ -42,7 +42,7 @@ Core status path:
 4. `paid` -> confirmed amount crosses paid threshold
 5. settlement:
    - `forwarded` on-chain to destination wallet, or
-   - internal merchant balance fallback (`merchant_balances`), or
+   - explicit admin-policy internal credit (`merchant_balances`), or
    - explicit non-retryable `held` / `manual` state with a deferred policy ledger entry
 6. webhook delivery:
    - lifecycle events are enqueued
@@ -59,12 +59,12 @@ Core status path:
 - multi-asset model with `asset_key` + `network_key`
 - chain-family abstraction: UTXO + native EVM + ERC-20
 - separate admin portal and Merchant Portal v2
-- merchant dashboard metrics, payment workspace, create-payment flow, settlement workspace, developer tools, settings, and team module
+- merchant dashboard metrics, payment workspace, create-payment flow, settlement workspace, per-asset Settlement Rules, developer tools, settings, and team module
 - wallet management and settlement routing
 - settlement ledger entries with backfill command for older invoice forwarding summaries
 - merchant activity logging with sensitive metadata scrubbing
 - EVM address allocation through derivation strategy
-- asset policy resolution for checkout availability, forwarding gates, and merchant-specific blocks
+- layered asset/settlement policy resolution with physically separate admin authority and merchant intent
 - ERC-20 gas sponsorship flow to unblock token payout from deposit addresses when settlement policy allows an automatic sweep
 - explicit forwarding states distinguish retryable failures from policy-held and manual settlements
 - durable settlement attempts separate reservation, broadcast ambiguity, chain confirmation, and accounting completion
@@ -86,12 +86,13 @@ Core status path:
 - End-to-end invoice lifecycle from creation to settlement + webhook delivery.
 - Merchant API, Merchant Portal v2, Admin Portal, Hosted Checkout flow.
 - Multi-asset support with UTXO and local EVM/ERC-20 paths.
-- Internal balance fallback when forwarding destination is not configured.
+- Missing merchant wallets produce explicit non-retryable holds instead of implicit internal credit.
+- Merchant Settlement Rules expose immediate, per-invoice threshold, inherit, and Pause settlements modes with exact decimal strings and optimistic revisions.
 - Merchant checkout settings for branding, redirects, allowed assets, expiration, partial-payment behavior, confirmation display, and min/max amounts.
 - Team management and teammate audit dossiers.
 
 ## Known constraints / next steps
-- Global/merchant policy administration and an authorized, audited hold-release command are not implemented; `held` and `manual` invoices are intentionally terminal for automatic retry.
+- Global admin policy UI and an authorized, audited hold-release command are not implemented; merchant Settlement Rules are available, while `held` and `manual` invoices remain terminal for automatic retry.
 - `max_gas_cost` is decision/ledger metadata only and is not enforced by EVM gas estimation or sponsorship yet.
 - Durable settlement attempts quarantine every error after `broadcasting`; `held`, `manual`, and `needs_reconciliation` never auto-retry while the invoice remains `paid`.
 - Payout and gas-funding reconciliation jobs/commands are implemented. Admin UI and authorized held/manual or quarantined-evidence disposition remain missing; those records must never be released by editing status fields.

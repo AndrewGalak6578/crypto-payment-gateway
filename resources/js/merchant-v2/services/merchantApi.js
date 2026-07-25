@@ -11,6 +11,8 @@ export const merchantApi = {
     createPayment: (payload) => api.post('/api/merchant/invoices', payload),
     balances: () => api.get('/api/merchant/balances'),
     settlementEntries: (params = {}) => api.get('/api/merchant/settlement-entries', { params }),
+    settlementPolicies: () => api.get('/api/merchant/settlement-policies'),
+    updateSettlementPolicy: (assetKey, payload) => api.put(`/api/merchant/settlement-policies/${assetKey}`, payload),
     wallets: () => api.get('/api/merchant/wallets'),
     createWallet: (payload) => api.post('/api/merchant/wallets', payload),
     updateWallet: (id, payload) => api.put(`/api/merchant/wallets/${id}`, payload),

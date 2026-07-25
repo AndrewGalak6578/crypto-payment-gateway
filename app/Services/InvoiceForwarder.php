@@ -14,6 +14,7 @@ use App\Exceptions\EvmGasTopUpDeferredException;
 use App\Jobs\ReconcileSettlementAttemptJob;
 use App\Models\AssetPolicy;
 use App\Models\Invoice;
+use App\Models\Merchant;
 use App\Models\MerchantSettlementAttempt;
 use App\Models\SuperWallet;
 use App\Services\Settlement\MerchantBalanceCreditor;
@@ -57,92 +58,37 @@ final class InvoiceForwarder
     /**
      * Attempts to settle a paid invoice.
      *
-     * Once an attempt enters broadcasting, every error is quarantined because
-     * the chain may have accepted the payout even when the app has no txid.
+     * Policy evaluation and attempt reservation commit before this method
+     * performs any RPC preparation or broadcast-capable work.
      */
     public function forward(int $invoiceId): void
     {
-        if ($this->handleExistingAttempt($invoiceId)) {
-            return;
-        }
-
-        $invoice = $this->prepareSettlementSnapshot($invoiceId);
-        if ($invoice === null) {
-            return;
-        }
-
-        $invoice->loadMissing('paymentAddress');
-        $assetKey = $invoice->resolvedAssetKey();
-        $networkKey = $invoice->resolvedNetworkKey();
-        $settlementPolicy = $this->settlementPolicies->resolveForInvoice($invoice);
-
-        if ($settlementPolicy->reason === 'nothing_to_forward') {
-            $this->markForwardingDone($invoiceId);
-
-            return;
-        }
-
-        if ($settlementPolicy->shouldCreditInternalBalance()) {
-            $this->creditInternalBalance($invoiceId, 'internal_balance_only');
-
-            return;
-        }
-
-        if ($settlementPolicy->shouldHold()) {
-            $this->holdByPolicy($invoiceId, $settlementPolicy);
-
-            return;
-        }
-
-        $wallet = $this->walletResolver->resolveByAsset(
-            merchant: $invoice->merchant,
-            assetKey: $assetKey,
-            networkKey: $networkKey,
-        );
-
-        if ($wallet === null) {
-            $this->creditInternalBalance($invoiceId, 'destination_wallet_missing');
-
-            return;
-        }
-
-        $family = $this->chains->family($networkKey);
-        $transferType = match ($family) {
-            'utxo' => MerchantSettlementAttempt::TRANSFER_UTXO,
-            'evm' => $this->isEvmTokenAsset($assetKey)
-                ? MerchantSettlementAttempt::TRANSFER_ERC20
-                : MerchantSettlementAttempt::TRANSFER_EVM_NATIVE,
-            default => throw new RuntimeException(
-                "Unsupported forwarding family [{$family}] for network [{$networkKey}]."
-            ),
-        };
-
         $ownerToken = (string) Str::uuid();
-        $attempt = $this->attempts->reserve(
-            invoiceId: $invoiceId,
-            chainFamily: $family,
-            transferType: $transferType,
-            destinationAddress: (string) $wallet->wallet,
-            metadata: [
-                'settlement_mode' => $settlementPolicy->mode,
-                'settlement_reason' => $settlementPolicy->reason,
-                'min_sweep_amount' => $settlementPolicy->minSweepAmount,
-                'max_gas_cost' => $settlementPolicy->maxGasCost,
-                'fee_rate' => $wallet->fee_rate !== null ? (string) $wallet->fee_rate : null,
-            ],
-            ownerToken: $ownerToken,
-        );
+        $plan = $this->prepareSettlementPlan($invoiceId, $ownerToken);
 
-        if ($attempt === null) {
+        if ($plan === null) {
             return;
         }
+
+        if (isset($plan['reconcile_attempt_id'])) {
+            $this->scheduleReconciliation($plan['reconcile_attempt_id']);
+
+            return;
+        }
+
+        /** @var MerchantSettlementAttempt $attempt */
+        $attempt = $plan['attempt'];
+        /** @var Invoice $invoice */
+        $invoice = $plan['invoice'];
+        /** @var SuperWallet $wallet */
+        $wallet = $plan['wallet'];
 
         try {
-            $result = match ($transferType) {
+            $result = match ($attempt->transfer_type) {
                 MerchantSettlementAttempt::TRANSFER_UTXO => $this->forwardUtxo($attempt, $wallet, $ownerToken),
                 MerchantSettlementAttempt::TRANSFER_EVM_NATIVE => $this->forwardEvmNative($attempt, $invoice, $wallet, $ownerToken),
                 MerchantSettlementAttempt::TRANSFER_ERC20 => $this->forwardEvmErc20($attempt, $invoice, $wallet, $ownerToken),
-                default => throw new RuntimeException("Unsupported settlement transfer type [{$transferType}]."),
+                default => throw new RuntimeException("Unsupported settlement transfer type [{$attempt->transfer_type}]."),
             };
 
             $this->attempts->markBroadcasted(
@@ -159,8 +105,6 @@ final class InvoiceForwarder
                 $attempt->id,
                 'EVM gas top-up is pending confirmation before token payout.',
             );
-
-            return;
         } catch (Throwable $e) {
             $freshAttempt = $attempt->fresh();
 
@@ -178,110 +122,49 @@ final class InvoiceForwarder
 
             throw $e;
         }
-
     }
 
     /**
-     * A redelivered job must treat an unfinished broadcast-capable state as
-     * ambiguous. It may be the first code running after a worker was killed.
+     * @return array{attempt: MerchantSettlementAttempt, invoice: Invoice, wallet: SuperWallet}|array{reconcile_attempt_id: int}|null
      */
-    private function handleExistingAttempt(int $invoiceId): bool
+    private function prepareSettlementPlan(int $invoiceId, string $ownerToken): ?array
     {
-        $attemptUuid = Invoice::query()
-            ->whereKey($invoiceId)
-            ->value('forward_attempt_uuid');
-
-        if (! is_string($attemptUuid) || $attemptUuid === '') {
-            return false;
-        }
-
-        $attempt = MerchantSettlementAttempt::query()
-            ->where('invoice_id', $invoiceId)
-            ->where('attempt_uuid', $attemptUuid)
-            ->first();
-
-        if ($attempt === null) {
-            return false;
-        }
-
-        if (in_array($attempt->state, [
-            MerchantSettlementAttempt::STATE_BROADCASTING,
-            MerchantSettlementAttempt::STATE_BROADCASTED,
-            MerchantSettlementAttempt::STATE_CONFIRMED,
-            MerchantSettlementAttempt::STATE_NEEDS_RECONCILIATION,
-        ], true)) {
-            $this->scheduleReconciliation($attempt->id);
-        } elseif ($attempt->state === MerchantSettlementAttempt::STATE_FAILED) {
-            $this->attempts->markNeedsReconciliation(
-                attemptId: $attempt->id,
-                errorMessage: 'Invoice retained a failed attempt as active.',
-                metadata: ['failure_stage' => 'inconsistent_active_attempt'],
-            );
-        }
-
-        return true;
-    }
-
-    private function scheduleReconciliation(int $attemptId): void
-    {
-        ReconcileSettlementAttemptJob::dispatch($attemptId)
-            ->delay(now('UTC')->addSeconds(5));
-    }
-
-    private function creditInternalBalance(int $invoiceId, string $reason): void
-    {
-        $this->balanceCreditor->credit($invoiceId, $reason);
-    }
-
-    private function holdByPolicy(int $invoiceId, SettlementPolicyDecision $decision): void
-    {
-        DB::transaction(function () use ($invoiceId, $decision): void {
+        return DB::transaction(function () use ($invoiceId, $ownerToken): ?array {
             /** @var Invoice $invoice */
-            $invoice = Invoice::query()
-                ->with('merchant')
-                ->lockForUpdate()
-                ->findOrFail($invoiceId);
+            $invoice = Invoice::query()->lockForUpdate()->findOrFail($invoiceId);
 
-            if (
-                $invoice->status !== 'paid'
-                || ! $invoice->hasRetryableForwardStatus()
-                || $invoice->forward_attempt_uuid !== null
-            ) {
-                return;
-            }
-
-            $invoice->forward_status = $decision->mode === AssetPolicy::MODE_MANUAL
-                ? Invoice::FORWARD_STATUS_MANUAL
-                : Invoice::FORWARD_STATUS_HELD;
-            $invoice->save();
-
-            $this->settlementLedger->recordPolicyHold($invoice, $decision);
-        });
-    }
-
-    /**
-     * Locks merchant fee and net payout before any policy or money-movement action.
-     */
-    private function prepareSettlementSnapshot(int $invoiceId): ?Invoice
-    {
-        return DB::transaction(function () use ($invoiceId): ?Invoice {
-            /** @var Invoice $invoice */
-            $invoice = Invoice::query()
-                ->with('merchant')
-                ->lockForUpdate()
-                ->findOrFail($invoiceId);
+            /** @var Merchant $merchant */
+            $merchant = Merchant::query()->lockForUpdate()->findOrFail($invoice->merchant_id);
+            $invoice->setRelation('merchant', $merchant);
 
             if ($invoice->status !== 'paid') {
                 return null;
             }
 
             if ($invoice->forward_attempt_uuid !== null) {
-                $attemptExists = MerchantSettlementAttempt::query()
+                $attempt = MerchantSettlementAttempt::query()
                     ->where('attempt_uuid', $invoice->forward_attempt_uuid)
                     ->where('invoice_id', $invoice->id)
-                    ->exists();
+                    ->lockForUpdate()
+                    ->first();
 
-                if (! $attemptExists) {
+                if ($attempt === null) {
+                    $invoice->forward_status = Invoice::FORWARD_STATUS_NEEDS_RECONCILIATION;
+                    $invoice->save();
+
+                    return null;
+                }
+
+                if (in_array($attempt->state, [
+                    MerchantSettlementAttempt::STATE_BROADCASTING,
+                    MerchantSettlementAttempt::STATE_BROADCASTED,
+                    MerchantSettlementAttempt::STATE_CONFIRMED,
+                    MerchantSettlementAttempt::STATE_NEEDS_RECONCILIATION,
+                ], true)) {
+                    return ['reconcile_attempt_id' => $attempt->id];
+                }
+
+                if ($attempt->state === MerchantSettlementAttempt::STATE_FAILED) {
                     $invoice->forward_status = Invoice::FORWARD_STATUS_NEEDS_RECONCILIATION;
                     $invoice->save();
                 }
@@ -302,10 +185,7 @@ final class InvoiceForwarder
 
             if (
                 $invoice->forward_status === Invoice::FORWARD_STATUS_PROCESSING
-                || (
-                    $invoice->forward_status === Invoice::FORWARD_STATUS_FAILED
-                    && ! $invoice->hasRetryableForwardStatus()
-                )
+                || ($invoice->forward_status === Invoice::FORWARD_STATUS_FAILED && ! $invoice->hasRetryableForwardStatus())
             ) {
                 $invoice->forward_status = Invoice::FORWARD_STATUS_NEEDS_RECONCILIATION;
                 $invoice->save();
@@ -325,49 +205,118 @@ final class InvoiceForwarder
             }
 
             if ($invoice->fee_coin === null || $invoice->merchant_payout_coin === null) {
-                throw new RuntimeException(
-                    "Invoice [{$invoice->id}] has an incomplete locked settlement snapshot."
-                );
+                throw new RuntimeException("Invoice [{$invoice->id}] has an incomplete locked settlement snapshot.");
             }
 
-            return $invoice;
-        });
-    }
+            $decision = $this->settlementPolicies->resolveForInvoice($invoice, true);
 
-    private function markForwardingDone(int $invoiceId): void
-    {
-        DB::transaction(function () use ($invoiceId): void {
-            /** @var Invoice $invoice */
-            $invoice = Invoice::query()
-                ->lockForUpdate()
-                ->findOrFail($invoiceId);
+            if ($decision->reason === 'nothing_to_forward') {
+                $this->markForwardingDoneLocked($invoice);
 
-            if (
-                $invoice->status !== 'paid'
-                || ! $invoice->hasRetryableForwardStatus()
-                || $invoice->forward_attempt_uuid !== null
-            ) {
-                return;
+                return null;
+            }
+
+            if ($decision->shouldCreditInternalBalance()) {
+                $this->balanceCreditor->credit($invoice->id, 'internal_balance_only');
+
+                return null;
+            }
+
+            if ($decision->shouldHold()) {
+                $this->holdLocked($invoice, $decision);
+
+                return null;
             }
 
             $assetKey = $invoice->resolvedAssetKey();
-            $recordedForwarded = $this->amounts->recordedForwardedCoin($invoice);
+            $networkKey = $invoice->resolvedNetworkKey();
+            $wallet = $this->walletResolver->resolveByAsset($merchant, $assetKey, $networkKey);
 
-            if (
-                $this->decimal->asset($recordedForwarded, $assetKey)
-                    ->compareTo($this->decimal->asset($invoice->forwarded_coin, $assetKey)) > 0
-            ) {
-                $invoice->forwarded_coin = $recordedForwarded;
+            if ($wallet === null) {
+                $this->holdLocked($invoice, new SettlementPolicyDecision(
+                    mode: $decision->mode,
+                    reason: 'destination_wallet_missing',
+                    minSweepAmount: $decision->minSweepAmount,
+                    maxGasCost: $decision->maxGasCost,
+                    forwardingAllowed: false,
+                    assetKey: $decision->assetKey,
+                    networkKey: $decision->networkKey,
+                    remainingAmount: $decision->remainingAmount,
+                    policySnapshot: $decision->policySnapshot,
+                ));
+
+                return null;
             }
 
-            $invoice->forward_status = Invoice::FORWARD_STATUS_DONE;
-            $invoice->save();
-            $this->enqueueWebhook->enqueue(
-                'invoice.forwarded',
-                $invoice->loadMissing('merchant'),
-                "invoice:{$invoice->id}:event:invoice.forwarded",
+            $family = $this->chains->family($networkKey);
+            $transferType = match ($family) {
+                'utxo' => MerchantSettlementAttempt::TRANSFER_UTXO,
+                'evm' => $this->isEvmTokenAsset($assetKey)
+                    ? MerchantSettlementAttempt::TRANSFER_ERC20
+                    : MerchantSettlementAttempt::TRANSFER_EVM_NATIVE,
+                default => throw new RuntimeException("Unsupported forwarding family [{$family}] for network [{$networkKey}]."),
+            };
+
+            $attempt = $this->attempts->reserveLocked(
+                invoice: $invoice,
+                chainFamily: $family,
+                transferType: $transferType,
+                destinationAddress: (string) $wallet->wallet,
+                metadata: [
+                    'settlement_mode' => $decision->mode,
+                    'settlement_reason' => $decision->reason,
+                    'min_sweep_amount' => $decision->minSweepAmount,
+                    'max_gas_cost' => $decision->maxGasCost,
+                    'fee_rate' => $wallet->fee_rate !== null ? (string) $wallet->fee_rate : null,
+                    'destination_source' => $wallet->merchant_id === $merchant->id ? 'merchant' : 'platform_fallback',
+                    'policy_snapshot' => $decision->policySnapshot,
+                ],
+                ownerToken: $ownerToken,
             );
+
+            return $attempt === null ? null : [
+                'attempt' => $attempt,
+                'invoice' => $invoice,
+                'wallet' => $wallet,
+            ];
         });
+    }
+
+    private function holdLocked(Invoice $invoice, SettlementPolicyDecision $decision): void
+    {
+        $invoice->forward_status = $decision->mode === AssetPolicy::MODE_MANUAL
+            ? Invoice::FORWARD_STATUS_MANUAL
+            : Invoice::FORWARD_STATUS_HELD;
+        $invoice->save();
+
+        $this->settlementLedger->recordPolicyHold($invoice, $decision);
+    }
+
+    private function markForwardingDoneLocked(Invoice $invoice): void
+    {
+        $assetKey = $invoice->resolvedAssetKey();
+        $recordedForwarded = $this->amounts->recordedForwardedCoin($invoice);
+
+        if (
+            $this->decimal->asset($recordedForwarded, $assetKey)
+                ->compareTo($this->decimal->asset($invoice->forwarded_coin, $assetKey)) > 0
+        ) {
+            $invoice->forwarded_coin = $recordedForwarded;
+        }
+
+        $invoice->forward_status = Invoice::FORWARD_STATUS_DONE;
+        $invoice->save();
+        $this->enqueueWebhook->enqueue(
+            'invoice.forwarded',
+            $invoice,
+            "invoice:{$invoice->id}:event:invoice.forwarded",
+        );
+    }
+
+    private function scheduleReconciliation(int $attemptId): void
+    {
+        ReconcileSettlementAttemptJob::dispatch($attemptId)
+            ->delay(now('UTC')->addSeconds(5));
     }
 
     private function forwardUtxo(

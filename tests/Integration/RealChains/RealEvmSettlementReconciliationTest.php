@@ -64,7 +64,7 @@ final class RealEvmSettlementReconciliationTest extends TestCase
         $merchant = $this->createMerchant(['fee_percent' => '0']);
         $invoice = $this->paidInvoice($merchant->id, 'eth_local', '0.001000000000000000', $source);
         $this->paymentAddress($invoice, $source, 'dev_rpc_account');
-        $this->wallet('eth_local', $destination);
+        $this->wallet($merchant->id, 'eth_local', $destination);
         $this->immediatePolicy('eth_local');
 
         app(InvoiceForwarder::class)->forward($invoice->id);
@@ -133,7 +133,7 @@ final class RealEvmSettlementReconciliationTest extends TestCase
             (string) $source->derivationPath,
             $source->derivationIndex,
         );
-        $this->wallet('eth_usdt_local', '0x70997970c51812dc3a010c7d01b50e0d17dc79c8');
+        $this->wallet($merchant->id, 'eth_usdt_local', '0x70997970c51812dc3a010c7d01b50e0d17dc79c8');
         $this->immediatePolicy('eth_usdt_local');
 
         app(InvoiceForwarder::class)->forward($invoice->id);
@@ -215,10 +215,10 @@ final class RealEvmSettlementReconciliationTest extends TestCase
         ]);
     }
 
-    private function wallet(string $assetKey, string $address): void
+    private function wallet(int $merchantId, string $assetKey, string $address): void
     {
         SuperWallet::query()->create([
-            'merchant_id' => null,
+            'merchant_id' => $merchantId,
             'coin' => $assetKey,
             'asset_key' => $assetKey,
             'network_key' => 'evm_local',

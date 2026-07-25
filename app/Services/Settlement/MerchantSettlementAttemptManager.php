@@ -6,6 +6,7 @@ namespace App\Services\Settlement;
 
 use App\Data\SettlementCompletionResult;
 use App\Models\Invoice;
+use App\Models\Merchant;
 use App\Models\MerchantSettlementAttempt;
 use App\Services\Webhooks\EnqueueInvoiceWebhook;
 use App\Support\Chains\ChainRegistry;
@@ -45,104 +46,135 @@ final readonly class MerchantSettlementAttemptManager
         ): ?MerchantSettlementAttempt {
             /** @var Invoice $invoice */
             $invoice = Invoice::query()
-                ->with('merchant')
                 ->lockForUpdate()
                 ->findOrFail($invoiceId);
 
-            if ($invoice->status !== 'paid' || ! $invoice->hasRetryableForwardStatus()) {
-                return null;
-            }
+            /** @var Merchant $merchant */
+            $merchant = Merchant::query()->lockForUpdate()->findOrFail($invoice->merchant_id);
+            $invoice->setRelation('merchant', $merchant);
 
-            $blockingAttempt = MerchantSettlementAttempt::query()
-                ->where('invoice_id', $invoice->id)
-                ->whereIn('state', [
-                    MerchantSettlementAttempt::STATE_RESERVED,
-                    MerchantSettlementAttempt::STATE_BROADCASTING,
-                    MerchantSettlementAttempt::STATE_BROADCASTED,
-                    MerchantSettlementAttempt::STATE_CONFIRMED,
-                    MerchantSettlementAttempt::STATE_NEEDS_RECONCILIATION,
-                ])
-                ->latest('id')
-                ->first();
+            return $this->reserveLocked(
+                invoice: $invoice,
+                chainFamily: $chainFamily,
+                transferType: $transferType,
+                destinationAddress: $destinationAddress,
+                metadata: $metadata,
+                ownerToken: $ownerToken,
+            );
+        });
+    }
 
-            if ($blockingAttempt !== null) {
-                $invoice->forward_attempt_uuid = $blockingAttempt->attempt_uuid;
-                $invoice->forward_status = $blockingAttempt->state === MerchantSettlementAttempt::STATE_NEEDS_RECONCILIATION
-                    ? Invoice::FORWARD_STATUS_NEEDS_RECONCILIATION
-                    : Invoice::FORWARD_STATUS_PROCESSING;
-                $invoice->save();
+    /**
+     * Reserves against an invoice already locked by the caller's transaction.
+     *
+     * @param  array<string, mixed>  $metadata
+     */
+    public function reserveLocked(
+        Invoice $invoice,
+        string $chainFamily,
+        string $transferType,
+        string $destinationAddress,
+        array $metadata = [],
+        ?string $ownerToken = null,
+    ): ?MerchantSettlementAttempt {
+        if (DB::transactionLevel() < 1) {
+            throw new RuntimeException('reserveLocked requires an active database transaction.');
+        }
 
-                return null;
-            }
+        if ($invoice->status !== 'paid' || ! $invoice->hasRetryableForwardStatus()) {
+            return null;
+        }
 
-            if ($invoice->forward_attempt_uuid !== null) {
-                $invoice->forward_status = Invoice::FORWARD_STATUS_NEEDS_RECONCILIATION;
-                $invoice->save();
+        $blockingAttempt = MerchantSettlementAttempt::query()
+            ->where('invoice_id', $invoice->id)
+            ->whereIn('state', [
+                MerchantSettlementAttempt::STATE_RESERVED,
+                MerchantSettlementAttempt::STATE_BROADCASTING,
+                MerchantSettlementAttempt::STATE_BROADCASTED,
+                MerchantSettlementAttempt::STATE_CONFIRMED,
+                MerchantSettlementAttempt::STATE_NEEDS_RECONCILIATION,
+            ])
+            ->latest('id')
+            ->lockForUpdate()
+            ->first();
 
-                return null;
-            }
-
-            if (
-                $invoice->settlement_snapshot_locked_at === null
-                || $invoice->fee_coin === null
-                || $invoice->merchant_payout_coin === null
-            ) {
-                throw new RuntimeException("Invoice [{$invoice->id}] has no complete locked settlement snapshot.");
-            }
-
-            $assetKey = $invoice->resolvedAssetKey();
-            $recordedForwarded = $this->amounts->recordedForwardedCoin($invoice);
-            if (
-                $this->decimal->asset($recordedForwarded, $assetKey)
-                    ->compareTo($this->decimal->asset($invoice->forwarded_coin, $assetKey)) > 0
-            ) {
-                $invoice->forwarded_coin = $recordedForwarded;
-            }
-
-            $amount = $this->amounts->remainingPayoutCoin($invoice);
-            if (BigDecimal::of($amount)->isZero()) {
-                $invoice->forward_status = Invoice::FORWARD_STATUS_DONE;
-                $invoice->save();
-
-                return null;
-            }
-
-            $attemptUuid = (string) Str::uuid();
-            $now = now('UTC');
-            $leaseSeconds = max(30, (int) config('forwarding.attempts.reservation_lease_seconds', 300));
-
-            /** @var MerchantSettlementAttempt $attempt */
-            $attempt = MerchantSettlementAttempt::query()->create([
-                'attempt_uuid' => $attemptUuid,
-                'merchant_id' => $invoice->merchant_id,
-                'invoice_id' => $invoice->id,
-                'asset_key' => $assetKey,
-                'network_key' => $invoice->resolvedNetworkKey(),
-                'chain_family' => $chainFamily,
-                'transfer_type' => $transferType,
-                'state' => MerchantSettlementAttempt::STATE_RESERVED,
-                'retry_safe' => false,
-                'amount_coin' => $amount,
-                'fee_coin_snapshot' => $this->decimal->format($invoice->fee_coin, $assetKey),
-                'merchant_payout_coin_snapshot' => $this->decimal->format($invoice->merchant_payout_coin, $assetKey),
-                'destination_address' => $destinationAddress,
-                'required_confirmations' => max(1, $this->chains->confirmations($invoice->resolvedNetworkKey())),
-                'broadcast_reference' => "settlement:{$attemptUuid}",
-                'metadata' => array_merge($metadata, ['invoice_public_id' => $invoice->public_id]),
-                'lease_owner_token' => $ownerToken ?? (string) Str::uuid(),
-                'lease_expires_at' => $now->copy()->addSeconds($leaseSeconds),
-                'heartbeat_at' => $now,
-                'reserved_at' => $now,
-            ]);
-
-            $invoice->forward_status = Invoice::FORWARD_STATUS_PROCESSING;
-            $invoice->forward_attempt_uuid = $attemptUuid;
-            $invoice->forwarding_coin = $amount;
-            $invoice->forwarding_started_at = $now;
+        if ($blockingAttempt !== null) {
+            $invoice->forward_attempt_uuid = $blockingAttempt->attempt_uuid;
+            $invoice->forward_status = $blockingAttempt->state === MerchantSettlementAttempt::STATE_NEEDS_RECONCILIATION
+                ? Invoice::FORWARD_STATUS_NEEDS_RECONCILIATION
+                : Invoice::FORWARD_STATUS_PROCESSING;
             $invoice->save();
 
-            return $attempt;
-        });
+            return null;
+        }
+
+        if ($invoice->forward_attempt_uuid !== null) {
+            $invoice->forward_status = Invoice::FORWARD_STATUS_NEEDS_RECONCILIATION;
+            $invoice->save();
+
+            return null;
+        }
+
+        if (
+            $invoice->settlement_snapshot_locked_at === null
+            || $invoice->fee_coin === null
+            || $invoice->merchant_payout_coin === null
+        ) {
+            throw new RuntimeException("Invoice [{$invoice->id}] has no complete locked settlement snapshot.");
+        }
+
+        $assetKey = $invoice->resolvedAssetKey();
+        $recordedForwarded = $this->amounts->recordedForwardedCoin($invoice);
+        if (
+            $this->decimal->asset($recordedForwarded, $assetKey)
+                ->compareTo($this->decimal->asset($invoice->forwarded_coin, $assetKey)) > 0
+        ) {
+            $invoice->forwarded_coin = $recordedForwarded;
+        }
+
+        $amount = $this->amounts->remainingPayoutCoin($invoice);
+        if (BigDecimal::of($amount)->isZero()) {
+            $invoice->forward_status = Invoice::FORWARD_STATUS_DONE;
+            $invoice->save();
+
+            return null;
+        }
+
+        $attemptUuid = (string) Str::uuid();
+        $now = now('UTC');
+        $leaseSeconds = max(30, (int) config('forwarding.attempts.reservation_lease_seconds', 300));
+
+        /** @var MerchantSettlementAttempt $attempt */
+        $attempt = MerchantSettlementAttempt::query()->create([
+            'attempt_uuid' => $attemptUuid,
+            'merchant_id' => $invoice->merchant_id,
+            'invoice_id' => $invoice->id,
+            'asset_key' => $assetKey,
+            'network_key' => $invoice->resolvedNetworkKey(),
+            'chain_family' => $chainFamily,
+            'transfer_type' => $transferType,
+            'state' => MerchantSettlementAttempt::STATE_RESERVED,
+            'retry_safe' => false,
+            'amount_coin' => $amount,
+            'fee_coin_snapshot' => $this->decimal->format($invoice->fee_coin, $assetKey),
+            'merchant_payout_coin_snapshot' => $this->decimal->format($invoice->merchant_payout_coin, $assetKey),
+            'destination_address' => $destinationAddress,
+            'required_confirmations' => max(1, $this->chains->confirmations($invoice->resolvedNetworkKey())),
+            'broadcast_reference' => "settlement:{$attemptUuid}",
+            'metadata' => array_merge($metadata, ['invoice_public_id' => $invoice->public_id]),
+            'lease_owner_token' => $ownerToken ?? (string) Str::uuid(),
+            'lease_expires_at' => $now->copy()->addSeconds($leaseSeconds),
+            'heartbeat_at' => $now,
+            'reserved_at' => $now,
+        ]);
+
+        $invoice->forward_status = Invoice::FORWARD_STATUS_PROCESSING;
+        $invoice->forward_attempt_uuid = $attemptUuid;
+        $invoice->forwarding_coin = $amount;
+        $invoice->forwarding_started_at = $now;
+        $invoice->save();
+
+        return $attempt;
     }
 
     /**
@@ -302,7 +334,7 @@ final readonly class MerchantSettlementAttemptManager
     public function recordRecoveredBroadcast(int $attemptId, string $txid, array $evidence = []): MerchantSettlementAttempt
     {
         return DB::transaction(function () use ($attemptId, $txid, $evidence): MerchantSettlementAttempt {
-            $attempt = $this->lockAttempt($attemptId);
+            [$attempt, $invoice] = $this->lockSettlementContext($attemptId);
 
             if ($attempt->txid !== null && $attempt->txid !== $txid) {
                 throw new RuntimeException("Settlement attempt [{$attempt->attempt_uuid}] has conflicting recovered txids.");
@@ -323,7 +355,7 @@ final readonly class MerchantSettlementAttemptManager
             $attempt->metadata = array_merge($attempt->metadata ?? [], ['recovered_broadcast' => $evidence]);
             $attempt->save();
 
-            $this->markInvoiceProcessing($attempt);
+            $this->markInvoiceProcessing($attempt, $invoice);
 
             return $attempt;
         });
@@ -360,11 +392,11 @@ final readonly class MerchantSettlementAttemptManager
     public function complete(int $attemptId): SettlementCompletionResult
     {
         return DB::transaction(function () use ($attemptId): SettlementCompletionResult {
-            $attempt = $this->lockAttempt($attemptId);
+            [$attempt, $invoice] = $this->lockSettlementContext($attemptId);
 
             if ($attempt->state === MerchantSettlementAttempt::STATE_COMPLETED) {
                 return new SettlementCompletionResult(
-                    Invoice::query()->with('merchant')->findOrFail($attempt->invoice_id),
+                    $invoice,
                     false,
                 );
             }
@@ -374,12 +406,6 @@ final readonly class MerchantSettlementAttemptManager
             if ($attempt->txid === null || $attempt->txid === '') {
                 throw new RuntimeException("Settlement attempt [{$attempt->attempt_uuid}] has no txid.");
             }
-
-            /** @var Invoice $invoice */
-            $invoice = Invoice::query()
-                ->with('merchant')
-                ->lockForUpdate()
-                ->findOrFail($attempt->invoice_id);
 
             if (
                 $invoice->forward_attempt_uuid !== $attempt->attempt_uuid
@@ -457,19 +483,19 @@ final readonly class MerchantSettlementAttemptManager
     public function markPreBroadcastFailed(int $attemptId, ?string $errorMessage = null): void
     {
         DB::transaction(function () use ($attemptId, $errorMessage): void {
-            $attempt = $this->lockAttempt($attemptId);
+            [$attempt, $invoice] = $this->lockSettlementContext($attemptId);
 
             if ($attempt->state === MerchantSettlementAttempt::STATE_FAILED && $attempt->retry_safe) {
                 return;
             }
 
             if ($attempt->state !== MerchantSettlementAttempt::STATE_RESERVED) {
-                $this->quarantineLockedAttempt($attempt, $errorMessage ?? 'Failure occurred after broadcast could have started.');
+                $this->quarantineLockedAttempt($attempt, $invoice, $errorMessage ?? 'Failure occurred after broadcast could have started.');
 
                 return;
             }
 
-            $this->failRetrySafeLocked($attempt, $errorMessage);
+            $this->failRetrySafeLocked($attempt, $invoice, $errorMessage);
         });
     }
 
@@ -479,7 +505,7 @@ final readonly class MerchantSettlementAttemptManager
     public function markProvenFailed(int $attemptId, string $reason, array $evidence): void
     {
         DB::transaction(function () use ($attemptId, $reason, $evidence): void {
-            $attempt = $this->lockAttempt($attemptId);
+            [$attempt, $invoice] = $this->lockSettlementContext($attemptId);
 
             if ($attempt->state === MerchantSettlementAttempt::STATE_FAILED && $attempt->retry_safe) {
                 return;
@@ -495,7 +521,7 @@ final readonly class MerchantSettlementAttemptManager
             }
 
             $attempt->metadata = array_merge($attempt->metadata ?? [], ['failed_chain_evidence' => $evidence]);
-            $this->failRetrySafeLocked($attempt, $reason);
+            $this->failRetrySafeLocked($attempt, $invoice, $reason);
         });
     }
 
@@ -505,7 +531,7 @@ final readonly class MerchantSettlementAttemptManager
     public function markNeedsReconciliation(int $attemptId, ?string $errorMessage = null, array $metadata = []): void
     {
         DB::transaction(function () use ($attemptId, $errorMessage, $metadata): void {
-            $attempt = $this->lockAttempt($attemptId);
+            [$attempt, $invoice] = $this->lockSettlementContext($attemptId);
 
             if ($attempt->state === MerchantSettlementAttempt::STATE_COMPLETED) {
                 return;
@@ -518,15 +544,13 @@ final readonly class MerchantSettlementAttemptManager
                 $attempt->next_reconciliation_at ??= now('UTC');
                 $attempt->save();
 
-                /** @var Invoice $invoice */
-                $invoice = Invoice::query()->lockForUpdate()->findOrFail($attempt->invoice_id);
                 $invoice->forward_status = Invoice::FORWARD_STATUS_NEEDS_RECONCILIATION;
                 $invoice->save();
 
                 return;
             }
 
-            $this->quarantineLockedAttempt($attempt, $errorMessage);
+            $this->quarantineLockedAttempt($attempt, $invoice, $errorMessage);
         });
     }
 
@@ -557,7 +581,7 @@ final readonly class MerchantSettlementAttemptManager
 
         foreach ($ids as $id) {
             DB::transaction(function () use ($id, &$reaped): void {
-                $attempt = $this->lockAttempt((int) $id);
+                [$attempt, $invoice] = $this->lockSettlementContext((int) $id);
                 if (
                     $attempt->state !== MerchantSettlementAttempt::STATE_RESERVED
                     || $attempt->lease_expires_at === null
@@ -566,7 +590,7 @@ final readonly class MerchantSettlementAttemptManager
                     return;
                 }
 
-                $this->failRetrySafeLocked($attempt, 'Reservation ownership lease expired before broadcast.');
+                $this->failRetrySafeLocked($attempt, $invoice, 'Reservation ownership lease expired before broadcast.');
                 $reaped++;
             });
         }
@@ -574,8 +598,11 @@ final readonly class MerchantSettlementAttemptManager
         return $reaped;
     }
 
-    private function failRetrySafeLocked(MerchantSettlementAttempt $attempt, ?string $errorMessage): void
-    {
+    private function failRetrySafeLocked(
+        MerchantSettlementAttempt $attempt,
+        Invoice $invoice,
+        ?string $errorMessage,
+    ): void {
         $attempt->state = MerchantSettlementAttempt::STATE_FAILED;
         $attempt->retry_safe = true;
         $attempt->error_message = $errorMessage;
@@ -586,11 +613,14 @@ final readonly class MerchantSettlementAttemptManager
         $attempt->next_reconciliation_at = null;
         $attempt->save();
 
-        $this->markInvoiceFailedForRetry($attempt);
+        $this->markInvoiceFailedForRetry($attempt, $invoice);
     }
 
-    private function quarantineLockedAttempt(MerchantSettlementAttempt $attempt, ?string $errorMessage): void
-    {
+    private function quarantineLockedAttempt(
+        MerchantSettlementAttempt $attempt,
+        Invoice $invoice,
+        ?string $errorMessage,
+    ): void {
         $attempt->state = MerchantSettlementAttempt::STATE_NEEDS_RECONCILIATION;
         $attempt->retry_safe = false;
         $attempt->error_message = $errorMessage;
@@ -599,8 +629,6 @@ final readonly class MerchantSettlementAttemptManager
         $attempt->lease_expires_at = null;
         $attempt->save();
 
-        /** @var Invoice $invoice */
-        $invoice = Invoice::query()->lockForUpdate()->findOrFail($attempt->invoice_id);
         $invoice->forward_status = Invoice::FORWARD_STATUS_NEEDS_RECONCILIATION;
         $invoice->forward_attempt_uuid = $attempt->attempt_uuid;
         $invoice->forwarding_coin = $attempt->amount_coin;
@@ -608,21 +636,16 @@ final readonly class MerchantSettlementAttemptManager
         $invoice->save();
     }
 
-    private function markInvoiceProcessing(MerchantSettlementAttempt $attempt): void
+    private function markInvoiceProcessing(MerchantSettlementAttempt $attempt, Invoice $invoice): void
     {
-        /** @var Invoice $invoice */
-        $invoice = Invoice::query()->lockForUpdate()->findOrFail($attempt->invoice_id);
         $invoice->forward_status = Invoice::FORWARD_STATUS_PROCESSING;
         $invoice->forward_attempt_uuid = $attempt->attempt_uuid;
         $invoice->forwarding_coin = $attempt->amount_coin;
         $invoice->save();
     }
 
-    private function markInvoiceFailedForRetry(MerchantSettlementAttempt $attempt): void
+    private function markInvoiceFailedForRetry(MerchantSettlementAttempt $attempt, Invoice $invoice): void
     {
-        /** @var Invoice $invoice */
-        $invoice = Invoice::query()->lockForUpdate()->findOrFail($attempt->invoice_id);
-
         if ($invoice->forward_attempt_uuid !== $attempt->attempt_uuid) {
             throw new RuntimeException(
                 "Invoice [{$invoice->id}] no longer references settlement attempt [{$attempt->attempt_uuid}]."
@@ -654,6 +677,33 @@ final readonly class MerchantSettlementAttemptManager
         $leaseSeconds = max(30, (int) config('forwarding.attempts.reservation_lease_seconds', 300));
         $attempt->heartbeat_at = now('UTC');
         $attempt->lease_expires_at = now('UTC')->addSeconds($leaseSeconds);
+    }
+
+    /** @return array{MerchantSettlementAttempt, Invoice} */
+    private function lockSettlementContext(int $attemptId): array
+    {
+        if (DB::transactionLevel() < 1) {
+            throw new RuntimeException('Settlement context locking requires an active database transaction.');
+        }
+
+        /** @var MerchantSettlementAttempt $identity */
+        $identity = MerchantSettlementAttempt::query()
+            ->select(['id', 'invoice_id', 'merchant_id'])
+            ->findOrFail($attemptId);
+
+        /** @var Invoice $invoice */
+        $invoice = Invoice::query()->lockForUpdate()->findOrFail($identity->invoice_id);
+
+        /** @var Merchant $merchant */
+        $merchant = Merchant::query()->lockForUpdate()->findOrFail($invoice->merchant_id);
+        $invoice->setRelation('merchant', $merchant);
+
+        $attempt = $this->lockAttempt($attemptId);
+        if ($attempt->invoice_id !== $invoice->id || $attempt->merchant_id !== $merchant->id) {
+            throw new RuntimeException("Settlement attempt [{$attempt->attempt_uuid}] identity changed while locking.");
+        }
+
+        return [$attempt, $invoice];
     }
 
     private function lockAttempt(int $attemptId): MerchantSettlementAttempt

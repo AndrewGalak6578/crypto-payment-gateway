@@ -22,6 +22,16 @@ return [
         'description' => 'View merchant balances',
     ],
     [
+        'code' => 'settlements.read',
+        'name' => 'Settlements Read',
+        'description' => 'View settlement activity, balances, wallets, and settlement rules',
+    ],
+    [
+        'code' => 'settlements.write',
+        'name' => 'Settlements Write',
+        'description' => 'Manage merchant settlement rules',
+    ],
+    [
         'code' => 'wallets.read',
         'name' => 'Wallets Read',
         'description' => 'View wallets',

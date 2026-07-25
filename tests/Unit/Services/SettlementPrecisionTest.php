@@ -23,6 +23,14 @@ final class SettlementPrecisionTest extends TestCase
     public function test_eighteen_decimal_fee_and_internal_credit_survive_without_precision_loss(): void
     {
         config()->set('webhooks.enabled', false);
+        AssetPolicy::query()->create([
+            'asset_key' => 'eth_local',
+            'network_key' => 'evm_local',
+            'asset_enabled' => true,
+            'checkout_enabled' => true,
+            'forwarding_enabled' => true,
+            'settlement_mode' => AssetPolicy::MODE_INTERNAL_BALANCE_ONLY,
+        ]);
         $merchant = $this->createMerchant(['fee_percent' => '0.1000']);
         $invoice = $this->createInvoice($merchant, [
             'status' => 'paid',

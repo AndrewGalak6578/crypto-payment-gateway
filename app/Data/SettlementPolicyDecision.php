@@ -17,6 +17,7 @@ final readonly class SettlementPolicyDecision
         public string $assetKey,
         public string $networkKey,
         public string $remainingAmount,
+        public array $policySnapshot = [],
     ) {}
 
     public function shouldCreditInternalBalance(): bool

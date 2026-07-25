@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Tests\Unit\Services;
 
 use App\Models\Invoice;
+use App\Models\Merchant;
 use App\Models\MerchantSettlementAttempt;
 use App\Services\Settlement\MerchantSettlementAttemptManager;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use RuntimeException;
 use Tests\Support\BuildsDomainData;
@@ -116,6 +118,59 @@ final class SettlementReservationLeaseTest extends TestCase
         );
 
         self::assertSame(MerchantSettlementAttempt::STATE_BROADCASTING, $replacement->fresh()->state);
+    }
+
+    public function test_public_reservation_paths_share_blocking_attempt_behavior(): void
+    {
+        [$invoice, $attempt] = $this->reserve();
+        $invoice = $invoice->fresh();
+        self::assertSame($attempt->attempt_uuid, $invoice->forward_attempt_uuid);
+
+        $manager = app(MerchantSettlementAttemptManager::class);
+
+        $invoice->forceFill([
+            'forward_status' => Invoice::FORWARD_STATUS_NONE,
+            'forward_attempt_uuid' => null,
+        ])->save();
+
+        $duplicate = $manager->reserve(
+            invoiceId: $invoice->id,
+            chainFamily: 'utxo',
+            transferType: MerchantSettlementAttempt::TRANSFER_UTXO,
+            destinationAddress: 'bcrt1qleasedestination',
+            ownerToken: (string) Str::uuid(),
+        );
+
+        self::assertNull($duplicate);
+        self::assertSame(Invoice::FORWARD_STATUS_PROCESSING, $invoice->fresh()->forward_status);
+        self::assertSame($attempt->attempt_uuid, $invoice->fresh()->forward_attempt_uuid);
+
+        $invoice->forceFill([
+            'forward_status' => Invoice::FORWARD_STATUS_NONE,
+            'forward_attempt_uuid' => null,
+        ])->save();
+
+        $lockedDuplicate = DB::transaction(function () use ($invoice, $manager): ?MerchantSettlementAttempt {
+            $lockedInvoice = Invoice::query()->lockForUpdate()->findOrFail($invoice->id);
+            $lockedMerchant = Merchant::query()->lockForUpdate()->findOrFail($lockedInvoice->merchant_id);
+            $lockedInvoice->setRelation('merchant', $lockedMerchant);
+
+            return $manager->reserveLocked(
+                invoice: $lockedInvoice,
+                chainFamily: 'utxo',
+                transferType: MerchantSettlementAttempt::TRANSFER_UTXO,
+                destinationAddress: 'bcrt1qleasedestination',
+                ownerToken: (string) Str::uuid(),
+            );
+        });
+
+        self::assertNull($lockedDuplicate);
+        self::assertSame(Invoice::FORWARD_STATUS_PROCESSING, $invoice->fresh()->forward_status);
+        self::assertSame($attempt->attempt_uuid, $invoice->fresh()->forward_attempt_uuid);
+        self::assertSame(
+            1,
+            MerchantSettlementAttempt::query()->where('invoice_id', $invoice->id)->count(),
+        );
     }
 
     /**

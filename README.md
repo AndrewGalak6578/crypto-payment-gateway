@@ -2,7 +2,7 @@
 
 **Portfolio MVP for a multi-asset invoice and settlement gateway**
 
-Settlane is a Laravel + Vue project that models the backend workflow of a payment gateway: merchant APIs, invoice creation, deposit address allocation, asynchronous payment monitoring, settlement, internal balance fallback, signed webhooks, and admin operations.
+Settlane is a Laravel + Vue project that models the backend workflow of a payment gateway: merchant APIs, invoice creation, deposit address allocation, asynchronous payment monitoring, policy-controlled settlement, signed webhooks, and admin operations.
 
 It is positioned as an employer-facing backend/platform portfolio project for fintech, banking, crypto exchanges, iGaming, and payment infrastructure. It is close to a product-shaped MVP, but it should still be evaluated as a demo system rather than an audited production gateway for real funds.
 
@@ -24,7 +24,7 @@ This project models the operational flow of a gateway that accepts crypto-denomi
 - the gateway snapshots a rate and computes the payable asset amount
 - the system allocates a dedicated deposit address
 - queue workers refresh invoice state from chain data
-- paid invoices are either forwarded to a configured wallet or credited to an internal balance
+- paid invoices are forwarded, held by policy, or credited internally only when an explicit custodial policy selects that outcome
 - invoice state changes are delivered to merchant webhook endpoints with persisted delivery history
 
 The repository includes:
@@ -44,7 +44,7 @@ Settlane models the backend concerns of a transactional payment system:
 - tracking an invoice through multiple state transitions
 - isolating deposit addresses per invoice
 - separating payment detection from settlement
-- handling payout fallback when no forwarding wallet is configured
+- holding payouts safely when no merchant-owned forwarding wallet is configured
 - exposing operational visibility to merchant and admin users
 - persisting and retrying outbound webhooks
 
@@ -85,8 +85,10 @@ Settlane models the backend concerns of a transactional payment system:
 ### Settlement
 
 - Net settlement after merchant fee deduction.
-- Forwarding to merchant-specific or global destination wallet when configured.
-- Internal balance credit fallback when no forwarding wallet exists.
+- Forwarding to merchant-owned destination wallets; platform custody fallback is separately configured and disabled by default.
+- Explicit `immediate`, per-invoice `threshold`, `manual`, `internal_balance_only`, and `disabled` policy modes.
+- Missing merchant destination wallets create non-retryable policy holds, not implicit custodial liabilities.
+- Internal balance credit only when `internal_balance_only` is selected by admin policy.
 - Forwarding status tracking on invoices.
 - Settlement ledger entries for internal credits and forward-sent outcomes.
 - Durable settlement attempts with confirmation-aware chain reconciliation.
@@ -113,6 +115,7 @@ Settlane models the backend concerns of a transactional payment system:
   - payments list, filters, detail drawer, and full payment detail
   - create payment link
   - settlements, destination wallets, balances, wallet estimate, and settlement ledger
+  - per-asset Settlement Rules with platform inheritance and optimistic revision handling
   - developer tools: API keys, webhook settings, webhook deliveries, test webhook signal, payload inspection, and retry
   - checkout/settings customization
   - team management
@@ -159,12 +162,12 @@ Settlane uses a single Laravel backend for API routes, hosted invoice pages, que
 | `MonitorInvoiceJob` | Re-dispatching monitor loop for active invoices |
 | `InvoiceStatusRefresher` | Reads chain state and applies invoice transitions |
 | `ForwardInvoiceJob` | Async settlement trigger |
-| `InvoiceForwarder` | Resolves settlement destination and executes forwarding or fallback credit |
+| `InvoiceForwarder` | Atomically resolves policy/destination and persists a hold, explicit internal credit, or forwarding attempt |
 | `SettlementAttemptReconciler` | Verifies broadcast identity and confirmations before accounting completion |
 | `ReconcileSettlementAttemptJob` | Runs delayed, bounded reconciliation without rebroadcasting |
 | `EvmGasFundingReconciler` | Verifies native gas-sponsorship identity, receipts, and confirmations |
 | `ReconcileEvmGasFundingJob` | Runs delayed gas-funding reconciliation without resending ambiguous top-ups |
-| `MerchantBalanceCreditor` | Credits internal merchant balances when no wallet is configured |
+| `MerchantBalanceCreditor` | Credits internal merchant balances only when policy mode is `internal_balance_only` |
 | `EnqueueInvoiceWebhook` | Persists idempotent outgoing webhook deliveries and dispatches only after commit |
 | `DeliverWebhookJob` | Async webhook delivery trigger |
 | `WebhookDeliverySender` | Executes webhook HTTP delivery and retry scheduling |
@@ -228,17 +231,46 @@ stateDiagram-v2
 ### Settlement behavior after `paid`
 
 1. The system calculates the merchant net amount after fee deduction.
-2. `SettlementPolicyResolver` evaluates platform and merchant asset policy before wallet lookup.
+2. `SettlementPolicyResolver` composes registry defaults, global asset policy, wildcard merchant admin restriction, exact merchant admin restriction, and merchant preference in that order.
 3. `internal_balance_only` credits `merchant_balances`; `disabled`, `manual`, and below-threshold outcomes are recorded as deferred settlement ledger holds without creating a forwarding attempt.
-4. If policy allows forwarding and a destination wallet exists, Settlane reserves an immutable payout snapshot before chain-side work.
+4. The forwarder locks the invoice and merchant policy namespace, reads locked policy rows, and atomically persists either a hold/internal credit or a reserved immutable attempt. No RPC work occurs in that transaction.
 5. A successful RPC response records only `broadcasted` and schedules reconciliation. It does not mark the invoice settled, write a completed ledger row, or emit `invoice.forwarded`.
 6. Reconciliation verifies transaction identity and required confirmations. Only then does the existing attempt become `confirmed` and atomically finalize invoice accounting as `completed`.
-7. If policy allows forwarding but no forwarding wallet exists, Settlane credits `merchant_balances` instead.
+7. If policy allows forwarding but no merchant-owned wallet exists, Settlane records `destination_wallet_missing` and leaves the paid invoice in non-retryable `held` state unless the separately configured platform custody fallback is enabled. Existing completed internal credits remain authoritative. Adding a wallet later does not auto-release existing held invoices.
 8. Confirmed on-chain completion or internal credit persists exactly one pending `invoice.forwarded` delivery in the same database transaction as accounting completion. Queue dispatch happens after commit; the scheduler recovers a lost dispatch.
 
 ERC-20 local/dev assets default to threshold settlement via `forwarding.assets.eth_usdt_local.min` so small token payments do not automatically trigger native-gas sponsorship. Threshold comparison uses the durable merchant net payout after `fee_percent`, not the gross received amount. Explicit asset policy rows can opt an asset back into `immediate` mode for local testing or controlled operations.
 
 `invoices.forward_status` uses an explicit settlement state vocabulary. `none` and `partial` are retryable. `failed` is retryable only when the latest durable attempt proves the failure happened before broadcast and has `retry_safe=true`. `processing` identifies an active attempt. `held`, `manual`, and `needs_reconciliation` are non-retryable; the invoice remains `paid`. `done` means the merchant obligation was completed either on-chain, by internal balance credit, or because no amount remained to settle.
+
+### Merchant Settlement Rules
+
+Merchant intent is stored separately in `merchant_settlement_preferences`; `merchant_asset_policies` remains platform/admin-owned and merchant endpoints never write it. Owner/admin roles receive `settlements.read` and `settlements.write`; analyst/viewer roles receive `settlements.read`. Each update records an immutable `settlement_policy.updated` activity event inside the preference transaction.
+
+```http
+GET /api/merchant/settlement-policies
+PUT /api/merchant/settlement-policies/{assetKey}
+```
+
+The GET resource returns asset/network metadata, merchant `requested`, platform/admin `inherited`, and final `effective` values separately. It also reports merchant-owned destination readiness, field editability, unavailable mode reason codes, and the platform restriction that overrides merchant intent. `max_gas_cost` is reported only as non-enforced metadata and is hidden from the primary editor.
+
+PUT is a canonical replacement of merchant intent:
+
+```json
+{
+  "revision": 0,
+  "requested": {
+    "mode": "threshold",
+    "minimum_invoice_payout": "0.123456789012345678"
+  }
+}
+```
+
+`revision` is required. A missing row has revision `0`; a successful update increments it. A stale update returns HTTP `409` with code `settlement_policy_revision_conflict` and the current policy resource. `mode=null` plus `minimum_invoice_payout=null` means inherit. Threshold amounts are positive asset-scale decimal strings; every non-threshold mode requires a null minimum. Unknown fields, exponent notation, and float coercion are rejected.
+
+Merchants may choose `immediate`, `threshold`, or `disabled`, presented as **Pause settlements**. `manual` remains unavailable with reason `operator_release_unavailable`, and `internal_balance_only` remains admin-only because it creates a custodial liability. Threshold means **Minimum invoice payout** and applies independently to each invoice; held amounts are not aggregated or automatically combined.
+
+Policy updates affect future policy evaluations only. A paid invoice with an existing attempt retains its immutable fee, net payout, destination, and policy snapshot. Existing `held` or `manual` invoices are not automatically released when preferences change. Settlement evaluation and preference updates serialize on the locked merchant row, so either the update wins before evaluation or the attempt/hold commits with the preceding policy snapshot.
 
 `merchant_settlement_attempts` owns the mutable send lifecycle:
 
@@ -315,7 +347,7 @@ The gas-funding lifecycle migration backfills legacy rows with a tx hash as `bro
 - DB transaction boundaries around status refresh and settlement reservation/finalization.
 - Durable settlement attempts with pre-broadcast retry proof and ambiguous-broadcast quarantine.
 - Persisted webhook delivery attempts, statuses, timestamps, and errors.
-- Merchant balance fallback when forwarding destination is absent.
+- Explicit internal-balance policy and non-custodial missing-wallet holds.
 - Separate payment address records rather than relying only on invoice rows.
 - Real-RPC integration tests for UTXO forwarding flows.
 
@@ -424,25 +456,27 @@ npm run dev
 5. Log in to the Merchant Portal v2 at `/merchant/login`.
 6. Open `/merchant/settings` and configure checkout defaults such as brand, allowed assets, redirects, and amount limits.
 7. Configure a destination wallet in `/merchant/settlements`.
-8. Create a payment link from `/merchant/payments/new`.
-9. Open the hosted checkout URL.
-10. Choose an asset if the invoice has no fixed asset.
-11. Pay the deposit address in the local demo environment.
-12. Observe status progression in `/merchant/payments`: `pending -> fixated -> paid`.
+8. Configure per-asset forwarding intent in `/merchant/settlement-rules`.
+9. Create a payment link from `/merchant/payments/new`.
+10. Open the hosted checkout URL.
+11. Choose an asset if the invoice has no fixed asset.
+12. Pay the deposit address in the local demo environment.
+13. Observe status progression in `/merchant/payments`: `pending -> fixated -> paid`.
 
 ### Flow 2: Settlement forwarding
 
-1. Configure a forwarding wallet for the merchant or global scope.
+1. Configure a merchant-owned forwarding wallet. Platform custody fallback requires an explicit deployment setting and defaults off.
 2. Pay a test invoice.
 3. Observe `forward_status`, forwarding tx IDs, and settlement entries on the invoice/payment detail page.
 4. Verify settlement behavior in admin and merchant settlement views.
 
-### Flow 3: Internal balance fallback
+### Flow 3: Policy hold or internal balance
 
-1. Remove or skip wallet configuration.
-2. Pay a test invoice.
-3. Observe merchant balance credit in `merchant_balances`.
-4. Observe the corresponding settlement ledger entry in `/merchant/settlements`.
+1. Remove the merchant destination wallet and pay an invoice whose effective mode allows forwarding.
+2. Observe `forward_status=held` and the `destination_wallet_missing` ledger reason without a balance credit.
+3. Separately, configure the admin-only `internal_balance_only` mode and pay another invoice.
+4. Observe the explicit internal credit in `merchant_balances` and the settlement ledger.
+
 
 ### Flow 4: Webhook delivery and retry
 

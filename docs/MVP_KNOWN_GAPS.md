@@ -46,7 +46,7 @@
 - Статус: проект демонстрирует backend architecture и operational flows; production hardening отдельный этап.
 
 ### 9) Нет operator workflow для release held/manual settlement
-- Факт: `held` и `manual` являются terminal для automatic retry, но авторизованного endpoint/command для release или регистрации external settlement пока нет.
+- Факт: merchant Settlement Rules меняют только будущие policy evaluations; `held` и `manual` являются terminal для automatic retry и не снимаются автоматически даже после добавления destination-wallet, но авторизованного endpoint/command для release или регистрации external settlement пока нет.
 - Риск: ручная смена `forward_status` обходит audit/idempotency semantics и может привести к повторному движению средств.
 - Статус: нужен отдельный operator flow с invoice lock, actor/reason audit, policy re-resolution и атомарным выбором retry либо external completion.
 
@@ -64,3 +64,8 @@
 - Факт: `invoice.forwarded` delivery создаётся transactionally с settlement completion, имеет unique idempotency key и восстанавливается scheduler command. HTTP request может быть принят merchant endpoint до worker crash.
 - Риск: повторная HTTP delivery возможна после ambiguous transport failure.
 - Статус: merchant должен дедуплицировать по `X-Webhook-Delivery-Id`; exactly-once через внешний HTTP transport не обещается.
+
+### 13) Legacy wallets с `network_key=null` требуют backfill
+- Факт: settlement wallet resolver временно принимает legacy wallet row без `network_key` только для canonical network зарегистрированного asset.
+- Риск: null-network compatibility ослабляет явную привязку destination wallet к сети и не должна оставаться в mainnet settlement path.
+- Статус: до mainnet backfill всех существующих wallet rows должен установить явный `network_key`; после проверки данных null-network fallback и его compatibility tests нужно удалить.

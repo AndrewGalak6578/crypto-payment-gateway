@@ -7,6 +7,9 @@
                 <p class="page-subtitle">Balances, destination wallets, and forwarding readiness for merchant payouts.</p>
             </div>
             <div class="page-actions settlements-actions">
+                <RouterLink v-if="canReadRules" class="btn btn-secondary" :to="{ name: 'merchant-v2.settlement-rules' }">
+                    Settlement rules
+                </RouterLink>
                 <button class="btn btn-secondary" type="button" :disabled="loading" @click="load">
                     {{ loading ? 'Refreshing...' : 'Refresh' }}
                 </button>
@@ -50,7 +53,7 @@
                     <div class="card-pad section-header">
                         <div>
                             <h3 class="card-title">Internal balances</h3>
-                            <p class="card-subtitle">Funds credited when automatic forwarding was not available.</p>
+                            <p class="card-subtitle">Funds credited by an explicit internal-balance policy appear here. Held payouts are tracked separately.</p>
                         </div>
                     </div>
 
@@ -115,7 +118,7 @@
                     <div class="card-pad section-header">
                         <div>
                             <h3 class="card-title">Settlement activity</h3>
-                            <p class="card-subtitle">Ledger of forwarding transactions, fallback credits, and settlement exceptions.</p>
+                            <p class="card-subtitle">Ledger of forwarding transactions, explicit internal credits, and settlement holds.</p>
                         </div>
                         <button class="btn btn-secondary compact-action" type="button" :disabled="activityLoading" @click="loadActivity">
                             {{ activityLoading ? 'Loading...' : 'Reload' }}
@@ -252,7 +255,7 @@
 
                 <article class="card card-pad readiness-card">
                     <h3 class="card-title">Forwarding coverage</h3>
-                    <p class="card-subtitle">Assets without a destination wallet fall back to internal merchant balances.</p>
+                    <p class="card-subtitle">Payouts without a merchant-owned destination wallet remain held. Adding a wallet later does not automatically release existing held invoices.</p>
                     <div class="coverage-list">
                         <div v-for="asset in coverageAssets" :key="asset.assetKey" class="coverage-row">
                             <AssetBadge :item="{ asset_key: asset.assetKey }" />
@@ -320,6 +323,7 @@ const activityStatusFilters = [
 
 const supportedAssets = MERCHANT_ASSET_CATALOG.filter((asset) => asset.assetKey);
 const canWriteWallets = computed(() => authStore.hasCapability('wallets.write'));
+const canReadRules = computed(() => authStore.hasCapability('settlements.read'));
 const configuredWallets = computed(() => normalizedWallets.value.length);
 const totalBalanceLabel = computed(() => {
     const total = normalizedBalances.value.reduce((sum, balance) => sum + Number(balance.amount || 0), 0);
@@ -379,7 +383,7 @@ const metrics = computed(() => [
     {
         label: 'Internal balances',
         value: String(normalizedBalances.value.length),
-        note: normalizedBalances.value.length ? 'Assets waiting on manual settlement or wallet setup' : 'No fallback balances',
+        note: normalizedBalances.value.length ? 'Explicit internal-balance credits only' : 'No internal balances',
         tone: normalizedBalances.value.length ? 'warning' : 'success',
     },
     {
@@ -391,7 +395,7 @@ const metrics = computed(() => [
     {
         label: 'Missing coverage',
         value: String(coverageAssets.value.filter((asset) => !asset.configured).length),
-        note: 'Assets that will credit internal balance instead of forwarding',
+        note: 'Future payouts for these assets will be held',
         tone: coverageAssets.value.some((asset) => !asset.configured) ? 'warning' : 'success',
     },
 ]);

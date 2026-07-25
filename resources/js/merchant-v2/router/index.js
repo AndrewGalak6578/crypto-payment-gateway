@@ -11,6 +11,7 @@ const PaymentDetailPage = () => import('../pages/payments/PaymentDetailPage.vue'
 const CreatePaymentPage = () => import('../pages/payments/CreatePaymentPage.vue');
 const DevelopersPage = () => import('../pages/developers/DevelopersPage.vue');
 const SettlementsPage = () => import('../pages/settlements/SettlementsPage.vue');
+const SettlementRulesPage = () => import('../pages/settlements/SettlementRulesPage.vue');
 const TeamPage = () => import('../pages/team/TeamPage.vue');
 const TeamMemberProfilePage = () => import('../pages/team/TeamMemberProfilePage.vue');
 const SettingsPage = () => import('../pages/settings/SettingsPage.vue');
@@ -41,6 +42,12 @@ const routes = [
             { path: 'payments/:paymentId', name: 'merchant-v2.payment-detail', component: PaymentDetailPage, props: true },
             { path: 'developers', name: 'merchant-v2.developers', component: DevelopersPage },
             { path: 'settlements', name: 'merchant-v2.settlements', component: SettlementsPage },
+            {
+                path: 'settlement-rules',
+                name: 'merchant-v2.settlement-rules',
+                component: SettlementRulesPage,
+                meta: { capability: 'settlements.read' },
+            },
             { path: 'team', name: 'merchant-v2.team', component: TeamPage },
             { path: 'team/:userId', name: 'merchant-v2.team-member', component: TeamMemberProfilePage, props: true },
             { path: 'settings', name: 'merchant-v2.settings', component: SettingsPage },
@@ -70,6 +77,11 @@ router.beforeEach(async (to) => {
 
     if (guestOnly && authStore.isAuthenticated) {
         return typeof to.query.redirect === 'string' ? to.query.redirect : '/merchant/dashboard';
+    }
+
+    const capability = to.matched.map((record) => record.meta.capability).find(Boolean);
+    if (capability && !authStore.hasCapability(capability)) {
+        return { name: 'merchant-v2.dashboard' };
     }
 
     return true;

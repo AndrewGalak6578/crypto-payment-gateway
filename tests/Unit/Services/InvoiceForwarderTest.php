@@ -20,6 +20,7 @@ use App\Models\Merchant;
 use App\Models\MerchantBalance;
 use App\Models\MerchantSettlementAttempt;
 use App\Models\MerchantSettlementEntry;
+use App\Models\MerchantSettlementPreference;
 use App\Models\PaymentAddress;
 use App\Models\SuperWallet;
 use App\Models\WebhookDelivery;
@@ -40,6 +41,13 @@ final class InvoiceForwarderTest extends TestCase
         createInvoice as createDomainInvoice;
     }
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config()->set('forwarding.allow_platform_wallet_fallback', true);
+    }
 
     public function test_duplicate_forward_job_execution_creates_one_active_attempt_and_one_send(): void
     {
@@ -196,7 +204,7 @@ final class InvoiceForwarderTest extends TestCase
         self::assertEqualsWithDelta(0.00985, $fakeRpc->sendCalls[0]['amount'], 0.00000001);
     }
 
-    public function test_forward_without_wallet_credits_merchant_balance_and_emits_webhook(): void
+    public function test_forward_without_wallet_is_held_without_internal_credit_or_forwarded_webhook(): void
     {
         config()->set('coins.mode', 'mock');
         config()->set('webhooks.enabled', true);
@@ -217,27 +225,24 @@ final class InvoiceForwarderTest extends TestCase
         app(InvoiceForwarder::class)->forward($invoice->id);
 
         $fresh = $invoice->fresh();
-        self::assertSame('done', $fresh->forward_status);
+        self::assertSame(Invoice::FORWARD_STATUS_HELD, $fresh->forward_status);
         self::assertSame('0.010000000000000000', (string) $fresh->fee_coin);
         self::assertSame('0.490000000000000000', (string) $fresh->merchant_payout_coin);
 
-        $balance = MerchantBalance::query()
-            ->where('merchant_id', $merchant->id)
-            ->where('coin', 'btc')
-            ->first();
+        self::assertDatabaseMissing('merchant_balances', [
+            'merchant_id' => $merchant->id,
+            'coin' => 'btc',
+        ]);
 
-        self::assertNotNull($balance);
-        self::assertSame('0.490000000000000000', (string) $balance->amount);
-
-        $entry = MerchantSettlementEntry::query()->where('invoice_id', $invoice->id)->first();
-        self::assertNotNull($entry);
-        self::assertSame(MerchantSettlementEntry::TYPE_INTERNAL_CREDIT, $entry->type);
-        self::assertSame(MerchantSettlementEntry::STATUS_COMPLETED, $entry->status);
+        $entry = MerchantSettlementEntry::query()->where('invoice_id', $invoice->id)->sole();
+        self::assertSame(MerchantSettlementEntry::TYPE_FORWARD_HELD, $entry->type);
+        self::assertSame(MerchantSettlementEntry::STATUS_DEFERRED, $entry->status);
         self::assertSame('0.490000000000000000', (string) $entry->amount_coin);
+        self::assertSame('destination_wallet_missing', $entry->error_message);
         self::assertNull($entry->txid);
 
         $forwardedWebhook = WebhookDelivery::query()->where('invoice_id', $invoice->id)->where('event', 'invoice.forwarded')->first();
-        self::assertNotNull($forwardedWebhook);
+        self::assertNull($forwardedWebhook);
     }
 
     public function test_internal_balance_policy_credits_balance_even_when_wallet_exists(): void
@@ -349,6 +354,73 @@ final class InvoiceForwarderTest extends TestCase
 
         $forwardedWebhook = WebhookDelivery::query()->where('invoice_id', $invoice->id)->where('event', 'invoice.forwarded')->first();
         self::assertNull($forwardedWebhook);
+    }
+
+    public function test_merchant_preference_changes_affect_new_evaluations_but_do_not_release_existing_hold(): void
+    {
+        config()->set('coins.mode', 'mock');
+        config()->set('webhooks.enabled', false);
+
+        $fakeRpc = new FakeCoinRpc;
+        $this->app->instance(MockRpc::class, $fakeRpc);
+        $merchant = $this->createMerchant(['fee_percent' => '0']);
+        SuperWallet::query()->create([
+            'merchant_id' => $merchant->id,
+            'coin' => 'btc',
+            'asset_key' => 'btc',
+            'network_key' => 'bitcoin',
+            'wallet' => 'bcrt1qmerchantpreferencedestination',
+        ]);
+        $preference = MerchantSettlementPreference::query()->create([
+            'merchant_id' => $merchant->id,
+            'asset_key' => 'btc',
+            'network_key' => 'bitcoin',
+            'requested_mode' => AssetPolicy::MODE_THRESHOLD,
+            'requested_minimum_invoice_payout' => '0.10000000',
+            'revision' => 1,
+        ]);
+        $heldInvoice = $this->createInvoice($merchant, [
+            'status' => 'paid',
+            'coin' => 'btc',
+            'asset_key' => 'btc',
+            'network_key' => 'bitcoin',
+            'received_conf_coin' => '0.01000000',
+            'forward_status' => Invoice::FORWARD_STATUS_NONE,
+        ]);
+
+        $forwarder = app(InvoiceForwarder::class);
+        $forwarder->forward($heldInvoice->id);
+
+        self::assertSame(Invoice::FORWARD_STATUS_HELD, $heldInvoice->fresh()->forward_status);
+        self::assertSame('below_threshold', MerchantSettlementEntry::query()->where('invoice_id', $heldInvoice->id)->sole()->error_message);
+        self::assertCount(0, $fakeRpc->sendCalls);
+
+        $preference->update([
+            'requested_mode' => AssetPolicy::MODE_IMMEDIATE,
+            'requested_minimum_invoice_payout' => null,
+            'revision' => 2,
+        ]);
+
+        $forwarder->forward($heldInvoice->id);
+        self::assertSame(Invoice::FORWARD_STATUS_HELD, $heldInvoice->fresh()->forward_status);
+        self::assertSame(1, MerchantSettlementEntry::query()->where('invoice_id', $heldInvoice->id)->count());
+        self::assertCount(0, $fakeRpc->sendCalls);
+
+        $newInvoice = $this->createInvoice($merchant, [
+            'status' => 'paid',
+            'coin' => 'btc',
+            'asset_key' => 'btc',
+            'network_key' => 'bitcoin',
+            'received_conf_coin' => '0.01000000',
+            'forward_status' => Invoice::FORWARD_STATUS_NONE,
+        ]);
+        $forwarder->forward($newInvoice->id);
+
+        self::assertSame(Invoice::FORWARD_STATUS_PROCESSING, $newInvoice->fresh()->forward_status);
+        self::assertCount(1, $fakeRpc->sendCalls);
+        $attempt = MerchantSettlementAttempt::query()->where('invoice_id', $newInvoice->id)->sole();
+        self::assertSame(AssetPolicy::MODE_IMMEDIATE, $attempt->metadata['policy_snapshot']['requested']['mode']);
+        self::assertSame(AssetPolicy::MODE_IMMEDIATE, $attempt->metadata['policy_snapshot']['effective']['mode']);
     }
 
     public function test_disabled_and_manual_policies_record_non_retryable_holds(): void

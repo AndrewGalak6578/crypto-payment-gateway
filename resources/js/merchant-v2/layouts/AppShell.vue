@@ -70,9 +70,12 @@ const navItems = computed(() => [
     { label: 'Create payment', to: '/merchant/payments/new', mark: '+' },
     { label: 'Developers', to: '/merchant/developers', mark: '03' },
     { label: 'Settlements', to: '/merchant/settlements', mark: '04' },
-    { label: 'Team', to: '/merchant/team', mark: '05' },
-    { label: 'Settings', to: '/merchant/settings', mark: '06' },
-]);
+    authStore.hasCapability('settlements.read')
+        ? { label: 'Settlement rules', to: '/merchant/settlement-rules', mark: '05' }
+        : null,
+    { label: 'Team', to: '/merchant/team', mark: '06' },
+    { label: 'Settings', to: '/merchant/settings', mark: '07' },
+].filter(Boolean));
 
 const merchantName = computed(() => authStore.merchant?.name || 'Merchant');
 const userLabel = computed(() => authStore.user?.name || authStore.user?.email || 'Merchant user');

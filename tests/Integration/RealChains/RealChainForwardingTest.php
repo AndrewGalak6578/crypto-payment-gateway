@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\Integration\RealChains;
 
 use App\Models\Invoice;
-use App\Models\MerchantBalance;
 use App\Models\MerchantSettlementAttempt;
 use App\Models\SuperWallet;
 use App\Services\CoinBasedLogic\CoinRate;
@@ -52,7 +51,7 @@ final class RealChainForwardingTest extends TestCase
         $destination = $rpc->getNewAddress('dest:'.$coin.':'.uniqid('', true));
 
         SuperWallet::query()->updateOrCreate(
-            ['merchant_id' => null, 'coin' => $coin],
+            ['merchant_id' => $merchant->id, 'coin' => $coin],
             ['wallet' => $destination, 'fee_rate' => null]
         );
 
@@ -114,7 +113,7 @@ final class RealChainForwardingTest extends TestCase
         ]);
     }
 
-    public function test_paid_invoice_is_credited_to_merchant_balance_when_wallet_missing(): void
+    public function test_paid_invoice_is_held_when_merchant_wallet_is_missing(): void
     {
         $this->skipUnlessRealRpcEnabled();
 
@@ -130,7 +129,7 @@ final class RealChainForwardingTest extends TestCase
         $coin = 'btc';
         $rpc = Coin::rpc($coin);
         if ($rpc->getBalance() <= 0.02) {
-            $this->markTestSkipped('btc wallet is not funded enough for merchant balance fallback test');
+            $this->markTestSkipped('btc wallet is not funded enough for missing-wallet hold test');
         }
 
         SuperWallet::query()->where('coin', $coin)->delete();
@@ -162,16 +161,17 @@ final class RealChainForwardingTest extends TestCase
         $fresh = $fresh->fresh();
 
         self::assertSame('paid', $fresh->status);
-        self::assertSame('done', $fresh->forward_status);
+        self::assertSame(Invoice::FORWARD_STATUS_HELD, $fresh->forward_status);
         self::assertNull($fresh->last_forwarded_at);
-
-        $balance = MerchantBalance::query()
-            ->where('merchant_id', $merchant->id)
-            ->where('coin', $coin)
-            ->first();
-
-        self::assertNotNull($balance);
-        self::assertEqualsWithDelta(0.0009, (float) $balance->amount, 1e-8);
+        self::assertDatabaseMissing('merchant_balances', [
+            'merchant_id' => $merchant->id,
+            'coin' => $coin,
+        ]);
+        self::assertDatabaseHas('merchant_settlement_entries', [
+            'invoice_id' => $invoice->id,
+            'type' => 'forward_held',
+            'error_message' => 'destination_wallet_missing',
+        ]);
     }
 
     /** @return array<string, array{0: string}> */

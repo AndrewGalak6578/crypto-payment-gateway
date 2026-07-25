@@ -53,7 +53,7 @@ Route::prefix('admin')->middleware(['web', 'auth.admin'])->group(function () {
     Route::post('/merchant-api-keys/{apiKey}/revoke', [MerchantApiKeyController::class, 'revoke']);
 });
 
-    Route::prefix('merchant')->middleware(['auth.merchant.portal', 'web', 'merchant.enabled'])->group(function () {
+Route::prefix('merchant')->middleware(['auth.merchant.portal', 'web', 'merchant.enabled'])->group(function () {
     Route::get('/dashboard', [\App\Http\Controllers\Api\MerchantPortal\DashboardController::class, '__invoke'])->middleware('merchant.capability:portal.view');
     Route::get('/settings', [\App\Http\Controllers\Api\MerchantPortal\SettingsController::class, 'show'])->middleware('merchant.capability:portal.view');
     Route::put('/settings', [\App\Http\Controllers\Api\MerchantPortal\SettingsController::class, 'update'])->middleware('merchant.capability:invoices.write');
@@ -66,6 +66,8 @@ Route::prefix('admin')->middleware(['web', 'auth.admin'])->group(function () {
 
     Route::get('/balances', [\App\Http\Controllers\Api\MerchantPortal\BalanceController::class, '__invoke'])->middleware('merchant.capability:balances.read');
     Route::get('/settlement-entries', [\App\Http\Controllers\Api\MerchantPortal\SettlementEntryController::class, 'index'])->middleware('merchant.capability:balances.read');
+    Route::get('/settlement-policies', [\App\Http\Controllers\Api\MerchantPortal\SettlementPolicyController::class, 'index'])->middleware('merchant.capability:settlements.read');
+    Route::put('/settlement-policies/{assetKey}', [\App\Http\Controllers\Api\MerchantPortal\SettlementPolicyController::class, 'update'])->middleware('merchant.capability:settlements.write');
 
     Route::get('/wallets', [\App\Http\Controllers\Api\MerchantPortal\WalletController::class, 'index'])->middleware('merchant.capability:wallets.read');
     Route::post('/wallets', [\App\Http\Controllers\Api\MerchantPortal\WalletController::class, 'store'])->middleware('merchant.capability:wallets.write');

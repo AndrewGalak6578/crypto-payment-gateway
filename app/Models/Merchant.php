@@ -39,6 +39,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property-read Collection<int, MerchantUser> $users
  * @property-read Collection<int, MerchantActivityLog> $activityLogs
  * @property-read Collection<int, MerchantAssetPolicy> $assetPolicies
+ * @property-read Collection<int, MerchantSettlementPreference> $settlementPreferences
  */
 class Merchant extends Model
 {
@@ -118,6 +119,11 @@ class Merchant extends Model
     public function assetPolicies(): HasMany
     {
         return $this->hasMany(MerchantAssetPolicy::class);
+    }
+
+    public function settlementPreferences(): HasMany
+    {
+        return $this->hasMany(MerchantSettlementPreference::class);
     }
 
     public function settlementAttempts(): HasMany

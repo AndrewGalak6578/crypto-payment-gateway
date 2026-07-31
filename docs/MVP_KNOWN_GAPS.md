@@ -69,3 +69,8 @@
 - Факт: settlement wallet resolver временно принимает legacy wallet row без `network_key` только для canonical network зарегистрированного asset.
 - Риск: null-network compatibility ослабляет явную привязку destination wallet к сети и не должна оставаться в mainnet settlement path.
 - Статус: до mainnet backfill всех существующих wallet rows должен установить явный `network_key`; после проверки данных null-network fallback и его compatibility tests нужно удалить.
+
+### 14) Custody journal пока не включен в production routing
+- Факт: Phase 1 добавляет gated append-only journal, postings и rebuildable projections, но invoice routing, payout requests и legacy backfill writes намеренно отсутствуют; все feature gates по умолчанию выключены.
+- Риск: `merchant_balances` остается operational source текущих internal credits, а наличие journal schema само по себе не означает production custody accounting.
+- Статус: перед включением нужны reviewed legacy migration, treasury collection/liquidity model, network-fee policy, approval controls, production signer и payout reconciliation.

@@ -190,6 +190,10 @@ Key tables and models:
 - `merchant_balances`
 - `merchant_settlement_entries`
 - `merchant_settlement_attempts`
+- `custody_accounts`
+- `custody_journal_entries`
+- `custody_journal_postings`
+- `custody_account_balances`
 - `merchant_activity_logs`
 - `webhook_deliveries`
 - `evm_gas_fundings`
@@ -339,6 +343,8 @@ Historical `paid` invoices without `settlement_snapshot_locked_at` are quarantin
 
 The gas-funding lifecycle migration backfills legacy rows with a tx hash as `broadcasted` (or `confirmed` only when legacy status explicitly proves it) and rows without a tx hash as `needs_reconciliation`. Rollback is intentionally refused while any gas-funding row has a null tx hash because restoring the old non-null column would destroy broadcast ambiguity. Reconcile or archive those records under an approved financial-data retention procedure before rollback.
 
+Phase 1 custody accounting adds immutable asset/network accounts, a balanced append-only PostgreSQL journal, and atomically maintained rebuildable projections. All custody and payout gates default off, and no invoice, balance, settlement, payout, API, or UI flow writes the new journal yet. Use `custody:verify-projections`, dry-run `custody:rebuild-projections`, and read-only `custody:reconcile-legacy-balances` for operational inspection. See [Custody Accounting Phase 1](docs/CUSTODY_ACCOUNTING_PHASE1.md).
+
 ## Backend Reliability Features
 
 - Queue-backed monitoring, settlement, and webhook delivery.
@@ -348,6 +354,7 @@ The gas-funding lifecycle migration backfills legacy rows with a tx hash as `bro
 - Durable settlement attempts with pre-broadcast retry proof and ambiguous-broadcast quarantine.
 - Persisted webhook delivery attempts, statuses, timestamps, and errors.
 - Explicit internal-balance policy and non-custodial missing-wallet holds.
+- Deferred database validation and canonical idempotency for the gated custody journal foundation.
 - Separate payment address records rather than relying only on invoice rows.
 - Real-RPC integration tests for UTXO forwarding flows.
 

@@ -6,6 +6,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * Immutable-ish settlement activity entry for merchant money movement history.
@@ -66,5 +67,10 @@ class MerchantSettlementEntry extends Model
     public function settlementAttempt(): BelongsTo
     {
         return $this->belongsTo(MerchantSettlementAttempt::class, 'settlement_attempt_id');
+    }
+
+    public function custodyJournalSourceLink(): HasOne
+    {
+        return $this->hasOne(CustodyJournalSourceLink::class, 'merchant_settlement_entry_id');
     }
 }

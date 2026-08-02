@@ -25,6 +25,7 @@ final readonly class CustodyAccountRepository
         CustodyAccount::CODE_OUTBOUND,
         CustodyAccount::CODE_FEE_REVENUE,
         CustodyAccount::CODE_NETWORK_FEE_EXPENSE,
+        CustodyAccount::CODE_INTERNAL_CREDIT_SHADOW_OFFSET,
     ];
 
     public function __construct(private AssetRegistry $assets) {}
@@ -142,7 +143,7 @@ final readonly class CustodyAccountRepository
 
     private function assertAccountingEnabled(): void
     {
-        if (! config('custody.accounting_enabled', false)) {
+        if (config('custody.accounting_enabled', false) !== true) {
             throw new CustodyAccountingException('Custody accounting is disabled.');
         }
     }

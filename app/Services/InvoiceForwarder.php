@@ -10,12 +10,14 @@ use App\Contracts\EvmSweepSourceResolverInterface;
 use App\Contracts\EvmTokenPayoutSenderInterface;
 use App\Data\EvmPayoutResult;
 use App\Data\SettlementPolicyDecision;
+use App\Exceptions\CustodyIdempotencyConflictException;
 use App\Exceptions\EvmGasTopUpDeferredException;
 use App\Jobs\ReconcileSettlementAttemptJob;
 use App\Models\AssetPolicy;
 use App\Models\Invoice;
 use App\Models\Merchant;
 use App\Models\MerchantSettlementAttempt;
+use App\Models\MerchantSettlementEntry;
 use App\Models\SuperWallet;
 use App\Services\Settlement\MerchantBalanceCreditor;
 use App\Services\Settlement\MerchantSettlementAttemptManager;
@@ -208,6 +210,16 @@ final class InvoiceForwarder
                 throw new RuntimeException("Invoice [{$invoice->id}] has an incomplete locked settlement snapshot.");
             }
 
+            if (MerchantSettlementEntry::query()
+                ->where('invoice_id', $invoice->id)
+                ->where('type', MerchantSettlementEntry::TYPE_INTERNAL_CREDIT)
+                ->where('status', MerchantSettlementEntry::STATUS_COMPLETED)
+                ->exists()) {
+                throw new CustodyIdempotencyConflictException(
+                    "Retryable invoice [{$invoice->id}] has pre-existing internal-credit financial evidence.",
+                );
+            }
+
             $decision = $this->settlementPolicies->resolveForInvoice($invoice, true);
 
             if ($decision->reason === 'nothing_to_forward') {
@@ -217,7 +229,7 @@ final class InvoiceForwarder
             }
 
             if ($decision->shouldCreditInternalBalance()) {
-                $this->balanceCreditor->credit($invoice->id, 'internal_balance_only');
+                $this->balanceCreditor->creditLocked($invoice, 'internal_balance_only');
 
                 return null;
             }

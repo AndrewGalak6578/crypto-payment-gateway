@@ -12,6 +12,7 @@ use App\Data\EvmPayoutResult;
 use App\Data\EvmSweepSource;
 use App\Data\PreparedErc20Payout;
 use App\Data\PreparedEvmPayout;
+use App\Exceptions\CustodyIdempotencyConflictException;
 use App\Jobs\ForwardInvoiceJob;
 use App\Jobs\ReconcileSettlementAttemptJob;
 use App\Models\AssetPolicy;
@@ -1359,11 +1360,9 @@ final class InvoiceForwarderTest extends TestCase
         ]);
 
         app(InvoiceForwarder::class)->forward($forwardedInvoice->id);
-        app(InvoiceForwarder::class)->forward($creditedInvoice->id);
 
         self::assertSame(Invoice::FORWARD_STATUS_DONE, $forwardedInvoice->fresh()->forward_status);
         self::assertSame('0.490000000000000000', (string) $forwardedInvoice->fresh()->forwarded_coin);
-        self::assertSame(Invoice::FORWARD_STATUS_DONE, $creditedInvoice->fresh()->forward_status);
         self::assertCount(0, $fakeRpc->sendCalls);
         self::assertDatabaseMissing('merchant_balances', [
             'merchant_id' => $merchant->id,
@@ -1371,6 +1370,18 @@ final class InvoiceForwarderTest extends TestCase
         ]);
         self::assertSame(1, MerchantSettlementEntry::query()->where('invoice_id', $forwardedInvoice->id)->count());
         self::assertSame(1, MerchantSettlementEntry::query()->where('invoice_id', $creditedInvoice->id)->count());
+
+        try {
+            app(InvoiceForwarder::class)->forward($creditedInvoice->id);
+            self::fail('A retryable invoice with pre-existing internal-credit evidence must conflict.');
+        } catch (CustodyIdempotencyConflictException) {
+            self::assertSame(Invoice::FORWARD_STATUS_NONE, $creditedInvoice->fresh()->forward_status);
+            self::assertDatabaseMissing('merchant_balances', [
+                'merchant_id' => $merchant->id,
+                'coin' => 'btc',
+            ]);
+            self::assertCount(0, $fakeRpc->sendCalls);
+        }
     }
 
     public function test_legacy_paid_invoice_without_locked_snapshot_is_quarantined(): void

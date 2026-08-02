@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Unit\Services;
 
 use App\Data\SettlementPolicyDecision;
+use App\Exceptions\CustodyAccountingException;
+use App\Exceptions\CustodyIdempotencyConflictException;
 use App\Models\AssetPolicy;
 use App\Models\MerchantSettlementAttempt;
 use App\Models\MerchantSettlementEntry;
@@ -151,13 +153,13 @@ final class MerchantSettlementLedgerTest extends TestCase
             amount: '0.49000000',
             feeCoin: '0.01000000',
             amountUsd: '4900.00',
-            reason: 'destination_wallet_missing',
+            reason: 'internal_balance_only',
         );
         $second = $ledger->recordInternalCredit(
             invoice: $invoice,
-            amount: '0.25000000',
-            feeCoin: '0.25000000',
-            amountUsd: '2500.00',
+            amount: '0.490000000000000000',
+            feeCoin: '0.010000000000000000',
+            amountUsd: '4900.000000',
             reason: 'internal_balance_only',
         );
 
@@ -167,7 +169,70 @@ final class MerchantSettlementLedgerTest extends TestCase
         $fresh = $first->fresh();
         self::assertSame('0.490000000000000000', (string) $fresh->amount_coin);
         self::assertSame('0.010000000000000000', (string) $fresh->fee_coin);
-        self::assertSame('destination_wallet_missing', $fresh->metadata['reason']);
+        self::assertSame('internal_balance_only', $fresh->metadata['reason']);
+    }
+
+    public function test_internal_credit_replay_with_different_exact_payload_conflicts(): void
+    {
+        $merchant = $this->createMerchant();
+        $invoice = $this->createInvoice($merchant, [
+            'status' => 'paid',
+            'asset_key' => 'btc',
+            'network_key' => 'bitcoin',
+            'received_conf_coin' => 0.5,
+        ]);
+        $ledger = app(MerchantSettlementLedger::class);
+        $ledger->recordInternalCredit(
+            invoice: $invoice,
+            amount: '0.49000000',
+            feeCoin: '0.01000000',
+            amountUsd: '4900.00',
+            reason: 'internal_balance_only',
+        );
+
+        $this->expectException(CustodyIdempotencyConflictException::class);
+
+        $ledger->recordInternalCredit(
+            invoice: $invoice,
+            amount: '0.25000000',
+            feeCoin: '0.01000000',
+            amountUsd: '2500.00',
+            reason: 'internal_balance_only',
+        );
+    }
+
+    public function test_internal_credit_rejects_excess_asset_fee_and_usd_precision_before_insert(): void
+    {
+        $merchant = $this->createMerchant();
+        $invoice = $this->createInvoice($merchant, [
+            'status' => 'paid',
+            'asset_key' => 'btc',
+            'network_key' => 'bitcoin',
+            'received_conf_coin' => 0.5,
+        ]);
+        $ledger = app(MerchantSettlementLedger::class);
+        $cases = [
+            ['0.490000001', '0.01000000', '4900.00'],
+            ['0.49000000', '0.010000001', '4900.00'],
+            ['0.49000000', '0.01000000', '4900.001'],
+        ];
+
+        foreach ($cases as [$amount, $feeCoin, $amountUsd]) {
+            try {
+                $ledger->recordInternalCredit(
+                    invoice: $invoice,
+                    amount: $amount,
+                    feeCoin: $feeCoin,
+                    amountUsd: $amountUsd,
+                    reason: 'internal_balance_only',
+                );
+                self::fail('Non-zero precision beyond the Phase 2A scale must fail before insert.');
+            } catch (CustodyAccountingException $e) {
+                self::assertStringContainsString('non-zero precision', $e->getMessage());
+            }
+        }
+
+        self::assertSame(0, MerchantSettlementEntry::query()->count());
     }
 
     public function test_completed_forward_is_immutable_and_idempotent(): void

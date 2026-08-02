@@ -13,6 +13,7 @@ use App\Models\CustodyJournalEntry;
 use App\Support\Assets\AssetRegistry;
 use Brick\Math\BigDecimal;
 use Carbon\CarbonImmutable;
+use Closure;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -27,6 +28,32 @@ final readonly class CustodyJournalWriter
 
     public function post(CustodyJournalTransactionData $transaction): CustodyJournalEntry
     {
+        return $this->write($transaction, null);
+    }
+
+    /**
+     * @param  Closure(int, Collection<int, CustodyAccount>, Collection<int, object>, list<array{account_id: int, side: string, amount: string, amount_atomic: ?string}>): void  $beforeProjectionDelta
+     */
+    public function postGuarded(
+        CustodyJournalTransactionData $transaction,
+        Closure $beforeProjectionDelta,
+    ): CustodyJournalEntry {
+        if (DB::transactionLevel() < 1) {
+            throw new CustodyAccountingException(
+                'Guarded custody journal writes require an existing outer database transaction.',
+            );
+        }
+
+        return $this->write($transaction, $beforeProjectionDelta);
+    }
+
+    /**
+     * @param  (Closure(int, Collection<int, CustodyAccount>, Collection<int, object>, list<array{account_id: int, side: string, amount: string, amount_atomic: ?string}>): void)|null  $beforeProjectionDelta
+     */
+    private function write(
+        CustodyJournalTransactionData $transaction,
+        ?Closure $beforeProjectionDelta,
+    ): CustodyJournalEntry {
         $this->assertWritesEnabled();
         $assetKey = strtolower(trim($transaction->assetKey));
         $networkKey = trim($transaction->networkKey);
@@ -55,6 +82,7 @@ final readonly class CustodyJournalWriter
             $assetKey,
             $networkKey,
             $assetScale,
+            $beforeProjectionDelta,
         ): int {
             $accountIds = collect($transaction->postings)
                 ->map(fn (CustodyPostingData $posting): int => $posting->accountId)
@@ -201,7 +229,12 @@ final readonly class CustodyJournalWriter
             }
             DB::table('custody_journal_postings')->insert($postingRows);
 
-            $this->applyProjections($entry->id, $accounts, $normalizedPostings);
+            $this->applyProjections(
+                $entry->id,
+                $accounts,
+                $normalizedPostings,
+                $beforeProjectionDelta,
+            );
 
             $updated = DB::table('custody_journal_entries')
                 ->where('id', $entry->id)
@@ -269,9 +302,14 @@ final readonly class CustodyJournalWriter
     /**
      * @param  Collection<int, CustodyAccount>  $accounts
      * @param  list<array{account_id: int, side: string, amount: string, amount_atomic: ?string}>  $postings
+     * @param  (Closure(int, Collection<int, CustodyAccount>, Collection<int, object>, list<array{account_id: int, side: string, amount: string, amount_atomic: ?string}>): void)|null  $beforeProjectionDelta
      */
-    private function applyProjections(int $entryId, Collection $accounts, array $postings): void
-    {
+    private function applyProjections(
+        int $entryId,
+        Collection $accounts,
+        array $postings,
+        ?Closure $beforeProjectionDelta,
+    ): void {
         $now = now('UTC');
         foreach ($accounts->keys()->sort()->values() as $accountId) {
             DB::table('custody_account_balances')->insertOrIgnore([
@@ -291,6 +329,10 @@ final readonly class CustodyJournalWriter
             ->lockForUpdate()
             ->get()
             ->keyBy('account_id');
+
+        if ($beforeProjectionDelta !== null) {
+            $beforeProjectionDelta($entryId, $accounts, $projections, $postings);
+        }
 
         foreach ($accounts->keys()->sort()->values() as $accountId) {
             $account = $accounts->get($accountId);
@@ -396,8 +438,8 @@ final readonly class CustodyJournalWriter
     private function assertWritesEnabled(): void
     {
         if (
-            ! config('custody.accounting_enabled', false)
-            || ! config('custody.journal_writes_enabled', false)
+            config('custody.accounting_enabled', false) !== true
+            || config('custody.journal_writes_enabled', false) !== true
         ) {
             throw new CustodyAccountingException('Custody journal writes are disabled.');
         }

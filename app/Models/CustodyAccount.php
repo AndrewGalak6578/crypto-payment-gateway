@@ -35,6 +35,8 @@ final class CustodyAccount extends Model
 
     public const CODE_NETWORK_FEE_EXPENSE = 'network_fee_expense';
 
+    public const CODE_INTERNAL_CREDIT_SHADOW_OFFSET = 'internal_credit_shadow_offset';
+
     public const CODE_MIGRATION_SUSPENSE = 'migration_suspense';
 
     protected $guarded = ['id'];

@@ -4,9 +4,14 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Models\CustodyPhase2ACutover;
 use App\Models\Invoice;
 use App\Models\MerchantSettlementEntry;
+use App\Services\Custody\Phase2AGate;
+use Brick\Math\BigDecimal;
+use Brick\Math\RoundingMode;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 
 class BackfillSettlementLedger extends Command
 {
@@ -19,6 +24,35 @@ class BackfillSettlementLedger extends Command
     public function handle(): int
     {
         $dryRun = (bool) $this->option('dry-run');
+
+        if ($dryRun) {
+            if ($this->cutoverExists()) {
+                $this->warn('post_cutover_backfill_write_prohibited (dry-run remains read-only; zero writes).');
+
+                return self::SUCCESS;
+            }
+
+            return $this->runBackfill(true);
+        }
+
+        return DB::transaction(function (): int {
+            DB::select(
+                'SELECT pg_advisory_xact_lock_shared(CAST(? AS bigint))',
+                [Phase2AGate::ADVISORY_LOCK_KEY],
+            );
+
+            if ($this->cutoverExists()) {
+                $this->error('post_cutover_backfill_write_prohibited');
+
+                return self::FAILURE;
+            }
+
+            return $this->runBackfill(false);
+        });
+    }
+
+    private function runBackfill(bool $dryRun): int
+    {
         $merchantId = $this->option('merchant-id');
         $created = 0;
         $skipped = 0;
@@ -41,11 +75,28 @@ class BackfillSettlementLedger extends Command
 
                     if ($payload === null) {
                         $skipped++;
+
                         continue;
                     }
 
                     if (MerchantSettlementEntry::query()->where('idempotency_key', $payload['idempotency_key'])->exists()) {
                         $skipped++;
+
+                        continue;
+                    }
+
+                    if (
+                        $payload['type'] === MerchantSettlementEntry::TYPE_INTERNAL_CREDIT
+                        && $payload['status'] === MerchantSettlementEntry::STATUS_COMPLETED
+                        && MerchantSettlementEntry::query()
+                            ->where('invoice_id', $invoice->id)
+                            ->where('type', MerchantSettlementEntry::TYPE_INTERNAL_CREDIT)
+                            ->where('status', MerchantSettlementEntry::STATUS_COMPLETED)
+                            ->exists()
+                    ) {
+                        $this->warn("internal_credit_invoice_conflict invoice #{$invoice->id}");
+                        $skipped++;
+
                         continue;
                     }
 
@@ -58,7 +109,7 @@ class BackfillSettlementLedger extends Command
                         $payload['amount_coin'],
                     ));
 
-                    if (!$dryRun) {
+                    if (! $dryRun) {
                         MerchantSettlementEntry::query()->create($payload);
                     }
 
@@ -69,6 +120,13 @@ class BackfillSettlementLedger extends Command
         $this->info("Settlement ledger backfill complete. Created: {$created}. Skipped: {$skipped}.");
 
         return self::SUCCESS;
+    }
+
+    private function cutoverExists(): bool
+    {
+        return CustodyPhase2ACutover::query()
+            ->whereKey(CustodyPhase2ACutover::PHASE_KEY)
+            ->exists();
     }
 
     /**
@@ -162,14 +220,14 @@ class BackfillSettlementLedger extends Command
     }
 
     /**
-     * @param array<string, mixed> $overrides
+     * @param  array<string, mixed>  $overrides
      * @return array<string, mixed>
      */
     private function basePayload(Invoice $invoice, array $overrides): array
     {
         $amountCoin = $this->decimalString($overrides['amount_coin'] ?? 0);
-        $amount = (float) $amountCoin;
-        $rate = (float) ($invoice->rate_usd ?? 0);
+        $amount = BigDecimal::of($amountCoin);
+        $rate = BigDecimal::of($this->decimalString($invoice->rate_usd));
 
         $payload = array_merge([
             'merchant_id' => $invoice->merchant_id,
@@ -177,7 +235,12 @@ class BackfillSettlementLedger extends Command
             'asset_key' => $invoice->resolvedAssetKey(),
             'network_key' => $invoice->resolvedNetworkKey(),
             'fee_coin' => $invoice->fee_coin,
-            'amount_usd' => $rate > 0 ? round($amount * $rate, 2) : $invoice->merchant_payout_usd,
+            'amount_usd' => $rate->compareTo(BigDecimal::zero()) > 0
+                ? (string) $amount->multipliedBy($rate)->toScale(2, RoundingMode::HALF_UP)
+                : ($invoice->merchant_payout_usd === null
+                    ? null
+                    : (string) BigDecimal::of((string) $invoice->merchant_payout_usd)
+                        ->toScale(2, RoundingMode::UNNECESSARY)),
             'destination_wallet' => null,
             'error_message' => null,
         ], $overrides);
@@ -193,11 +256,16 @@ class BackfillSettlementLedger extends Command
             return '0';
         }
 
-        if (is_string($value) && ! str_contains(strtolower($value), 'e')) {
-            return $this->trimDecimal($value);
+        if (! is_string($value) && ! is_int($value)) {
+            throw new \RuntimeException('Settlement backfill decimal input must be a database decimal string.');
         }
 
-        return $this->trimDecimal(number_format((float) $value, 18, '.', ''));
+        $value = (string) $value;
+        if (str_contains(strtolower($value), 'e')) {
+            throw new \RuntimeException('Settlement backfill decimal input cannot use exponent notation.');
+        }
+
+        return $this->trimDecimal($value);
     }
 
     private function trimDecimal(string $value): string
@@ -215,6 +283,6 @@ class BackfillSettlementLedger extends Command
 
     private function isPositiveDecimal(string $value): bool
     {
-        return (float) $value > 0;
+        return BigDecimal::of($value)->compareTo(BigDecimal::zero()) > 0;
     }
 }

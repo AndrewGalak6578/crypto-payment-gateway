@@ -15,6 +15,7 @@ use App\Models\WebhookDelivery;
 use Database\Seeders\MerchantAccessSeeder;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
@@ -26,9 +27,17 @@ final class MerchantDashboardMetricsApiTest extends TestCase
     {
         parent::setUp();
 
+        Carbon::setTestNow(now()->startOfMonth()->addDays(14)->midDay());
         $this->withoutMiddleware(VerifyCsrfToken::class);
         $this->seed(MerchantAccessSeeder::class);
         Cache::flush();
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+
+        parent::tearDown();
     }
 
     public function test_dashboard_returns_financial_metrics_and_health_snapshot(): void
@@ -171,7 +180,7 @@ final class MerchantDashboardMetricsApiTest extends TestCase
     }
 
     /**
-     * @param array<string, mixed> $overrides
+     * @param  array<string, mixed>  $overrides
      */
     private function createMerchant(array $overrides = []): Merchant
     {
@@ -195,7 +204,7 @@ final class MerchantDashboardMetricsApiTest extends TestCase
     }
 
     /**
-     * @param array<string, mixed> $overrides
+     * @param  array<string, mixed>  $overrides
      */
     private function createInvoice(Merchant $merchant, array $overrides = []): Invoice
     {
@@ -223,7 +232,7 @@ final class MerchantDashboardMetricsApiTest extends TestCase
     }
 
     /**
-     * @param array<string, mixed> $overrides
+     * @param  array<string, mixed>  $overrides
      */
     private function createWebhookDelivery(Invoice $invoice, array $overrides = []): WebhookDelivery
     {

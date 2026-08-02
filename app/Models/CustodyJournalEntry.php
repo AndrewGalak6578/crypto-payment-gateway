@@ -49,4 +49,9 @@ final class CustodyJournalEntry extends Model
         return $this->hasOne(self::class, 'reversal_of_id')
             ->whereNotNull('posted_at');
     }
+
+    public function phase2aSourceLink(): HasOne
+    {
+        return $this->hasOne(CustodyJournalSourceLink::class, 'custody_journal_entry_id');
+    }
 }

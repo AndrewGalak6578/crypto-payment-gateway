@@ -18,6 +18,13 @@ final class SettlementAuditRetentionTest extends TestCase
     use BuildsDomainData;
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->enableForwardingForTests();
+    }
+
     public function test_invoice_with_completed_settlement_audit_cannot_be_deleted(): void
     {
         [$invoice] = $this->completedSettlement();

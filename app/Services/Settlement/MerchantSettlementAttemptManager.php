@@ -8,6 +8,7 @@ use App\Data\SettlementCompletionResult;
 use App\Models\Invoice;
 use App\Models\Merchant;
 use App\Models\MerchantSettlementAttempt;
+use App\Services\Forwarding\ForwardingGate;
 use App\Services\Webhooks\EnqueueInvoiceWebhook;
 use App\Support\Chains\ChainRegistry;
 use Brick\Math\BigDecimal;
@@ -23,6 +24,7 @@ final readonly class MerchantSettlementAttemptManager
         private SettlementDecimal $decimal,
         private ChainRegistry $chains,
         private EnqueueInvoiceWebhook $enqueueWebhook,
+        private ForwardingGate $forwardingGate,
     ) {}
 
     /**
@@ -140,6 +142,13 @@ final readonly class MerchantSettlementAttemptManager
             return null;
         }
 
+        $gateState = $this->forwardingGate->inspectWithSharedLock();
+        $this->forwardingGate->throwIfOperationalFailure($gateState);
+
+        if (! $gateState->effective()) {
+            return null;
+        }
+
         $attemptUuid = (string) Str::uuid();
         $now = now('UTC');
         $leaseSeconds = max(30, (int) config('forwarding.attempts.reservation_lease_seconds', 300));
@@ -247,7 +256,7 @@ final readonly class MerchantSettlementAttemptManager
         array $metadata = [],
         ?string $ownerToken = null,
     ): MerchantSettlementAttempt {
-        return DB::transaction(function () use (
+        [$attempt, $failure] = DB::transaction(function () use (
             $attemptId,
             $sourceAddress,
             $sourceReference,
@@ -256,8 +265,8 @@ final readonly class MerchantSettlementAttemptManager
             $transactionFingerprint,
             $metadata,
             $ownerToken,
-        ): MerchantSettlementAttempt {
-            $attempt = $this->lockAttempt($attemptId);
+        ): array {
+            [$attempt, $invoice] = $this->lockSettlementContext($attemptId);
 
             if ($attempt->state === MerchantSettlementAttempt::STATE_BROADCASTING) {
                 throw new RuntimeException(
@@ -266,6 +275,26 @@ final readonly class MerchantSettlementAttemptManager
             }
 
             $this->assertReservedOwner($attempt, $ownerToken);
+            $gateState = $this->forwardingGate->inspectWithSharedLock();
+
+            if (! $gateState->configValid) {
+                $this->failRetrySafeLocked($attempt, $invoice, 'forwarding_configuration_invalid_before_broadcast');
+
+                return [$attempt, 'configuration_invalid'];
+            }
+
+            if (! $gateState->dbAvailable) {
+                throw new \App\Exceptions\ForwardingSwitchUnavailableException(
+                    'forwarding_switch_unavailable_before_broadcast',
+                );
+            }
+
+            if (! $gateState->effective()) {
+                $this->failRetrySafeLocked($attempt, $invoice, 'forwarding_disabled_before_broadcast');
+
+                return [$attempt, null];
+            }
+
             $attempt->state = MerchantSettlementAttempt::STATE_BROADCASTING;
             $attempt->retry_safe = false;
             $attempt->source_address = $sourceAddress ?? $attempt->source_address;
@@ -278,8 +307,14 @@ final readonly class MerchantSettlementAttemptManager
             $attempt->lease_expires_at = null;
             $attempt->save();
 
-            return $attempt;
+            return [$attempt, null];
         });
+
+        if ($failure === 'configuration_invalid') {
+            throw new \App\Exceptions\ForwardingConfigurationException($attempt->error_message);
+        }
+
+        return $attempt;
     }
 
     /**
@@ -554,6 +589,28 @@ final readonly class MerchantSettlementAttemptManager
         });
     }
 
+    public function failReservedForGateLocked(
+        MerchantSettlementAttempt $attempt,
+        Invoice $invoice,
+        string $reason,
+    ): void {
+        if (DB::transactionLevel() < 1) {
+            throw new RuntimeException('Failing a reserved attempt at the gate requires an active transaction.');
+        }
+
+        if ($attempt->state === MerchantSettlementAttempt::STATE_FAILED && $attempt->retry_safe) {
+            return;
+        }
+
+        if ($attempt->state !== MerchantSettlementAttempt::STATE_RESERVED) {
+            throw new RuntimeException(
+                "Settlement attempt [{$attempt->attempt_uuid}] already crossed the broadcast boundary.",
+            );
+        }
+
+        $this->failRetrySafeLocked($attempt, $invoice, $reason);
+    }
+
     public function heartbeatReserved(int $attemptId, string $ownerToken): bool
     {
         return DB::transaction(function () use ($attemptId, $ownerToken): bool {
@@ -607,7 +664,9 @@ final readonly class MerchantSettlementAttemptManager
         $attempt->retry_safe = true;
         $attempt->error_message = $errorMessage;
         $attempt->failed_at = now('UTC');
+        $attempt->lease_owner_token = null;
         $attempt->lease_expires_at = null;
+        $attempt->heartbeat_at = null;
         $attempt->reconciliation_owner_token = null;
         $attempt->reconciliation_lease_expires_at = null;
         $attempt->next_reconciliation_at = null;

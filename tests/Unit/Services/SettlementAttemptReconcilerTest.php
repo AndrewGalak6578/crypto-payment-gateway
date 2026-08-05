@@ -26,6 +26,13 @@ final class SettlementAttemptReconcilerTest extends TestCase
     use BuildsDomainData;
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->enableForwardingForTests();
+    }
+
     public function test_pending_and_inconclusive_evidence_never_create_completed_accounting(): void
     {
         [$invoice, $attempt] = $this->broadcastedAttempt();
@@ -237,6 +244,62 @@ final class SettlementAttemptReconcilerTest extends TestCase
             "invoice:{$invoice->id}:event:invoice.forwarded:attempt:{$secondAttempt->attempt_uuid}",
             $deliveries[1]->idempotency_key,
         );
+    }
+
+    public function test_disabled_gate_does_not_block_broadcasting_recovery_and_confirmed_accounting(): void
+    {
+        [$invoice, $attempt, $ownerToken] = $this->reservedAttempt();
+        app(MerchantSettlementAttemptManager::class)->markBroadcasting(
+            attemptId: $attempt->id,
+            sourceReference: 'rpc-wallet:bitcoin',
+            ownerToken: $ownerToken,
+        );
+        $this->disableForwardingForTests('reconciliation_must_continue');
+        $provider = new FakeSettlementEvidenceProvider(
+            SettlementReconciliationResult::confirmed(
+                'recovered_while_disabled',
+                3,
+                ['matched_broadcast_reference' => true],
+            ),
+        );
+        $this->app->instance(SettlementAttemptEvidenceProviderInterface::class, $provider);
+
+        app(SettlementAttemptReconciler::class)->reconcile($attempt->id, true);
+
+        self::assertSame(1, $provider->calls);
+        self::assertSame(MerchantSettlementAttempt::STATE_COMPLETED, $attempt->fresh()->state);
+        self::assertSame('recovered_while_disabled', $attempt->fresh()->txid);
+        self::assertSame(Invoice::FORWARD_STATUS_DONE, $invoice->fresh()->forward_status);
+        self::assertDatabaseHas('merchant_settlement_entries', [
+            'invoice_id' => $invoice->id,
+            'settlement_attempt_id' => $attempt->id,
+            'status' => MerchantSettlementEntry::STATUS_COMPLETED,
+        ]);
+    }
+
+    public function test_disabled_gate_keeps_needs_reconciliation_ambiguous_without_retry_safe_transition(): void
+    {
+        [$invoice, $attempt] = $this->broadcastedAttempt();
+        app(MerchantSettlementAttemptManager::class)->markNeedsReconciliation(
+            $attempt->id,
+            'simulated_ambiguous_broadcast',
+        );
+        $this->disableForwardingForTests('ambiguous_reconciliation_must_continue');
+        $provider = new FakeSettlementEvidenceProvider(
+            SettlementReconciliationResult::inconclusive(
+                'still_ambiguous',
+                (string) $attempt->txid,
+            ),
+        );
+        $this->app->instance(SettlementAttemptEvidenceProviderInterface::class, $provider);
+
+        app(SettlementAttemptReconciler::class)->reconcile($attempt->id, true);
+
+        self::assertSame(1, $provider->calls);
+        self::assertSame(MerchantSettlementAttempt::STATE_NEEDS_RECONCILIATION, $attempt->fresh()->state);
+        self::assertFalse($attempt->fresh()->retry_safe);
+        self::assertSame(Invoice::FORWARD_STATUS_NEEDS_RECONCILIATION, $invoice->fresh()->forward_status);
+        self::assertDatabaseMissing('merchant_settlement_entries', ['invoice_id' => $invoice->id]);
     }
 
     /**

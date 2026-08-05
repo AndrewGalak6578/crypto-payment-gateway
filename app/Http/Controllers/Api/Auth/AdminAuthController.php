@@ -1,17 +1,15 @@
 <?php
+
 declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\AdminLoginRequest;
-use App\Http\Requests\Auth\MerchantLoginRequest;
 use App\Models\AdminUser;
-use App\Models\MerchantUser;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
 
 class AdminAuthController extends Controller
 {
@@ -23,25 +21,25 @@ class AdminAuthController extends Controller
             ->where('email', $request->string('email')->toString())
             ->first();
 
-        if (!$user) {
+        if (! $user) {
             return response()->json([
                 'success' => false,
                 'message' => 'Invalid credentials.'],
                 422);
         }
 
-        if (!$user->isActive()) {
+        if (! $user->isActive()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Merchant user is inactive.'],
+                'message' => 'Admin user is inactive.'],
                 403);
         }
 
-        if (!Auth::guard('admin')->attempt($creds, remember: false)) {
+        if (! Auth::guard('admin')->attempt($creds, remember: false)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Merchant is inactive.'],
-                403);
+                'message' => 'Invalid credentials.'],
+                422);
         }
 
         Auth::guard('admin')->login($user);
@@ -62,13 +60,12 @@ class AdminAuthController extends Controller
         /** @var AdminUser $user */
         $user = Auth::guard('admin')->user();
 
-        if (!$user) {
+        if (! $user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Unauthenticated.'
+                'message' => 'Unauthenticated.',
             ], 401);
         }
-
 
         return response()->json([
             'success' => true,

@@ -9,12 +9,15 @@ use App\Data\EvmGasFundingReconciliationResult;
 use App\Jobs\ForwardInvoiceJob;
 use App\Models\EvmGasFunding;
 use App\Models\Invoice;
+use App\Services\CoinBasedLogic\MockRpc;
 use App\Services\Evm\EvmGasFundingReconciler;
+use App\Services\InvoiceForwarder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Tests\Support\BuildsDomainData;
+use Tests\Support\FakeCoinRpc;
 use Tests\TestCase;
 
 final class EvmGasFundingReconcilerTest extends TestCase
@@ -136,6 +139,33 @@ final class EvmGasFundingReconcilerTest extends TestCase
         self::assertSame(1, $funding->fresh()->reconciliation_attempts);
     }
 
+    public function test_disabled_gate_allows_funding_confirmation_but_continuation_creates_no_settlement(): void
+    {
+        Queue::fake();
+        [$invoice, $funding] = $this->funding();
+        $provider = new FakeGasFundingEvidenceProvider(
+            EvmGasFundingReconciliationResult::confirmed((string) $funding->tx_hash, 3),
+        );
+        $this->app->instance(EvmGasFundingEvidenceProviderInterface::class, $provider);
+        $fakeRpc = new FakeCoinRpc;
+        $this->app->instance(MockRpc::class, $fakeRpc);
+        $this->disableForwardingForTests('gas_funding_reconciliation_only');
+
+        app(EvmGasFundingReconciler::class)->reconcile($funding->id, true);
+
+        self::assertSame(EvmGasFunding::STATE_CONFIRMED, $funding->fresh()->state);
+        Queue::assertPushed(
+            ForwardInvoiceJob::class,
+            fn (ForwardInvoiceJob $job): bool => $job->invoiceId === $invoice->id,
+        );
+
+        (new ForwardInvoiceJob($invoice->id))->handle(app(InvoiceForwarder::class));
+
+        self::assertDatabaseMissing('merchant_settlement_attempts', ['invoice_id' => $invoice->id]);
+        self::assertCount(0, $fakeRpc->sendCalls);
+        self::assertSame(Invoice::FORWARD_STATUS_NONE, $invoice->fresh()->forward_status);
+    }
+
     /** @return array{Invoice, EvmGasFunding} */
     private function funding(?string $txHash = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'): array
     {
@@ -145,6 +175,10 @@ final class EvmGasFundingReconcilerTest extends TestCase
             'coin' => 'eth_usdt_local',
             'asset_key' => 'eth_usdt_local',
             'network_key' => 'evm_local',
+            'received_conf_coin' => '10.000000',
+            'fee_coin' => '0.000000',
+            'merchant_payout_coin' => '10.000000',
+            'settlement_snapshot_locked_at' => now('UTC'),
             'forward_status' => Invoice::FORWARD_STATUS_NONE,
         ]);
         $funding = EvmGasFunding::query()->create([

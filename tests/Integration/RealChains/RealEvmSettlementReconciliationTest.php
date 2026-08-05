@@ -46,6 +46,7 @@ final class RealEvmSettlementReconciliationTest extends TestCase
 
         config()->set('webhooks.enabled', false);
         config()->set('forwarding.enabled', true);
+        $this->enableForwardingForTests();
     }
 
     protected function tearDown(): void

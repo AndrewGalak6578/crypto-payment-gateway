@@ -22,6 +22,12 @@ final class InvoiceStatusRefresherTest extends TestCase
     use BuildsDomainData;
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->enableForwardingForTests('invoice_status_refresher_existing_contract');
+    }
+
     public function test_refresh_moves_pending_to_fixated_and_emits_webhook(): void
     {
         Queue::fake();

@@ -13,9 +13,12 @@ use App\Data\EvmSweepSource;
 use App\Data\PreparedErc20Payout;
 use App\Data\PreparedEvmPayout;
 use App\Exceptions\CustodyIdempotencyConflictException;
+use App\Exceptions\EvmGasFundingAttemptNotAuthorizedException;
+use App\Exceptions\ForwardingConfigurationException;
 use App\Jobs\ForwardInvoiceJob;
 use App\Jobs\ReconcileSettlementAttemptJob;
 use App\Models\AssetPolicy;
+use App\Models\EvmGasFunding;
 use App\Models\Invoice;
 use App\Models\Merchant;
 use App\Models\MerchantBalance;
@@ -32,6 +35,7 @@ use App\Services\Settlement\SettlementAttemptReconciler;
 use App\Services\Settlement\SettlementDecimal;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
 use Tests\Support\BuildsDomainData;
 use Tests\Support\FakeCoinRpc;
 use Tests\TestCase;
@@ -46,6 +50,7 @@ final class InvoiceForwarderTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->enableForwardingForTests('invoice_forwarder_existing_contract');
 
         config()->set('forwarding.allow_platform_wallet_fallback', true);
     }
@@ -757,9 +762,31 @@ final class InvoiceForwarderTest extends TestCase
             ],
         );
 
-        $this->mock(EvmGasTopUpServiceInterface::class, function ($mock): void {
+        $this->mock(EvmGasTopUpServiceInterface::class, function ($mock) use ($invoice, $source, $wallet): void {
             $mock->shouldReceive('ensureTopUpForErc20Transfer')
                 ->once()
+                ->withArgs(function (
+                    Invoice $forwardedInvoice,
+                    int $settlementAttemptId,
+                    string $settlementAttemptUuid,
+                    string $ownerToken,
+                    EvmSweepSource $forwardedSource,
+                    SuperWallet $destination,
+                    string $amountDecimal,
+                ) use ($invoice, $source, $wallet): bool {
+                    $attempt = MerchantSettlementAttempt::query()->findOrFail($settlementAttemptId);
+
+                    self::assertSame($invoice->id, $forwardedInvoice->id);
+                    self::assertSame($attempt->attempt_uuid, $settlementAttemptUuid);
+                    self::assertSame($attempt->lease_owner_token, $ownerToken);
+                    self::assertSame(MerchantSettlementAttempt::STATE_RESERVED, $attempt->state);
+                    self::assertSame(MerchantSettlementAttempt::TRANSFER_ERC20, $attempt->transfer_type);
+                    self::assertSame($source->address, $forwardedSource->address);
+                    self::assertSame($wallet->id, $destination->id);
+                    self::assertSame('25.000000', $amountDecimal);
+
+                    return true;
+                })
                 ->andReturn(new EvmGasTopUpOutcome('sufficient', false));
         });
         $this->mock(EvmTokenPayoutSenderInterface::class, function ($mock) use ($prepared): void {
@@ -889,6 +916,70 @@ final class InvoiceForwarderTest extends TestCase
         self::assertDatabaseMissing('merchant_settlement_entries', [
             'invoice_id' => $invoice->id,
         ]);
+    }
+
+    public function test_stale_erc20_gas_worker_does_not_mutate_newer_active_attempt(): void
+    {
+        [$invoice, $wallet] = $this->evmFixture('eth_usdt_local', '25.000000');
+        $replacementAttemptId = null;
+        $replacementOwner = (string) Str::uuid();
+
+        $this->mock(EvmGasTopUpServiceInterface::class, function ($mock) use (
+            $invoice,
+            $wallet,
+            &$replacementAttemptId,
+            $replacementOwner,
+        ): void {
+            $mock->shouldReceive('ensureTopUpForErc20Transfer')
+                ->once()
+                ->andReturnUsing(function (
+                    Invoice $forwardedInvoice,
+                    int $settlementAttemptId,
+                    string $settlementAttemptUuid,
+                    string $ownerToken,
+                ) use ($invoice, $wallet, &$replacementAttemptId, $replacementOwner): never {
+                    $manager = app(MerchantSettlementAttemptManager::class);
+                    $staleAttempt = MerchantSettlementAttempt::query()->findOrFail($settlementAttemptId);
+                    self::assertSame($invoice->id, $forwardedInvoice->id);
+                    self::assertSame($staleAttempt->attempt_uuid, $settlementAttemptUuid);
+                    self::assertSame($staleAttempt->lease_owner_token, $ownerToken);
+
+                    $manager->markPreBroadcastFailed($staleAttempt->id, 'simulated_reap_before_gas_boundary');
+                    $replacement = $manager->reserve(
+                        invoiceId: $invoice->id,
+                        chainFamily: 'evm',
+                        transferType: MerchantSettlementAttempt::TRANSFER_ERC20,
+                        destinationAddress: (string) $wallet->wallet,
+                        ownerToken: $replacementOwner,
+                    );
+                    self::assertNotNull($replacement);
+                    $replacementAttemptId = $replacement->id;
+
+                    throw new EvmGasFundingAttemptNotAuthorizedException(
+                        'settlement_attempt_replaced_before_gas_funding',
+                    );
+                });
+        });
+        $this->mock(EvmTokenPayoutSenderInterface::class, function ($mock): void {
+            $mock->shouldNotReceive('prepareToken');
+            $mock->shouldNotReceive('broadcastToken');
+        });
+        $this->mock(EvmPayoutSenderInterface::class, function ($mock): void {
+            $mock->shouldNotReceive('prepareNative');
+            $mock->shouldNotReceive('broadcastNative');
+        });
+
+        app(InvoiceForwarder::class)->forward($invoice->id);
+
+        self::assertNotNull($replacementAttemptId);
+        $replacement = MerchantSettlementAttempt::query()->findOrFail($replacementAttemptId);
+        self::assertSame(MerchantSettlementAttempt::STATE_RESERVED, $replacement->state);
+        self::assertFalse($replacement->retry_safe);
+        self::assertSame($replacementOwner, $replacement->lease_owner_token);
+        self::assertSame($replacement->attempt_uuid, $invoice->fresh()->forward_attempt_uuid);
+        self::assertSame(Invoice::FORWARD_STATUS_PROCESSING, $invoice->fresh()->forward_status);
+        self::assertSame(2, MerchantSettlementAttempt::query()->where('invoice_id', $invoice->id)->count());
+        self::assertSame(0, EvmGasFunding::query()->count());
     }
 
     public function test_utxo_timeout_after_broadcast_is_quarantined_and_never_sent_twice(): void
@@ -1418,6 +1509,306 @@ final class InvoiceForwarderTest extends TestCase
         self::assertCount(0, $fakeRpc->sendCalls);
         self::assertSame(Invoice::FORWARD_STATUS_NEEDS_RECONCILIATION, $invoice->fresh()->forward_status);
         self::assertDatabaseMissing('merchant_settlement_attempts', ['invoice_id' => $invoice->id]);
+    }
+
+    public function test_queued_and_direct_forwarding_fail_closed_until_explicit_redispatch_after_reenable(): void
+    {
+        Queue::fake();
+        [$invoice, $fakeRpc] = $this->utxoFixture();
+        $forwarder = app(InvoiceForwarder::class);
+
+        $this->disableForwardingForTests('queued_job_disabled');
+
+        $forwarder->forward($invoice->id);
+        (new ForwardInvoiceJob($invoice->id))->handle($forwarder);
+
+        self::assertDatabaseMissing('merchant_settlement_attempts', ['invoice_id' => $invoice->id]);
+        self::assertCount(0, $fakeRpc->sendCalls);
+        self::assertSame('paid', $invoice->fresh()->status);
+        self::assertSame(Invoice::FORWARD_STATUS_NONE, $invoice->fresh()->forward_status);
+
+        $this->enableForwardingForTests('operator_reenabled');
+
+        self::assertDatabaseMissing('merchant_settlement_attempts', ['invoice_id' => $invoice->id]);
+        self::assertCount(0, $fakeRpc->sendCalls);
+
+        (new ForwardInvoiceJob($invoice->id))->handle($forwarder);
+
+        self::assertDatabaseCount('merchant_settlement_attempts', 1);
+        self::assertCount(1, $fakeRpc->sendCalls);
+    }
+
+    public function test_invalid_config_blocks_direct_forwarding_before_attempt_or_rpc(): void
+    {
+        [$invoice, $fakeRpc] = $this->utxoFixture();
+        config()->set('forwarding.enabled', 'flase');
+
+        try {
+            app(InvoiceForwarder::class)->forward($invoice->id);
+            self::fail('Invalid forwarding config was accepted.');
+        } catch (ForwardingConfigurationException $exception) {
+            self::assertStringContainsString('native PHP Boolean', $exception->getMessage());
+        }
+
+        self::assertDatabaseMissing('merchant_settlement_attempts', ['invoice_id' => $invoice->id]);
+        self::assertCount(0, $fakeRpc->sendCalls);
+        self::assertSame(Invoice::FORWARD_STATUS_NONE, $invoice->fresh()->forward_status);
+    }
+
+    public function test_redelivered_job_closes_existing_reserved_attempt_when_disabled(): void
+    {
+        Queue::fake();
+        [$invoice, $fakeRpc] = $this->utxoFixture();
+        $attempt = app(MerchantSettlementAttemptManager::class)->reserve(
+            invoiceId: $invoice->id,
+            chainFamily: 'utxo',
+            transferType: MerchantSettlementAttempt::TRANSFER_UTXO,
+            destinationAddress: 'bcrt1qreservedredelivery',
+        );
+        self::assertNotNull($attempt);
+        $this->disableForwardingForTests('reserved_redelivery_disabled');
+
+        (new ForwardInvoiceJob($invoice->id))->handle(app(InvoiceForwarder::class));
+
+        $closed = $this->assertGateClosedAttempt(
+            $invoice,
+            'forwarding_disabled_before_broadcast',
+        );
+        self::assertSame($attempt->id, $closed->id);
+        self::assertCount(0, $fakeRpc->sendCalls);
+        Queue::assertNotPushed(ReconcileSettlementAttemptJob::class);
+    }
+
+    public function test_utxo_disable_after_reservation_but_before_boundary_never_calls_sender(): void
+    {
+        Queue::fake();
+        [$invoice, $fakeRpc] = $this->utxoFixture(false);
+        $this->app->bind(MockRpc::class, function () use ($fakeRpc): FakeCoinRpc {
+            $this->disableForwardingForTests('utxo_boundary_disabled');
+
+            return $fakeRpc;
+        });
+
+        app(InvoiceForwarder::class)->forward($invoice->id);
+
+        $this->assertGateClosedAttempt($invoice, 'forwarding_disabled_before_broadcast');
+        self::assertCount(0, $fakeRpc->sendCalls);
+    }
+
+    public function test_evm_native_disable_after_preparation_but_before_boundary_never_broadcasts(): void
+    {
+        Queue::fake();
+        [$invoice, $wallet, $source] = $this->evmFixture('eth_local', '1.000000000000000000');
+        $prepared = new PreparedEvmPayout(
+            networkKey: 'evm_local',
+            assetKey: 'eth_local',
+            source: $source,
+            destinationAddress: strtolower($wallet->wallet),
+            amountDecimal: '1.000000000000000000',
+            amountAtomic: '1000000000000000000',
+            nonce: 17,
+            chainId: 31337,
+            broadcastBlockNumber: 200,
+            transaction: [
+                'from' => strtolower($source->address),
+                'to' => strtolower($wallet->wallet),
+                'value' => '0xde0b6b3a7640000',
+                'nonce' => '0x11',
+            ],
+        );
+
+        $this->mock(EvmPayoutSenderInterface::class, function ($mock) use ($prepared): void {
+            $mock->shouldReceive('prepareNative')->once()->andReturnUsing(function () use ($prepared): PreparedEvmPayout {
+                $this->disableForwardingForTests('evm_native_boundary_disabled');
+
+                return $prepared;
+            });
+            $mock->shouldNotReceive('broadcastNative');
+        });
+        $this->mock(EvmGasTopUpServiceInterface::class, function ($mock): void {
+            $mock->shouldNotReceive('ensureTopUpForErc20Transfer');
+        });
+        $this->mock(EvmTokenPayoutSenderInterface::class, function ($mock): void {
+            $mock->shouldNotReceive('prepareToken');
+            $mock->shouldNotReceive('broadcastToken');
+        });
+
+        app(InvoiceForwarder::class)->forward($invoice->id);
+
+        $attempt = $this->assertGateClosedAttempt($invoice, 'forwarding_disabled_before_broadcast');
+        self::assertSame($prepared->fingerprint(), $attempt->transaction_fingerprint);
+        self::assertSame('17', $attempt->nonce);
+    }
+
+    public function test_erc20_disable_after_preparation_but_before_boundary_never_broadcasts(): void
+    {
+        Queue::fake();
+        [$invoice, $wallet, $source] = $this->evmFixture('eth_usdt_local', '25.000000');
+        $contract = strtolower((string) config('assets.eth_usdt_local.contract_address'));
+        $amountAtomic = '25000000';
+        $calldata = '0xa9059cbb'
+            .str_pad(substr(strtolower($wallet->wallet), 2), 64, '0', STR_PAD_LEFT)
+            .str_pad(dechex((int) $amountAtomic), 64, '0', STR_PAD_LEFT);
+        $prepared = new PreparedErc20Payout(
+            networkKey: 'evm_local',
+            assetKey: 'eth_usdt_local',
+            source: $source,
+            contractAddress: $contract,
+            destinationAddress: strtolower($wallet->wallet),
+            amountDecimal: '25.000000',
+            amountAtomic: $amountAtomic,
+            calldata: $calldata,
+            nonce: 18,
+            chainId: 31337,
+            broadcastBlockNumber: 201,
+            transaction: [
+                'from' => strtolower($source->address),
+                'to' => $contract,
+                'value' => '0x0',
+                'data' => $calldata,
+                'nonce' => '0x12',
+            ],
+        );
+
+        $this->mock(EvmGasTopUpServiceInterface::class, function ($mock): void {
+            $mock->shouldReceive('ensureTopUpForErc20Transfer')
+                ->once()
+                ->andReturn(new EvmGasTopUpOutcome('sufficient', false));
+        });
+        $this->mock(EvmTokenPayoutSenderInterface::class, function ($mock) use ($prepared): void {
+            $mock->shouldReceive('prepareToken')->once()->andReturnUsing(function () use ($prepared): PreparedErc20Payout {
+                $this->disableForwardingForTests('erc20_boundary_disabled');
+
+                return $prepared;
+            });
+            $mock->shouldNotReceive('broadcastToken');
+        });
+        $this->mock(EvmPayoutSenderInterface::class, function ($mock): void {
+            $mock->shouldNotReceive('prepareNative');
+            $mock->shouldNotReceive('broadcastNative');
+        });
+
+        app(InvoiceForwarder::class)->forward($invoice->id);
+
+        $attempt = $this->assertGateClosedAttempt($invoice, 'forwarding_disabled_before_broadcast');
+        self::assertSame($prepared->fingerprint(), $attempt->transaction_fingerprint);
+        self::assertSame($calldata, $attempt->calldata);
+        self::assertSame('18', $attempt->nonce);
+    }
+
+    /** @return array{Invoice, FakeCoinRpc} */
+    private function utxoFixture(bool $bindRpc = true): array
+    {
+        config()->set('coins.mode', 'mock');
+        config()->set('forwarding.assets.btc.min', 0);
+        config()->set('webhooks.enabled', false);
+
+        $fakeRpc = new FakeCoinRpc;
+        if ($bindRpc) {
+            $this->app->instance(MockRpc::class, $fakeRpc);
+        }
+
+        $merchant = $this->createMerchant(['fee_percent' => '0']);
+        SuperWallet::query()->create([
+            'merchant_id' => null,
+            'coin' => 'btc',
+            'asset_key' => 'btc',
+            'network_key' => 'bitcoin',
+            'wallet' => 'bcrt1qsafetyboundarydestination',
+            'fee_rate' => null,
+        ]);
+        $invoice = $this->createInvoice($merchant, [
+            'status' => 'paid',
+            'coin' => 'btc',
+            'asset_key' => 'btc',
+            'network_key' => 'bitcoin',
+            'received_conf_coin' => '0.50000000',
+            'forward_status' => Invoice::FORWARD_STATUS_NONE,
+        ]);
+
+        return [$invoice, $fakeRpc];
+    }
+
+    /** @return array{Invoice, SuperWallet, EvmSweepSource} */
+    private function evmFixture(string $assetKey, string $amount): array
+    {
+        config()->set('webhooks.enabled', false);
+        AssetPolicy::query()->create([
+            'asset_key' => $assetKey,
+            'network_key' => 'evm_local',
+            'asset_enabled' => true,
+            'checkout_enabled' => true,
+            'forwarding_enabled' => true,
+            'settlement_mode' => AssetPolicy::MODE_IMMEDIATE,
+            'min_sweep_amount' => 0,
+        ]);
+
+        $merchant = $this->createMerchant(['fee_percent' => '0']);
+        $wallet = SuperWallet::query()->create([
+            'merchant_id' => null,
+            'coin' => $assetKey,
+            'asset_key' => $assetKey,
+            'network_key' => 'evm_local',
+            'wallet' => '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266',
+            'fee_rate' => null,
+        ]);
+        $sourceAddress = '0x15d34aaf54267db7d7c367839aaf71a00a2c6a65';
+        $invoice = $this->createInvoice($merchant, [
+            'status' => 'paid',
+            'coin' => $assetKey,
+            'asset_key' => $assetKey,
+            'network_key' => 'evm_local',
+            'pay_address' => $sourceAddress,
+            'received_conf_coin' => $amount,
+            'forward_status' => Invoice::FORWARD_STATUS_NONE,
+        ]);
+        PaymentAddress::query()->create([
+            'merchant_id' => $merchant->id,
+            'invoice_id' => $invoice->id,
+            'network_key' => 'evm_local',
+            'asset_key' => $assetKey,
+            'address' => $sourceAddress,
+            'family' => 'evm',
+            'address_type' => 'deposit',
+            'strategy' => 'hd_derived',
+            'status' => 'assigned',
+            'derivation_path' => "m/44'/60'/0'/0/0",
+            'derivation_index' => 0,
+            'key_ref' => 'anvil:default',
+            'issued_at' => now('UTC'),
+            'assigned_at' => now('UTC'),
+            'meta' => [],
+        ]);
+
+        return [$invoice, $wallet, new EvmSweepSource(
+            networkKey: 'evm_local',
+            address: $sourceAddress,
+            keyRef: 'anvil:default',
+            derivationPath: "m/44'/60'/0'/0/0",
+            derivationIndex: 0,
+        )];
+    }
+
+    private function assertGateClosedAttempt(Invoice $invoice, string $reason): MerchantSettlementAttempt
+    {
+        $attempt = MerchantSettlementAttempt::query()->where('invoice_id', $invoice->id)->sole();
+        self::assertSame(MerchantSettlementAttempt::STATE_FAILED, $attempt->state);
+        self::assertTrue($attempt->retry_safe);
+        self::assertSame($reason, $attempt->error_message);
+        self::assertNotNull($attempt->failed_at);
+        self::assertNull($attempt->lease_owner_token);
+        self::assertNull($attempt->lease_expires_at);
+        self::assertNull($attempt->heartbeat_at);
+        self::assertNull($attempt->reconciliation_owner_token);
+        self::assertNull($attempt->reconciliation_lease_expires_at);
+        self::assertNull($attempt->next_reconciliation_at);
+        self::assertSame('paid', $invoice->fresh()->status);
+        self::assertSame(Invoice::FORWARD_STATUS_FAILED, $invoice->fresh()->forward_status);
+        self::assertNull($invoice->fresh()->forward_attempt_uuid);
+        self::assertNull($invoice->fresh()->forwarding_coin);
+        self::assertNull($invoice->fresh()->forwarding_started_at);
+
+        return $attempt;
     }
 
     /**

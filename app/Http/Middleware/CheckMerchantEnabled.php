@@ -5,7 +5,6 @@ namespace App\Http\Middleware;
 use App\Models\Merchant;
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
 class CheckMerchantEnabled
@@ -17,17 +16,21 @@ class CheckMerchantEnabled
      */
     public function handle(Request $request, Closure $next): Response
     {
-        /** @var Merchant $merchant */
+        /** @var Merchant|null $merchant */
         $merchant = $request->attributes->get('merchant');
 
-        $merchantUser = Auth::guard('merchant')->user();
+        $merchantUser = $request->attributes->get('merchant_user');
 
-        if (!$merchantUser) {
+        if (! $merchantUser) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
         if ($merchantUser->status !== 'active') {
             return response()->json(['message' => 'Merchant user is inactive.'], 403);
+        }
+
+        if (! $merchant || $merchant->status !== 'active') {
+            return response()->json(['message' => 'Merchant is inactive.'], 403);
         }
 
         return $next($request);

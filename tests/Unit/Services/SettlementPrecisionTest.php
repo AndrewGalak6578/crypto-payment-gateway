@@ -20,6 +20,13 @@ final class SettlementPrecisionTest extends TestCase
     use BuildsDomainData;
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->enableForwardingForTests();
+    }
+
     public function test_eighteen_decimal_fee_and_internal_credit_survive_without_precision_loss(): void
     {
         config()->set('webhooks.enabled', false);

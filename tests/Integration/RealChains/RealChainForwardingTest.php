@@ -22,6 +22,13 @@ final class RealChainForwardingTest extends TestCase
     use BuildsDomainData;
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->enableForwardingForTests();
+    }
+
     #[DataProvider('coinProvider')]
     public function test_paid_invoice_broadcasts_net_amount_without_completing_before_confirmation(string $coin): void
     {

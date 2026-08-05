@@ -31,10 +31,14 @@ final class EvmGasTopUpService implements EvmGasTopUpServiceInterface
         private readonly EvmTransactionSignerInterface $signer,
         private readonly EvmTokenGasChecker $gasChecker,
         private readonly EvmRpcClientFactory $clients,
+        private readonly EvmGasFundingBoundary $fundingBoundary,
     ) {}
 
     public function ensureTopUpForErc20Transfer(
         Invoice $invoice,
+        int $settlementAttemptId,
+        string $settlementAttemptUuid,
+        string $ownerToken,
         EvmSweepSource $source,
         SuperWallet $destination,
         string $amountDecimal,
@@ -255,43 +259,56 @@ final class EvmGasTopUpService implements EvmGasTopUpServiceInterface
                 'transaction' => $transaction,
             ], JSON_THROW_ON_ERROR));
 
-            $funding = EvmGasFunding::query()->create([
-                'funding_uuid' => (string) Str::uuid(),
-                'invoice_id' => $invoice->id,
-                'network_key' => $networkKey,
-                'asset_key' => $assetKey,
-                'source_address' => $gasStationAddress,
-                'target_address' => $sourceAddress,
-                'amount_native_wei' => $neededWei,
-                'tx_hash' => null,
-                'status' => 'broadcasting',
-                'state' => EvmGasFunding::STATE_BROADCASTING,
-                'retry_safe' => false,
-                'chain_id' => (string) $chainId,
-                'nonce' => (string) $fundingNonce,
-                'required_confirmations' => max(1, $this->chains->confirmations($networkKey)),
-                'broadcast_block_number' => $client->blockNumber(),
-                'transaction_fingerprint' => $fingerprint,
-                'reserved_at' => now('UTC'),
-                'broadcasting_at' => now('UTC'),
-                'next_reconciliation_at' => now('UTC'),
-                'meta' => [
-                    'reason' => 'insufficient_native_gas_for_erc20_payout',
-                    'prepared_transaction' => $transaction,
-                    'target_min_native_wei' => $this->targetMinWei($client, $networkKey),
-                    'safety_buffer_wei' => $this->safetyBufferWei($client, $networkKey),
-                    'required_native_balance_wei' => $requiredBalanceWei,
-                    'native_balance_before_wei' => $gasCheck->nativeBalanceWei,
-                    'estimated_erc20_gas_cost_wei' => $gasCheck->estimatedCostWei,
-                    'erc20_gas_price_wei' => $gasCheck->gasPriceWei,
-                    'erc20_gas_limit' => $gasCheck->gasLimit,
-                    'gas_station_key_ref' => $gasStationSource->keyRef,
-                    'gas_station_derivation_path' => $gasStationSource->derivationPath,
-                    'gas_station_derivation_index' => $gasStationSource->derivationIndex,
-                    'funding_tx_gas_price_wei' => $fundingGasPriceWei,
-                    'funding_tx_gas_limit' => $fundingGasLimit,
+            $broadcastBlockNumber = $client->blockNumber();
+            $funding = $this->fundingBoundary->begin(
+                invoiceId: $invoice->id,
+                settlementAttemptId: $settlementAttemptId,
+                settlementAttemptUuid: $settlementAttemptUuid,
+                ownerToken: $ownerToken,
+                attributes: [
+                    'funding_uuid' => (string) Str::uuid(),
+                    'network_key' => $networkKey,
+                    'asset_key' => $assetKey,
+                    'source_address' => $gasStationAddress,
+                    'target_address' => $sourceAddress,
+                    'amount_native_wei' => $neededWei,
+                    'chain_id' => (string) $chainId,
+                    'nonce' => (string) $fundingNonce,
+                    'required_confirmations' => max(1, $this->chains->confirmations($networkKey)),
+                    'broadcast_block_number' => $broadcastBlockNumber,
+                    'transaction_fingerprint' => $fingerprint,
+                    'meta' => [
+                        'reason' => 'insufficient_native_gas_for_erc20_payout',
+                        'prepared_transaction' => $transaction,
+                        'target_min_native_wei' => $this->targetMinWei($client, $networkKey),
+                        'safety_buffer_wei' => $this->safetyBufferWei($client, $networkKey),
+                        'required_native_balance_wei' => $requiredBalanceWei,
+                        'native_balance_before_wei' => $gasCheck->nativeBalanceWei,
+                        'estimated_erc20_gas_cost_wei' => $gasCheck->estimatedCostWei,
+                        'erc20_gas_price_wei' => $gasCheck->gasPriceWei,
+                        'erc20_gas_limit' => $gasCheck->gasLimit,
+                        'gas_station_key_ref' => $gasStationSource->keyRef,
+                        'gas_station_derivation_path' => $gasStationSource->derivationPath,
+                        'gas_station_derivation_index' => $gasStationSource->derivationIndex,
+                        'funding_tx_gas_price_wei' => $fundingGasPriceWei,
+                        'funding_tx_gas_limit' => $fundingGasLimit,
+                    ],
                 ],
-            ]);
+            );
+
+            if ($funding === null) {
+                return new EvmGasTopUpOutcome(
+                    status: 'forwarding_disabled',
+                    requiresDeferredPayout: true,
+                    fundedAmountWei: $neededWei,
+                    gasStationAddress: $gasStationAddress,
+                    retryAfterSeconds: $retryDelaySeconds,
+                    meta: [
+                        'reason' => 'forwarding_disabled_before_gas_funding',
+                        'target_address' => $sourceAddress,
+                    ],
+                );
+            }
 
             try {
                 $signed = $this->signer->signTransaction($networkKey, $gasStationSource, $transaction);

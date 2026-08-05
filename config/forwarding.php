@@ -9,7 +9,7 @@ $settlementReconciliationBackoff = array_values(array_filter(
 ));
 
 return [
-    'enabled' => (bool) env('FORWARDING_ENABLED', false),
+    'enabled' => env('FORWARDING_ENABLED', false),
     'allow_platform_wallet_fallback' => (bool) env('FORWARDING_ALLOW_PLATFORM_WALLET_FALLBACK', false),
 
     'assets' => [

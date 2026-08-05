@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('auth/merchant')->middleware('web')->group(function () {
     Route::post('/register', [\App\Http\Controllers\Api\Auth\MerchantAuthController::class, 'register'])->middleware('throttle:3,1');
     Route::post('/login', [\App\Http\Controllers\Api\Auth\MerchantAuthController::class, 'login'])->middleware('throttle:5,1');
-    Route::post('/logout', [\App\Http\Controllers\Api\Auth\MerchantAuthController::class, 'logout'])->middleware('auth.merchant.portal');
+    Route::post('/logout', [\App\Http\Controllers\Api\Auth\MerchantAuthController::class, 'logout']);
     Route::get('/me', [\App\Http\Controllers\Api\Auth\MerchantAuthController::class, 'me'])->middleware('auth.merchant.portal');
 });
 Route::prefix('auth/admin')->middleware('web')->group(function () {
@@ -25,32 +25,32 @@ Route::prefix('auth/admin')->middleware('web')->group(function () {
 
 /** Functional routes for admin and merchant */
 Route::prefix('admin')->middleware(['web', 'auth.admin'])->group(function () {
-    Route::get('/dashboard', DashboardController::class);
+    Route::get('/dashboard', DashboardController::class)->middleware('admin.capability:dashboard.read');
 
-    Route::get('/merchants', [MerchantController::class, 'index']);
-    Route::post('/merchants', [MerchantController::class, 'store']);
-    Route::get('/merchants/{merchant}', [MerchantController::class, 'show']);
-    Route::patch('/merchants/{merchant}/status', [MerchantController::class, 'updateStatus']);
-    Route::get('/merchants/{merchant}/wallets', [MerchantWalletController::class, 'index']);
-    Route::post('/merchants/{merchant}/wallets', [MerchantWalletController::class, 'store']);
-    Route::put('/merchants/{merchant}/wallets/{wallet}', [MerchantWalletController::class, 'update']);
-    Route::delete('/merchants/{merchant}/wallets/{wallet}', [MerchantWalletController::class, 'destroy']);
+    Route::get('/merchants', [MerchantController::class, 'index'])->middleware('admin.capability:merchants.read');
+    Route::post('/merchants', [MerchantController::class, 'store'])->middleware('admin.capability:merchants.create');
+    Route::get('/merchants/{merchant}', [MerchantController::class, 'show'])->middleware('admin.capability:merchants.read');
+    Route::patch('/merchants/{merchant}/status', [MerchantController::class, 'updateStatus'])->middleware('admin.capability:merchants.status.change');
+    Route::get('/merchants/{merchant}/wallets', [MerchantWalletController::class, 'index'])->middleware('admin.capability:destination_wallets.read');
+    Route::post('/merchants/{merchant}/wallets', [MerchantWalletController::class, 'store'])->middleware('admin.capability:destination_wallets.write');
+    Route::put('/merchants/{merchant}/wallets/{wallet}', [MerchantWalletController::class, 'update'])->middleware('admin.capability:destination_wallets.write');
+    Route::delete('/merchants/{merchant}/wallets/{wallet}', [MerchantWalletController::class, 'destroy'])->middleware('admin.capability:destination_wallets.write');
 
-    Route::get('/merchant-users', [MerchantUserController::class, 'index']);
-    Route::post('/merchant-users', [MerchantUserController::class, 'store']);
-    Route::patch('/merchant-users/{merchantUser}/role', [MerchantUserController::class, 'updateRole']);
-    Route::patch('/merchant-users/{merchantUser}/status', [MerchantUserController::class, 'updateStatus']);
+    Route::get('/merchant-users', [MerchantUserController::class, 'index'])->middleware('admin.capability:merchant_users.read');
+    Route::post('/merchant-users', [MerchantUserController::class, 'store'])->middleware('admin.capability:merchant_users.create');
+    Route::patch('/merchant-users/{merchantUser}/role', [MerchantUserController::class, 'updateRole'])->middleware('admin.capability:merchant_users.roles.write');
+    Route::patch('/merchant-users/{merchantUser}/status', [MerchantUserController::class, 'updateStatus'])->middleware('admin.capability:merchant_users.status.change');
 
-    Route::get('/invoices', [InvoiceController::class, 'index']);
-    Route::get('/invoices/{invoice}', [InvoiceController::class, 'show']);
-    Route::post('/invoices/{invoice}/refresh', [InvoiceController::class, 'refresh']);
+    Route::get('/invoices', [InvoiceController::class, 'index'])->middleware('admin.capability:invoices.read');
+    Route::get('/invoices/{invoice}', [InvoiceController::class, 'show'])->middleware('admin.capability:invoices.read');
+    Route::post('/invoices/{invoice}/refresh', [InvoiceController::class, 'refresh'])->middleware('admin.capability:invoices.refresh');
 
-    Route::get('/webhook-deliveries', [WebhookDeliveryController::class, 'index']);
-    Route::get('/webhook-deliveries/{delivery}', [WebhookDeliveryController::class, 'show']);
-    Route::post('/webhook-deliveries/{delivery}/retry', [WebhookDeliveryController::class, 'retry']);
+    Route::get('/webhook-deliveries', [WebhookDeliveryController::class, 'index'])->middleware('admin.capability:webhook_deliveries.read');
+    Route::get('/webhook-deliveries/{delivery}', [WebhookDeliveryController::class, 'show'])->middleware('admin.capability:webhook_deliveries.read');
+    Route::post('/webhook-deliveries/{delivery}/retry', [WebhookDeliveryController::class, 'retry'])->middleware('admin.capability:webhook_deliveries.retry');
 
-    Route::get('/merchant-api-keys', [MerchantApiKeyController::class, 'index']);
-    Route::post('/merchant-api-keys/{apiKey}/revoke', [MerchantApiKeyController::class, 'revoke']);
+    Route::get('/merchant-api-keys', [MerchantApiKeyController::class, 'index'])->middleware('admin.capability:merchant_api_keys.read');
+    Route::post('/merchant-api-keys/{apiKey}/revoke', [MerchantApiKeyController::class, 'revoke'])->middleware('admin.capability:merchant_api_keys.revoke');
 });
 
 Route::prefix('merchant')->middleware(['auth.merchant.portal', 'web', 'merchant.enabled'])->group(function () {

@@ -30,6 +30,7 @@ final class Phase2ACutoverConcurrencyTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->enableForwardingForTests('phase2a_existing_contract');
         self::assertSame('pgsql', DB::connection()->getDriverName());
         self::assertTrue(function_exists('pcntl_fork'), 'Phase 2A concurrency tests require ext-pcntl.');
         config()->set('webhooks.enabled', false);

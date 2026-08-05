@@ -17,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'auth.merchant.portal' => \App\Http\Middleware\AuthenticateMerchant::class,
             'merchant.capability' => \App\Http\Middleware\EnsureMerchantCapability::class,
             'auth.admin' => \App\Http\Middleware\AuthenticateAdmin::class,
+            'admin.capability' => \App\Http\Middleware\EnsureAdminCapability::class,
             'merchant.enabled' => \App\Http\Middleware\CheckMerchantEnabled::class,
         ]);
     })

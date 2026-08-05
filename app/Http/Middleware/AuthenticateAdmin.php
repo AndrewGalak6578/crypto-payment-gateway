@@ -16,14 +16,31 @@ class AuthenticateAdmin
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if (!Auth::guard('admin')->check()) {
+        $guard = Auth::guard('admin');
+        $identifier = $guard->id();
+
+        if ($identifier === null) {
             return response()->json([
                 'success' => false,
                 'message' => 'Unauthenticated.',
             ], 401);
         }
 
-        $request->attributes->set('admin_user', Auth::guard('admin')->user());
+        $admin = $guard->getProvider()->retrieveById($identifier);
+
+        if (! $admin || ! $admin->isActive()) {
+            $guard->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Admin user is inactive.',
+            ], 403);
+        }
+
+        $guard->setUser($admin);
+        $request->attributes->set('admin_user', $admin);
 
         return $next($request);
     }

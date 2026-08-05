@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\AdminPortal;
@@ -7,8 +8,10 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreMerchantUserRequest;
 use App\Http\Requests\Admin\UpdateMerchantUserRoleRequest;
 use App\Http\Requests\Admin\UpdateMerchantUserStatusRequest;
+use App\Models\AdminUser;
 use App\Models\MerchantUser;
 use App\Models\Role;
+use App\Services\AdminPortalAccess;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,7 +26,7 @@ class MerchantUserController extends Controller
             ->latest('id');
 
         if ($merchantId = $request->query('merchant_id')) {
-            $query->where('merchant_id', (int)$merchantId);
+            $query->where('merchant_id', (int) $merchantId);
         }
 
         if ($status = $request->query('status')) {
@@ -66,7 +69,7 @@ class MerchantUserController extends Controller
                 'last_login_at' => optional($user->last_login_at)->toIso8601String(),
                 'created_at' => optional($user->created_at)->toIso8601String(),
             ]),
-            'roles' => $roles->map(fn(Role $role) => [
+            'roles' => $roles->map(fn (Role $role) => [
                 'id' => $role->id,
                 'slug' => $role->slug,
                 'name' => $role->name,
@@ -132,10 +135,23 @@ class MerchantUserController extends Controller
         ]);
     }
 
-    public function updateStatus(UpdateMerchantUserStatusRequest $request, MerchantUser $merchantUser): JsonResponse
-    {
+    public function updateStatus(
+        UpdateMerchantUserStatusRequest $request,
+        MerchantUser $merchantUser,
+        AdminPortalAccess $access,
+    ): JsonResponse {
+        $status = $request->validated('status');
+        $admin = $request->attributes->get('admin_user');
+
+        if (
+            $status === 'active'
+            && (! $admin instanceof AdminUser || ! $access->can($admin, 'merchant_users.status.enable'))
+        ) {
+            return response()->json(['success' => false, 'message' => 'Forbidden.'], 403);
+        }
+
         $merchantUser->update([
-            'status' => $request->validated('status'),
+            'status' => $status,
         ]);
 
         return response()->json([

@@ -27,6 +27,13 @@ final class SettlementPolicyLinearizationTest extends TestCase
 {
     use DatabaseMigrations;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->enableForwardingForTests();
+    }
+
     public function test_policy_update_racing_settlement_evaluation_cannot_change_reserved_snapshot(): void
     {
         self::assertSame('pgsql', DB::connection()->getDriverName());

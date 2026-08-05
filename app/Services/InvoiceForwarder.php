@@ -11,7 +11,10 @@ use App\Contracts\EvmTokenPayoutSenderInterface;
 use App\Data\EvmPayoutResult;
 use App\Data\SettlementPolicyDecision;
 use App\Exceptions\CustodyIdempotencyConflictException;
+use App\Exceptions\EvmGasFundingAttemptNotAuthorizedException;
 use App\Exceptions\EvmGasTopUpDeferredException;
+use App\Exceptions\ForwardingConfigurationException;
+use App\Exceptions\ForwardingSwitchUnavailableException;
 use App\Jobs\ReconcileSettlementAttemptJob;
 use App\Models\AssetPolicy;
 use App\Models\Invoice;
@@ -19,6 +22,7 @@ use App\Models\Merchant;
 use App\Models\MerchantSettlementAttempt;
 use App\Models\MerchantSettlementEntry;
 use App\Models\SuperWallet;
+use App\Services\Forwarding\ForwardingGate;
 use App\Services\Settlement\MerchantBalanceCreditor;
 use App\Services\Settlement\MerchantSettlementAttemptManager;
 use App\Services\Settlement\MerchantSettlementLedger;
@@ -55,6 +59,7 @@ final class InvoiceForwarder
         private readonly EvmPayoutSenderInterface $evmPayoutSender,
         private readonly EvmTokenPayoutSenderInterface $evmTokenPayoutSender,
         private readonly EvmGasTopUpServiceInterface $evmGasTopUpService,
+        private readonly ForwardingGate $forwardingGate,
     ) {}
 
     /**
@@ -70,6 +75,10 @@ final class InvoiceForwarder
 
         if ($plan === null) {
             return;
+        }
+
+        if (($plan['gate_failure'] ?? null) === 'configuration_invalid') {
+            throw new ForwardingConfigurationException('forwarding_configuration_invalid_before_broadcast');
         }
 
         if (isset($plan['reconcile_attempt_id'])) {
@@ -93,6 +102,10 @@ final class InvoiceForwarder
                 default => throw new RuntimeException("Unsupported settlement transfer type [{$attempt->transfer_type}]."),
             };
 
+            if ($result === null) {
+                return;
+            }
+
             $this->attempts->markBroadcasted(
                 attemptId: $attempt->id,
                 txid: $result->txHash,
@@ -102,6 +115,10 @@ final class InvoiceForwarder
             );
 
             $this->scheduleReconciliation($attempt->id);
+        } catch (EvmGasFundingAttemptNotAuthorizedException $e) {
+            report($e);
+
+            return;
         } catch (EvmGasTopUpDeferredException $e) {
             $this->attempts->markPreBroadcastFailed(
                 $attempt->id,
@@ -112,7 +129,10 @@ final class InvoiceForwarder
 
             if ($freshAttempt?->state === MerchantSettlementAttempt::STATE_RESERVED) {
                 $this->attempts->markPreBroadcastFailed($attempt->id, $e->getMessage());
-            } elseif ($freshAttempt?->state !== MerchantSettlementAttempt::STATE_COMPLETED) {
+            } elseif (! in_array($freshAttempt?->state, [
+                MerchantSettlementAttempt::STATE_FAILED,
+                MerchantSettlementAttempt::STATE_COMPLETED,
+            ], true)) {
                 $this->attempts->markNeedsReconciliation(
                     attemptId: $attempt->id,
                     errorMessage: $e->getMessage(),
@@ -127,7 +147,7 @@ final class InvoiceForwarder
     }
 
     /**
-     * @return array{attempt: MerchantSettlementAttempt, invoice: Invoice, wallet: SuperWallet}|array{reconcile_attempt_id: int}|null
+     * @return array{attempt: MerchantSettlementAttempt, invoice: Invoice, wallet: SuperWallet}|array{reconcile_attempt_id: int}|array{gate_failure: string}|null
      */
     private function prepareSettlementPlan(int $invoiceId, string $ownerToken): ?array
     {
@@ -164,6 +184,32 @@ final class InvoiceForwarder
                     MerchantSettlementAttempt::STATE_NEEDS_RECONCILIATION,
                 ], true)) {
                     return ['reconcile_attempt_id' => $attempt->id];
+                }
+
+                if ($attempt->state === MerchantSettlementAttempt::STATE_RESERVED) {
+                    $gateState = $this->forwardingGate->inspectWithSharedLock();
+
+                    if (! $gateState->configValid) {
+                        $this->attempts->failReservedForGateLocked(
+                            $attempt,
+                            $invoice,
+                            'forwarding_configuration_invalid_before_broadcast',
+                        );
+
+                        return ['gate_failure' => 'configuration_invalid'];
+                    }
+
+                    $this->forwardingGate->throwIfOperationalFailure($gateState);
+
+                    if (! $gateState->effective()) {
+                        $this->attempts->failReservedForGateLocked(
+                            $attempt,
+                            $invoice,
+                            'forwarding_disabled_before_broadcast',
+                        );
+                    }
+
+                    return null;
                 }
 
                 if ($attempt->state === MerchantSettlementAttempt::STATE_FAILED) {
@@ -218,6 +264,13 @@ final class InvoiceForwarder
                 throw new CustodyIdempotencyConflictException(
                     "Retryable invoice [{$invoice->id}] has pre-existing internal-credit financial evidence.",
                 );
+            }
+
+            $gateState = $this->forwardingGate->inspectWithSharedLock();
+            $this->forwardingGate->throwIfOperationalFailure($gateState);
+
+            if (! $gateState->effective()) {
+                return null;
             }
 
             $decision = $this->settlementPolicies->resolveForInvoice($invoice, true);
@@ -335,7 +388,7 @@ final class InvoiceForwarder
         MerchantSettlementAttempt $attempt,
         SuperWallet $wallet,
         string $ownerToken,
-    ): EvmPayoutResult {
+    ): ?EvmPayoutResult {
         $sourceReference = "rpc-wallet:{$attempt->network_key}";
         $fingerprint = hash('sha256', json_encode([
             'network_key' => $attempt->network_key,
@@ -353,6 +406,10 @@ final class InvoiceForwarder
             transactionFingerprint: $fingerprint,
             ownerToken: $ownerToken,
         );
+
+        if (! $this->boundaryCrossed($attempt->fresh())) {
+            return null;
+        }
 
         $txid = $rpc->sendToAddress(
             address: $attempt->destination_address,
@@ -378,7 +435,7 @@ final class InvoiceForwarder
         Invoice $invoice,
         SuperWallet $wallet,
         string $ownerToken,
-    ): EvmPayoutResult {
+    ): ?EvmPayoutResult {
         $freshInvoice = Invoice::query()
             ->with(['merchant', 'paymentAddress'])
             ->findOrFail($invoice->id);
@@ -439,6 +496,10 @@ final class InvoiceForwarder
             ownerToken: $ownerToken,
         );
 
+        if (! $this->boundaryCrossed($attempt->fresh())) {
+            return null;
+        }
+
         return $this->evmPayoutSender->broadcastNative($prepared);
     }
 
@@ -447,7 +508,7 @@ final class InvoiceForwarder
         Invoice $invoice,
         SuperWallet $wallet,
         string $ownerToken,
-    ): EvmPayoutResult {
+    ): ?EvmPayoutResult {
         $freshInvoice = Invoice::query()
             ->with(['merchant', 'paymentAddress'])
             ->findOrFail($invoice->id);
@@ -479,6 +540,9 @@ final class InvoiceForwarder
 
         $topUpOutcome = $this->evmGasTopUpService->ensureTopUpForErc20Transfer(
             invoice: $freshInvoice,
+            settlementAttemptId: $attempt->id,
+            settlementAttemptUuid: $attempt->attempt_uuid,
+            ownerToken: $ownerToken,
             source: $source,
             destination: $wallet,
             amountDecimal: $amountDecimal,
@@ -543,7 +607,28 @@ final class InvoiceForwarder
             ownerToken: $ownerToken,
         );
 
+        if (! $this->boundaryCrossed($attempt->fresh())) {
+            return null;
+        }
+
         return $this->evmTokenPayoutSender->broadcastToken($prepared);
+    }
+
+    private function boundaryCrossed(MerchantSettlementAttempt $attempt): bool
+    {
+        if ($attempt->state === MerchantSettlementAttempt::STATE_BROADCASTING) {
+            return true;
+        }
+
+        if ($attempt->error_message === 'forwarding_configuration_invalid_before_broadcast') {
+            throw new ForwardingConfigurationException($attempt->error_message);
+        }
+
+        if ($attempt->error_message === 'forwarding_switch_unavailable_before_broadcast') {
+            throw new ForwardingSwitchUnavailableException($attempt->error_message);
+        }
+
+        return false;
     }
 
     private function formatAmountForEvm(string $amount, string $assetKey): string

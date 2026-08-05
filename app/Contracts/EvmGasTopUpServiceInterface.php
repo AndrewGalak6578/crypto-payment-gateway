@@ -13,6 +13,9 @@ interface EvmGasTopUpServiceInterface
 {
     public function ensureTopUpForErc20Transfer(
         Invoice $invoice,
+        int $settlementAttemptId,
+        string $settlementAttemptUuid,
+        string $ownerToken,
         EvmSweepSource $source,
         SuperWallet $destination,
         string $amountDecimal,

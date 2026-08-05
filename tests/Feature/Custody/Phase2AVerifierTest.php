@@ -34,6 +34,7 @@ final class Phase2AVerifierTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->enableForwardingForTests('phase2a_existing_contract');
         config()->set('webhooks.enabled', false);
         $this->setRequiredPhase2AGates();
     }

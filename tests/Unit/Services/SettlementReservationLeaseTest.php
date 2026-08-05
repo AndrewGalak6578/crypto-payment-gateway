@@ -20,6 +20,13 @@ final class SettlementReservationLeaseTest extends TestCase
     use BuildsDomainData;
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->enableForwardingForTests();
+    }
+
     public function test_active_lease_is_not_reaped_but_expired_reserved_lease_is_retry_safe(): void
     {
         [$invoice, $attempt] = $this->reserve();
@@ -171,6 +178,82 @@ final class SettlementReservationLeaseTest extends TestCase
             1,
             MerchantSettlementAttempt::query()->where('invoice_id', $invoice->id)->count(),
         );
+    }
+
+    public function test_disabled_gate_closes_reserved_attempt_and_lower_reservation_path_stays_closed(): void
+    {
+        [$invoice, $attempt, $ownerToken] = $this->reserve();
+        $manager = app(MerchantSettlementAttemptManager::class);
+        $this->disableForwardingForTests('reservation_boundary_disabled');
+
+        $closed = $manager->markBroadcasting(
+            attemptId: $attempt->id,
+            sourceReference: 'rpc-wallet:bitcoin',
+            ownerToken: $ownerToken,
+        );
+
+        self::assertSame(MerchantSettlementAttempt::STATE_FAILED, $closed->state);
+        self::assertTrue($closed->retry_safe);
+        self::assertSame('forwarding_disabled_before_broadcast', $closed->error_message);
+        self::assertNotNull($closed->failed_at);
+        self::assertNull($closed->lease_owner_token);
+        self::assertNull($closed->lease_expires_at);
+        self::assertNull($closed->heartbeat_at);
+        self::assertNull($closed->reconciliation_owner_token);
+        self::assertNull($closed->reconciliation_lease_expires_at);
+        self::assertNull($closed->next_reconciliation_at);
+        self::assertSame('paid', $invoice->fresh()->status);
+        self::assertSame(Invoice::FORWARD_STATUS_FAILED, $invoice->fresh()->forward_status);
+        self::assertNull($invoice->fresh()->forward_attempt_uuid);
+        self::assertNull($invoice->fresh()->forwarding_coin);
+        self::assertNull($invoice->fresh()->forwarding_started_at);
+
+        $secondInvoice = $this->createInvoice($invoice->merchant, [
+            'status' => 'paid',
+            'received_conf_coin' => '0.25000000',
+            'fee_coin' => '0.00500000',
+            'merchant_payout_coin' => '0.24500000',
+            'settlement_snapshot_locked_at' => now('UTC'),
+            'forward_status' => Invoice::FORWARD_STATUS_NONE,
+        ]);
+        $newAttempt = $manager->reserve(
+            invoiceId: $secondInvoice->id,
+            chainFamily: 'utxo',
+            transferType: MerchantSettlementAttempt::TRANSFER_UTXO,
+            destinationAddress: 'bcrt1qdisabledreservation',
+            ownerToken: (string) Str::uuid(),
+        );
+
+        self::assertNull($newAttempt);
+        self::assertDatabaseMissing('merchant_settlement_attempts', ['invoice_id' => $secondInvoice->id]);
+        self::assertSame(Invoice::FORWARD_STATUS_NONE, $secondInvoice->fresh()->forward_status);
+    }
+
+    public function test_invalid_config_closes_reserved_attempt_with_distinct_evidence(): void
+    {
+        [$invoice, $attempt, $ownerToken] = $this->reserve();
+        config()->set('forwarding.enabled', 'true');
+
+        try {
+            app(MerchantSettlementAttemptManager::class)->markBroadcasting(
+                attemptId: $attempt->id,
+                sourceReference: 'rpc-wallet:bitcoin',
+                ownerToken: $ownerToken,
+            );
+            self::fail('Invalid forwarding configuration was not surfaced.');
+        } catch (\App\Exceptions\ForwardingConfigurationException $exception) {
+            self::assertSame('forwarding_configuration_invalid_before_broadcast', $exception->getMessage());
+        }
+
+        $closed = $attempt->fresh();
+
+        self::assertSame(MerchantSettlementAttempt::STATE_FAILED, $closed->state);
+        self::assertTrue($closed->retry_safe);
+        self::assertSame('forwarding_configuration_invalid_before_broadcast', $closed->error_message);
+        self::assertNull($closed->lease_owner_token);
+        self::assertNull($closed->lease_expires_at);
+        self::assertSame(Invoice::FORWARD_STATUS_FAILED, $invoice->fresh()->forward_status);
+        self::assertNull($invoice->fresh()->forward_attempt_uuid);
     }
 
     /**

@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace App\Http\Middleware;
@@ -17,14 +18,39 @@ class AuthenticateMerchant
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if (!Auth::guard('merchant')->check()) {
+        $guard = Auth::guard('merchant');
+        $identifier = $guard->id();
+
+        if ($identifier === null) {
             return response()->json([
                 'success' => false,
                 'message' => 'Unauthenticated.',
             ], 401);
         }
 
-        $request->attributes->set('merchant_user', Auth::guard('merchant')->user());
+        $merchantUser = $guard->getProvider()->retrieveById($identifier);
+        $merchant = $merchantUser?->merchant()->first();
+
+        if (
+            ! $merchantUser
+            || $merchantUser->status !== 'active'
+            || ! $merchant
+            || $merchant->status !== 'active'
+        ) {
+            $guard->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Merchant session is inactive.',
+            ], 403);
+        }
+
+        $merchantUser->setRelation('merchant', $merchant);
+        $guard->setUser($merchantUser);
+        $request->attributes->set('merchant_user', $merchantUser);
+        $request->attributes->set('merchant', $merchant);
 
         return $next($request);
     }

@@ -8,6 +8,7 @@ use App\Contracts\EvmInvoiceMonitorInterface;
 use App\Jobs\ForwardInvoiceJob;
 use App\Models\Invoice;
 use App\Services\CoinBasedLogic\CoinRate;
+use App\Services\Forwarding\ForwardingGate;
 use App\Services\Settlement\SettlementAmountCalculator;
 use App\Services\Settlement\SettlementDecimal;
 use App\Services\Webhooks\EnqueueInvoiceWebhook;
@@ -32,7 +33,8 @@ final class InvoiceStatusRefresher
         private readonly SettlementDecimal $decimal,
         private readonly AssetRegistry $assets,
         private readonly ChainRegistry $chains,
-        private readonly EvmInvoiceMonitorInterface $evmMonitor
+        private readonly EvmInvoiceMonitorInterface $evmMonitor,
+        private readonly ForwardingGate $forwardingGate,
     ) {}
 
     /**
@@ -214,8 +216,13 @@ final class InvoiceStatusRefresher
             $this->enqueueWebhook->enqueue($event, $fresh);
         }
 
-        if ($shouldDispatchForward && config('forwarding.enabled')) {
-            ForwardInvoiceJob::dispatch($invoice->id);
+        if ($shouldDispatchForward) {
+            $gateState = $this->forwardingGate->inspect();
+            $this->forwardingGate->throwIfOperationalFailure($gateState);
+
+            if ($gateState->effective()) {
+                ForwardInvoiceJob::dispatch($invoice->id);
+            }
         }
 
         return $fresh;

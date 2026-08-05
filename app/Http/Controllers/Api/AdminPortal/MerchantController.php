@@ -7,9 +7,11 @@ namespace App\Http\Controllers\Api\AdminPortal;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreMerchantRequest;
 use App\Http\Requests\Admin\UpdateMerchantStatusRequest;
+use App\Models\AdminUser;
 use App\Models\Invoice;
 use App\Models\Merchant;
 use App\Models\SuperWallet;
+use App\Services\AdminPortalAccess;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -139,9 +141,22 @@ class MerchantController extends Controller
         ]);
     }
 
-    public function updateStatus(UpdateMerchantStatusRequest $request, Merchant $merchant): JsonResponse
-    {
-        $merchant->update(['status' => $request->validated('status')]);
+    public function updateStatus(
+        UpdateMerchantStatusRequest $request,
+        Merchant $merchant,
+        AdminPortalAccess $access,
+    ): JsonResponse {
+        $status = $request->validated('status');
+        $admin = $request->attributes->get('admin_user');
+
+        if (
+            $status === 'active'
+            && (! $admin instanceof AdminUser || ! $access->can($admin, 'merchants.status.enable'))
+        ) {
+            return response()->json(['success' => false, 'message' => 'Forbidden.'], 403);
+        }
+
+        $merchant->update(['status' => $status]);
 
         return response()->json([
             'success' => true,
